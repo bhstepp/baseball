@@ -46,13 +46,13 @@ BB.INKS = {
 // slot A (main / dark-ish: sky, crowd, uniforms, text), slot B (accent: pitcher, ball seams, big stamps) and
 // slot C (highlight: lights, grass tint where it overprints A, sparks). Overprints (A x B, A x C, B x C) are where
 // the riso look comes from: layers are composited with 'multiply'.
-BB.INKSETS = [
-  { id: 'classic',  name: 'Ballpark',      a: BB.INKS.blue,    b: BB.INKS.pink,   c: BB.INKS.yellow, paper: BB.INKS.paper },
-  { id: 'dusk',     name: 'Twi-Night',     a: BB.INKS.federal, b: BB.INKS.orange, c: BB.INKS.yellow, paper: '#F1E9DA' },
-  { id: 'lawn',     name: 'Bleacher Lawn', a: BB.INKS.green,   b: BB.INKS.pink,   c: BB.INKS.yellow, paper: BB.INKS.paper },
-  { id: 'grape',    name: 'Grape Soda',    a: BB.INKS.purple,  b: BB.INKS.orange, c: BB.INKS.yellow, paper: '#F3EDE4' },
-  { id: 'harbor',   name: 'Harbor Fog',    a: BB.INKS.teal,    b: BB.INKS.red,    c: BB.INKS.yellow, paper: '#EFEBE2' },
-  { id: 'ledger',   name: 'Box Score',     a: BB.INKS.black,   b: BB.INKS.red,    c: BB.INKS.yellow, paper: '#F2EDE0' },
+BB.INKSETS = [ // colour schemes ("Uniforms"): a = primary, b = accent, c = highlight
+  { id: 'classic',  name: 'Home Whites',   a: '#2E5AAC', b: '#D9483B', c: '#F2B632', paper: '#FFF4DC' },
+  { id: 'dusk',     name: 'Twi-Night',     a: '#2B2F5E', b: '#F28C38', c: '#F2B632', paper: '#FBEBD3' },
+  { id: 'lawn',     name: 'Bleacher Lawn', a: '#3E8E3A', b: '#D9483B', c: '#F2B632', paper: '#FFF4DC' },
+  { id: 'grape',    name: 'Grape Soda',    a: '#6B4C9A', b: '#F28C38', c: '#F2D74B', paper: '#FBEFE0' },
+  { id: 'harbor',   name: 'Harbor Fog',    a: '#1F7A80', b: '#E0604F', c: '#F2C14E', paper: '#F6F0E2' },
+  { id: 'ledger',   name: 'Old Timers',    a: '#1B1420', b: '#C0392B', c: '#E8B84A', paper: '#F7EDD8' },
 ];
 
 BB.FONTS = {
