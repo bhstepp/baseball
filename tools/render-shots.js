@@ -101,7 +101,7 @@ for (let i = 0; i < 6; i++) SHOTS.push(['fieldpark-' + i, `scene=field&play=gap&
           const q = new URLSearchParams(location.search), times = [];
           const v = buildView({ scene: sc, play: 'hr', state: 'idle' });
           const pitch = mockPitch(v.pitcher, 7);
-          BB.Render.frame(v); // warm caches
+          BB.Render._S.noAdapt = true; BB.Render.frame(v); // warm caches
           for (let i = 0; i < 180; i++) {
             v.time = i / 60;
             if (sc === 'bat') {

@@ -14,7 +14,7 @@
     canvas: null, ctx: null, W: 390, H: 844, dpr: 1, P: null,
     inkPick: null, inks: null, inkKey: '',
     cache: {}, cam: null, fcam: null, fieldKey: '', fbake: null,
-    freezeT: 0, lastTime: 0, perf: [], lastScene: '', built: 0,
+    freezeT: 0, lastTime: 0, dprReq: 1, qual: 1, perf: [], lastScene: '', built: 0,
   };
   var P = null;                        // the press currently being drawn into
 
@@ -340,10 +340,10 @@
 
     // stands: roof band, upper deck, facade, lower deck. Water replaces a side if the park has it.
     var water = ft.water || 'none';
-    var wx0 = water === 'left' ? -M : water === 'right' ? W * 0.62 : water === 'center' ? g.eyeX - g.eyeW * 1.6 : 0;
-    var wx1 = water === 'left' ? W * 0.38 : water === 'right' ? W + M : water === 'center' ? g.eyeX + g.eyeW * 1.6 : 0;
+    var wx0 = water === 'left' ? -M : water === 'right' ? W * 0.62 : water === 'center' ? g.eyeX - g.eyeW * 1.05 : 0;
+    var wx1 = water === 'left' ? W * 0.38 : water === 'right' ? W + M : water === 'center' ? g.eyeX + g.eyeW * 1.05 : 0;
     var excl = function (xx, yy) {
-      if (water !== 'none' && xx > wx0 && xx < wx1) return true;
+      if (water !== 'none' && xx > wx0 && xx < wx1 && (water !== 'center' || yy > g.deckY - 2)) return true;
       return xx > g.eyeX - g.eyeW / 2 - 2 && xx < g.eyeX + g.eyeW / 2 + 2 && yy > g.deckY - 2;
     };
     fill(rect(-M, g.standsTop, W + 2 * M, hz - g.standsTop + 4), { a: 0.85, b: 0.2 });
@@ -396,7 +396,7 @@
     for (i = bot.length - 1; i >= 0; i--) p.lineTo(bot[i].x, bot[i].y);
     p.closePath();
     // ground (everything below the wall) first: outfield grass all the way down
-    fill(rect(-M, hz - 40, W + 2 * M, H - hz + 40 + M), { a: 0.42, c: 1 });
+    fill(rect(-M, hz, W + 2 * M, H - hz + M), { a: 0.42, c: 1 });
     fill(p, { a: 1, c: 0.18 });
     var tl = new Path2D(); tl.moveTo(top[0].x, top[0].y); for (i = 1; i < top.length; i++) tl.lineTo(top[i].x, top[i].y);
     stroke(tl, C1, 1.6);
@@ -554,11 +554,11 @@
 
   // ------------------------------------------------------------------ the pitcher: a flat rubber-hose figure
   var BUILD = {
-    tall:  { leg: 3.0, torso: 2.1, sh: 0.74, hip: 0.5, limb: 0.44, belly: 0.05, head: 0.54, arm: 1.2 },
-    stout: { leg: 2.55, torso: 2.0, sh: 0.9, hip: 0.68, limb: 0.56, belly: 0.42, head: 0.58, arm: 1.12 },
-    lanky: { leg: 3.25, torso: 2.25, sh: 0.66, hip: 0.44, limb: 0.35, belly: 0, head: 0.5, arm: 1.32 },
+    tall:  { leg: 3.0, torso: 2.1, sh: 0.74, hip: 0.5, limb: 0.44, belly: 0.05, head: 0.68, arm: 1.2 },
+    stout: { leg: 2.55, torso: 2.0, sh: 0.9, hip: 0.68, limb: 0.56, belly: 0.42, head: 0.72, arm: 1.12 },
+    lanky: { leg: 3.25, torso: 2.25, sh: 0.66, hip: 0.44, limb: 0.35, belly: 0, head: 0.64, arm: 1.32 },
   };
-  var PE = 1.12, PY = 57.5, MOUND_Z = 0.83;
+  var PE = 1.35, PY = 57.5, MOUND_Z = 0.83;
 
   function lerpPose(a, b, u) {
     var o = {};
@@ -584,7 +584,8 @@
     var K2 = { hx: -0.1, hz: L * 0.99, lean: -0.05, turn: 0.9, bend: 0, fa: [-0.35, 0],
       fb: w === 'highkick' ? [0.75, L * 1.3] : [0.35, L * 0.6], th: [-0.1, L + T * 0.66], gl: [0.15, L + T * 0.66] };
     var K3 = { hx: 0.35, hz: L * 0.86, lean: -0.08, turn: 0.6, bend: 0.1, fa: [-0.55, 0], fb: [1.3, -0.12], th: [-1.75, L + T + 0.55], gl: [1.5, L + T * 0.82] };
-    var K4 = { hx: 0.45, hz: L * 0.82, lean: 0.22, turn: 0.1, bend: 0.3, fa: [-0.35, 0.15], fb: [1.3, -0.12], th: rel, gl: [0.7, L + T * 0.45] };
+    var relP = w === 'sidearm' ? [-2.35, L + T * 0.55] : w === 'submarine' ? [-2.0, L * 0.35] : [-1.25, L + T + 1.0];
+    var K4 = { hx: 0.45, hz: L * 0.82, lean: 0.22, turn: 0.1, bend: 0.3, fa: [-0.35, 0.15], fb: [1.3, -0.12], th: relP, gl: [0.7, L + T * 0.45] };
     var K5 = { hx: 0.5, hz: L * 0.76, lean: 0.12, turn: 0.05, bend: 0.7, fa: [-0.7, 0.7], fb: [1.3, -0.12], th: [0.95, L * 0.72], gl: [0.45, L + T * 0.35] };
     var K6 = { hx: 0.35, hz: L * 0.9, lean: 0, turn: 0, bend: 0.25, fa: [-0.35, 0], fb: [1.05, -0.06], th: [-0.65, L + 0.45], gl: [0.8, L + 0.55] };
     if (w === 'sidearm') {
@@ -605,7 +606,7 @@
     var base = proj(0, PY, MOUND_Z), s = base.s * PE;
     var rel = pitch && pitch.release ? pitch.release
       : (BB.Pitch && BB.Pitch.releasePoint ? BB.Pitch.releasePoint(pitcher) : { x: -1.75 * mir, z: 6 });
-    var pose = pitcherPose(look, ph, [mir * rel.x / PE, (rel.z - MOUND_Z) / PE]);
+    var pose = pitcherPose(look, ph, null);
     if (ph === 0) { var br = Math.sin(time * 2.1) * 0.035; pose.hz += br; pose.th = [pose.th[0], pose.th[1] + br]; pose.gl = [pose.gl[0], pose.gl[1] + br]; }
     var c = Math.cos(pose.lean), sn = Math.sin(pose.lean);
     function rot(x, z) { return [x * c + z * sn, -x * sn + z * c]; }
@@ -627,7 +628,7 @@
     fill(ell(base.x + mir * (pose.hx * 0.6) * s, base.y + 1, 1.7 * s, 0.32 * s), { a: 0.45 }, { over: true });
 
     function leg(hp, foot, side) {
-      var th = L * 0.53, knee = ik(hp[0], hp[1], foot[0], foot[1], th, th, side);
+      var th = L * 0.512, knee = ik(hp[0], hp[1], foot[0], foot[1], th, th, side);
       var mid = [lerp(knee[0], foot[0], 0.5), lerp(knee[1], foot[1], 0.5)];
       limb([pt(hp), pt(knee), pt(mid)], lw * 1.12, PAPER, kl);
       limb([pt(mid), pt(foot)], lw * 0.82, boss ? B1 : A1, kl);
@@ -707,7 +708,8 @@
     // arms (throwing arm in front unless it is cocked behind the body)
     arm(shG, pose.gl, -1, true);
     if (!behind) arm(shT, pose.th, 1, false);
-    return { hand: pt(pose.th) };
+    S.hand = { x: X(pose.th), y: Y(pose.th) };
+    return S.hand;
   }
 
   // ------------------------------------------------------------------ the batter: big flat figure, seen from behind
@@ -878,7 +880,7 @@
     var cb = catcherBase(), rest = [cb.x - 0.95 * cb.s, cb.y - 1.25 * cb.s];
     var pitch = view.pitch, t = view.pitchT;
     if (!pitch || t == null || view.windup != null) return { x: rest[0], y: rest[1], k: 0 };
-    var T = pitch.T || 0.75, k = smooth((t - (T - 0.32)) / 0.26);
+    var T = pitch.T || 0.75, k = smooth((t - (T - 0.1)) / 0.1);
     var q = proj(pitch.plate.x, -2.4, pitch.plate.z - 0.1);
     return { x: lerp(rest[0], q.x, k), y: lerp(rest[1], q.y, k), k: k };
   }
@@ -950,6 +952,7 @@
   function drawPitchBall(view) {
     var pitch = view.pitch, t = view.pitchT;
     var p = pitchPos(pitch, t), q = proj(p.x, p.y, p.z), r = ballR(q.s);
+    if (S.hand && t < 0.16) { var hb = smooth(t / 0.16); q = { x: lerp(S.hand.x, q.x, hb), y: lerp(S.hand.y, q.y, hb), s: q.s }; }
     // ground shadow helps read height
     var g = proj(p.x, p.y, 0);
     if (p.y > 1) fill(ell(g.x, g.y, r * 1.3, r * 0.38), { a: 0.38 }, { over: true });
@@ -1440,7 +1443,7 @@
     for (i = 0; i < 60; i++) { var sx = r() * W, sy = r() * hz * 0.6, sr = 0.5 + r() * r() * 1.4; stars.moveTo(sx + sr, sy); stars.arc(sx, sy, sr, 0, TAU); }
     fill(stars, PAPER);
     // halo rings around the moon-ball (dynamic ball drawn per frame)
-    var mx = W * 0.66, my = H * 0.19, mr = Math.min(W * 0.25, H * 0.13);
+    var mx = W * 0.58, my = H * 0.19, mr = Math.min(W * 0.22, H * 0.12);
     fill(circ(mx, my, mr * 1.5), { c: 0.18 }, { over: true });
     fill(circ(mx, my, mr * 1.25), { c: 0.32 }, { over: true });
     skyline(ft.skyline || 'city', -M, W + M, hz - H * 0.035, Math.min(1.25, W / 360), U.rng(seed + 11));
@@ -1467,7 +1470,7 @@
     stroke(dm, PAPER, 2);
   }
   function drawTitleDynamic(view, time) {
-    var W = S.W, H = S.H, mx = W * 0.66, my = H * 0.19, mr = Math.min(W * 0.25, H * 0.13), i;
+    var W = S.W, H = S.H, mx = W * 0.58, my = H * 0.19, mr = Math.min(W * 0.22, H * 0.12), i;
     // the moon is a baseball
     var moon = circ(mx, my, mr);
     fill(moon, PAPER);
@@ -1615,13 +1618,14 @@
       p.quadraticCurveTo(x + w * 1.05, yBot - hgt * 0.3, x + w, yBot);
       p.closePath();
     }
-    fill(p, { b: 0.85, c: 0.9 }, { over: true });
+    fill(p, { b: 0.9, c: 1 });
+    stroke(p, { b: 1 }, 1.5, { over: true });
     var p2 = new Path2D();
     for (i = 0; i < n; i++) {
       var x2 = -10 + (W + 20) * (i + 0.5) / n, h2 = (16 + 10 * Math.sin(time * 6 + i)) * (S.H / 844);
       p2.moveTo(x2 - 6, yBot); p2.quadraticCurveTo(x2 - 5, yBot - h2 * 0.6, x2, yBot - h2); p2.quadraticCurveTo(x2 + 5, yBot - h2 * 0.6, x2 + 6, yBot); p2.closePath();
     }
-    fill(p2, { c: 1 }, { over: true });
+    fill(p2, { c: 1, b: 0.15 });
     // rising embers
     var em = new Path2D(), r = U.rng(3);
     for (i = 0; i < 26; i++) {
@@ -1656,10 +1660,10 @@
     // double hit: the second impression lands offset and converges as the stamp settles
     var dh = (1 - thunk) * 14 + 3.2;
     P.text(txt, dh * 0.7, dh * 0.6, ff.font, shadow, { align: 'center', over: kind === 'neutral', outline: kind === 'neutral' ? 0 : 3 });
-    P.text(txt, 0, 0, ff.font, main, { align: 'center', over: true });
+    P.text(txt, 0, 0, ff.font, main, { align: 'center', over: kind !== 'neutral', outline: kind === 'neutral' ? 3 : 0 });
     if (kind === 'bad') stroke(seg(-P.measure(txt, ff.font) * 0.55, -px * 0.3, P.measure(txt, ff.font) * 0.55, -px * 0.42), { b: tone }, Math.max(3, px * 0.09), { over: true });
     if (sub) {
-      var sf = R.mono(kind === 'neutral' ? 11 : 13, true), sw = P.measure(sub, sf) + 18;
+      var sf = fitFont(sub, W * 0.84, kind === 'neutral' ? 11 : 13, function (px) { return R.mono(px, true); }).font, sw = P.measure(sub, sf) + 18;
       var sy = px * 0.35 + 8;
       var rib = R.poly([-sw / 2 - 8, sy, sw / 2 + 8, sy, sw / 2, sy + 10, sw / 2 + 8, sy + 20, -sw / 2 - 8, sy + 20, -sw / 2, sy + 10]);
       if (tone > 0.2) { fill(rib, kind === 'bad' ? { b: tone } : { a: tone }); P.text(sub, 0, sy + 14.5, sf, PAPER, { align: 'center', ko: ['a', 'b', 'c'] }); }
@@ -1747,6 +1751,7 @@
     if (!S.ctx) return;
     view = view || { scene: 'title' };
     var t0 = now();
+    adapt(t0, view.scene);
     var scene = view.scene || 'title', park = parkOf(view), inks = inksFor(view), time = view.time || 0;
     P = S.P; P.setInks(inks);
     var fr = R.fontsReady();
@@ -1799,17 +1804,17 @@
     var ci = contactInfo(view), T = pitch ? (pitch.T || 0.8) : 0;
     var flying = pitch && view.pitchT != null && view.windup == null && !ci;
     var arrived = flying && view.pitchT >= T;
-    if (flying && !arrived && view.assist) drawAssist(view);
-    if (flying && !arrived) drawPitchBall(view);
+    drawBatter(view);
     drawCatcherBody(view);
     drawMitt(view, false);
-    if (arrived) drawPitchBall(view);
-    drawMitt(view, true);
+    if (!arrived) drawMitt(view, true);
+    if (flying && !arrived && view.assist) drawAssist(view);
+    if (flying && !arrived) drawPitchBall(view);
+    if (arrived) { drawPitchBall(view); drawMitt(view, true); }
     if (arrived && view.pitchT - T < 0.25) {
       var m = mittTarget(view), pe = (view.pitchT - T) / 0.25;
       fill(R.star(m.x, m.y - 6, 26 + 16 * pe, 12, 10, 0.2, 0.2, U.rng(2)), { c: 1 - pe }, { over: true });
     }
-    drawBatter(view);
     if (ci) drawContact(view, ci);
     drawHud(view);
     drawStamp(view.stamp, 'bat');
@@ -1844,6 +1849,26 @@
     P.reset();
   }
 
+  // adaptive resolution: if the real frame interval stays well above 60 fps during play, print at a lower
+  // internal resolution (2 -> 1.6 -> 1.3 device px per css px). Never goes back up within a session.
+  function adapt(t, scene) {
+    var iv = S.lastCall ? t - S.lastCall : 0;
+    S.lastCall = t;
+    if (S.noAdapt || scene === 'title' || iv <= 0 || iv > 120) return;
+    S.iv = S.iv || []; S.iv.push(iv);
+    if (S.iv.length < 120) return;
+    var a = S.iv.slice().sort(function (x, y) { return x - y; }), med = a[a.length >> 1];
+    S.iv = [];
+    if (med > 21 && S.qual > 0.66) { S.qual = S.qual > 0.9 ? 0.8 : 0.65; applyRes(); }
+  }
+  function applyRes() {
+    var d = Math.max(1, S.dprReq * S.qual);
+    S.dpr = d;
+    if (S.canvas) { S.canvas.width = Math.round(S.W * d); S.canvas.height = Math.round(S.H * d); }
+    if (S.P) S.P.resize(S.W, S.H, d);
+    S.cache = {};
+  }
+
   // ------------------------------------------------------------------ API
   function init(canvas) {
     S.canvas = canvas;
@@ -1855,11 +1880,9 @@
   function resize(w, h, dpr) {
     w = Math.max(1, Math.round(w)); h = Math.max(1, Math.round(h));
     dpr = Math.min(dpr || 1, K.MAX_DPR || 2);
-    if (w === S.W && h === S.H && dpr === S.dpr && S.canvas && S.canvas.width === Math.round(w * dpr)) return;
-    S.W = w; S.H = h; S.dpr = dpr;
-    if (S.canvas) { S.canvas.width = Math.round(w * dpr); S.canvas.height = Math.round(h * dpr); }
-    if (S.P) S.P.resize(w, h, dpr);
-    S.cache = {};
+    if (w === S.W && h === S.H && dpr === S.dprReq && S.canvas && S.canvas.width === Math.round(w * S.dpr)) return;
+    S.W = w; S.H = h; S.dprReq = dpr; S.qual = S.qual || 1;
+    applyRes();
     layoutBat();
   }
   function setInks(set) {

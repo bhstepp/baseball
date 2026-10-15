@@ -317,7 +317,7 @@
     // clip to the frame ring + window background area (not the bottom text panel)
     x.beginPath();
     x.rect(ox + u, oy + u, 98 * u, 138 * u);
-    x.rect(ox + 7 * u, oy + 102 * u, 86 * u, 31 * u);
+    x.rect(ox + 6.5 * u, oy + 6.5 * u, 87 * u, 127 * u);
     x.clip('evenodd');
     if (rarity === 'foil') {
       x.globalCompositeOperation = 'multiply';
