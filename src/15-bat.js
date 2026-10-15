@@ -70,7 +70,7 @@
 
     var top = 105 * (bat.power || 1) * (power ? 1.08 : 1);
     res.ev = Math.round(U.clamp(48 + (top - 48) * Math.pow(q, 1.6) + g1 * 2.5, 45, 118));
-    var la = 9 + 18 * q * q + (pz - 2.5) * 12 + (power ? 5 : 0) + (bat.lift || 0);
+    var la = 4 + 12 * q + 10 * Math.pow(q, 8) + (pz - 2.5) * 12 + (power ? 5 : 0) + (bat.lift || 0);
     res.la = Math.round(U.clamp(la + g2 * (5 + 20 * (1 - q)), -30, 80));
     res.spray = Math.round(U.clamp(e / bt * 480 + px * 10 + U.gauss(rng) * 6, -80, 80));
     return res;
@@ -214,19 +214,22 @@
     var hardness = sw.ev * 1.4667;
 
     // ---- who gets to it first: scan the path; air catches need z <= 8.5, ground plays z <= 3.5
+    // liners are hard to read: outfielders get a late jump on them
+    var react = ORDER.map(function (p, j) { return fReact(j) + (j >= 6 ? 0.35 * U.clamp((22 - sw.la) / 14, 0, 1) : 0); });
     var by = -1, tf = -1, bx = 0, byy = 0, air = false, dive = false;
     for (k = 1; k < n && by < 0; k++) {
       var P = pts[k], t = P[0], isAir = fl.land < 0 || t < fl.land;
       if (fl.hr && t >= fl.crossT) break;
-      if (isAir ? P[3] > 8.5 : P[3] > 3.5) continue;
+      if (isAir ? P[3] > 7.5 : P[3] > 3.5) continue;
       if (!isAir && foulLand) break;
       if (!playable(park, P[1], P[2], isAir)) continue;
       for (i = 0; i < 9; i++) {
         var d = Math.hypot(P[1] - F[i].x, P[2] - F[i].y);
-        var reach = isAir ? (i >= 6 ? 3.5 : 3) : (i >= 6 ? 4 : 5 * U.clamp(1.5 - hardness / 140, 0.45, 1));
-        if (t >= fReact(i) + Math.max(0, d - reach) / fSpeed(i)) {
+        var reach = isAir ? (i >= 6 ? 3.5 : 3) : (i >= 6 ? 4 : 4.5 * U.clamp(1.6 - hardness / 120, 0.4, 1));
+        var spd = fSpeed(i) * (!isAir && i < 6 ? 0.85 : 1);    // lateral first step on a grounder is slower
+        if (t >= react[i] + Math.max(0, d - reach) / spd) {
           by = i; tf = t; bx = P[1]; byy = P[2]; air = isAir;
-          dive = isAir && d > 25 && t < fReact(i) + d / fSpeed(i) - 0.05;
+          dive = isAir && d > 25 && t < react[i] + d / fSpeed(i) - 0.05;
           break;
         }
       }
@@ -321,7 +324,7 @@
     for (i = 0; i < 9; i++) {
       var keys;
       if (i === by) {
-        keys = runTo(i, F[i], { x: bx, y: byy }, fReact(i), tf);
+        keys = runTo(i, F[i], { x: bx, y: byy }, react[i], tf);
       } else if (i === cover) {
         var base = throwTo === -1 ? FIELDERS.P : K.BASES[throwTo];
         keys = runTo(i, F[i], { x: base.x, y: base.y }, fReact(i), null, 1.5);
@@ -344,10 +347,10 @@
       fielders: ORDER.slice(),
       fielderAt: function (j, t) { return tracks[j](Math.max(0, t) * TS); },
       catchBy: by, catchT: by >= 0 ? tf / TS : -1,
-      desc: desc, wall: fl.wallT >= 0,
+      desc: desc, wall: fl.wallT >= 0 && (by < 0 || !air) && (by < 0 || fl.wallT < tf),
       // ---- extras (see report)
       carry: Math.round(carry),                 // ft the ball travelled in the air (HR: to where it lands in the seats)
-      wallT: fl.wallT >= 0 ? fl.wallT / TS : -1,
+      wallT: fl.wallT >= 0 && (by < 0 || !air) && (by < 0 || fl.wallT < tf) ? fl.wallT / TS : -1,
       fenceT: fl.crossT >= 0 ? fl.crossT / TS : -1, // HR / ground-rule double: when it crosses the fence
       foulCaught: type === 'OUT' && foulLand,
       throwTo: throwTo == null ? null : throwTo, // base index the ball is thrown to (1..3), -1 = back to the pitcher

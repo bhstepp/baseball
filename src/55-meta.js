@@ -79,7 +79,7 @@
     for (var t = 0; t < 6; t++) {
       var park = parks[t] || null;
       var town = (park && (park.town || park.name)) || FALLBACK_TOWNS[t];
-      var mascot = park && park.features && MASCOT_BY_SKYLINE[park.features.skyline];
+      var mascot = park && (park.team || (park.features && MASCOT_BY_SKYLINE[park.features.skyline]));
       if (!mascot || used[mascot]) { mascot = null; for (var m = 0; m < MASCOTS.length; m++) if (!used[MASCOTS[(t + m) % MASCOTS.length]]) { mascot = MASCOTS[(t + m) % MASCOTS.length]; break; } }
       used[mascot] = true;
       var ink = (park && park.inkset && inksetById(park.inkset)) ? park.inkset : BB.INKSETS[t % BB.INKSETS.length].id;
