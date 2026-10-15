@@ -129,6 +129,3063 @@ BB.U = (function () {
   };
 })();
 
+// ===================== MODULE: 10-pitch.js =====================
+// 10-pitch.js — BB.Pitch: pitch selection, location and flight path. Owned by the physics agent.
+// Coordinates (feet, see docs/CONTRACT.md): origin = centre of home plate, +y toward the pitcher, +x toward the
+// first-base side (catcher's right), +z up. A pitch is fully described by its seeded params; pos() is pure.
+(function () {
+  var K = BB.K, U = BB.U;
+
+  // spd = mph as a fraction of the pitcher's fastball velo. bx/bz = total break in feet as seen by the catcher for a
+  // RIGHT-handed pitcher (negative bx = arm side = catcher's left); mirrored for lefties. p = lateness exponent
+  // (break offset grows ~ s^p, s = t/T, so higher p = later, sharper break). arc = extra mid-flight loft (ft).
+  var TYPES = {
+    FB: { name: 'Fastball',    abbr: 'FB', spd: 1.00, bx: -0.45, bz:  0.35, p: 2.0, arc: 0.0 },
+    SI: { name: 'Sinker',      abbr: 'SI', spd: 0.98, bx: -0.85, bz: -0.65, p: 2.3, arc: 0.0 },
+    CT: { name: 'Cutter',      abbr: 'CT', spd: 0.94, bx:  0.50, bz: -0.10, p: 2.6, arc: 0.1 },
+    SL: { name: 'Slider',      abbr: 'SL', spd: 0.88, bx:  1.25, bz: -0.55, p: 2.8, arc: 0.3 },
+    CB: { name: 'Curveball',   abbr: 'CB', spd: 0.82, bx:  0.75, bz: -1.70, p: 2.6, arc: 1.3 },
+    CH: { name: 'Changeup',    abbr: 'CH', spd: 0.86, bx: -0.80, bz: -0.85, p: 2.4, arc: 0.4 },
+    SP: { name: 'Splitter',    abbr: 'SP', spd: 0.89, bx: -0.20, bz: -1.45, p: 3.2, arc: 0.2 },
+    KN: { name: 'Knuckleball', abbr: 'KN', spd: 0.78, bx:  0.00, bz: -0.30, p: 2.0, arc: 0.6, wobble: true },
+    EE: { name: 'Eephus',      abbr: 'EE', spd: 0.60, bx:  0.25, bz:  0.00, p: 2.0, arc: 7.5 },
+    SC: { name: 'Screwball',   abbr: 'SC', spd: 0.85, bx: -1.30, bz: -1.00, p: 2.7, arc: 0.4 },
+  };
+  var BREAKERS = { SL: 1, CB: 1, CH: 1, SP: 1, SC: 1, KN: 1, CT: 0 };
+
+  // Slowed-for-playability flight time: 95 mph -> 0.70 s, 80 -> 0.85 s, 55 -> 1.30 s.
+  function flightTime(mph) { return 0.70 * Math.pow(95 / Math.max(40, mph), 1.13); }
+
+  // Release point by hand and windup (RH pitcher's arm is on the catcher's LEFT, -x).
+  var LOOK = { classic: [1.75, 6.0], highkick: [1.55, 6.35], sidearm: [2.75, 4.7], submarine: [2.35, 2.6] };
+  function release(p) {
+    var look = (p && p.look) || {}, r = LOOK[look.windup] || LOOK.classic, side = p && p.hand === 'L' ? 1 : -1;
+    var z = r[1] + (look.build === 'tall' ? 0.3 : look.build === 'stout' ? -0.2 : look.build === 'lanky' ? 0.15 : 0);
+    return { x: side * r[0], y: K.RELEASE_Y, z: z };
+  }
+
+  function zoneProb(ctx, control) {
+    if (ctx.derby) return 0.85;
+    var b = ctx.balls || 0, s = ctx.strikes || 0, p = 0.45 + 0.25 * control;
+    if (s > b) p -= 0.08;
+    if (s === 2 && b < 3) p -= 0.12;
+    if (b > s) p += 0.10;
+    if (b === 3) p += 0.15;
+    return U.clamp(p, 0.2, 0.92);
+  }
+
+  function make(pitcher, ctx, rng) {
+    pitcher = pitcher || {}; ctx = ctx || {};
+    var control = pitcher.control == null ? 0.5 : pitcher.control, stuff = pitcher.stuff == null ? 0.5 : pitcher.stuff;
+    var velo = pitcher.velo || 90, ars = {}, k;
+    for (k in (pitcher.arsenal || { FB: 1 })) if (TYPES[k] && pitcher.arsenal[k] > 0) ars[k] = pitcher.arsenal[k];
+    if (!Object.keys(ars).length) ars = { FB: 1 };
+    // count leans: ahead -> more breaking stuff, behind -> more fastballs
+    var ahead = (ctx.strikes || 0) - (ctx.balls || 0);
+    if (!ctx.derby && ars.FB && ahead !== 0) ars.FB *= ahead > 0 ? 0.8 : 1.35;
+    var type = U.pickWeighted(rng, ars), T0 = TYPES[type];
+
+    var mph = type === 'EE' ? 50 + rng() * 8 : type === 'KN' ? Math.min(velo * T0.spd, 77) - 2 + rng() * 4
+      : velo * T0.spd - 1 + rng() * 2;
+    mph = Math.round(mph);
+    var T = flightTime(mph), rel = release(pitcher), mirror = pitcher.hand === 'L' ? -1 : 1;
+
+    // ---- location
+    var inZone = rng() < zoneProb(ctx, control), tx, tz;
+    var sd = ctx.derby ? 0.09 : 0.08 + 0.32 * (1 - control);
+    var zx = K.ZONE.xMax, zl = K.ZONE.zMin, zh = K.ZONE.zMax, zm = (zl + zh) / 2;
+    if (inZone) {
+      if (ctx.derby) {
+        tx = U.clamp(U.gauss(rng) * 0.28, -0.55, 0.55);
+        tz = U.clamp(zm + U.gauss(rng) * 0.32, 2.0, 3.05);
+      } else { // better control paints the edges
+        var e = 1 / (1 + 1.4 * control), ux = rng() * 2 - 1, uz = rng() * 2 - 1;
+        tx = Math.sign(ux) * Math.pow(Math.abs(ux), e) * (zx - 0.1);
+        tz = zm + Math.sign(uz) * Math.pow(Math.abs(uz), e) * ((zh - zl) / 2 - 0.1);
+      }
+    } else {
+      var r = rng(), lowBias = BREAKERS[type] ? 0.55 : 0.2;
+      if (r < lowBias) { tx = (rng() * 2 - 1) * 0.7; tz = zl - 0.35 - rng() * 0.75; }                    // in the dirt-ish
+      else if (r < lowBias + (1 - lowBias) * 0.5) { tx = zx + 0.3 + rng() * 0.6; tz = zm + (rng() * 2 - 1) * 0.8; } // away
+      else if (r < lowBias + (1 - lowBias) * 0.75) { tx = -(zx + 0.3 + rng() * 0.45); tz = zm + (rng() * 2 - 1) * 0.8; } // in
+      else { tx = (rng() * 2 - 1) * 0.6; tz = zh + 0.3 + rng() * 0.6; }                                   // up
+    }
+    var px = U.clamp(tx + U.gauss(rng) * sd, -2.6, 2.6), pz = U.clamp(tz + U.gauss(rng) * sd, 0.6, 5.2);
+
+    // ---- movement (seeded, deterministic)
+    var amt = (0.55 + 0.9 * stuff) * (0.85 + rng() * 0.3);
+    var bx = T0.bx * amt * mirror, bz = T0.bz * amt, wob = null;
+    if (T0.wobble) {
+      wob = [];
+      for (var i = 0; i < 4; i++) wob.push({ a: (0.25 + 0.35 * rng()) * (0.6 + stuff), f: 1.2 + rng() * 2.2, ph: rng() * 6.283 });
+      bx = (rng() * 2 - 1) * 0.8; bz = -0.2 - rng() * 0.6;
+    }
+    var pitch = {
+      id: ctx.id || 0, type: type, name: T0.name, mph: mph, T: T,
+      release: rel, plate: { x: px, z: pz }, strike: false,
+      _b: { x: bx, z: bz }, _p: T0.p, _arc: 0.55 + T0.arc, _wob: wob,
+    };
+    pitch.strike = isStrike(pitch);
+    return pitch;
+  }
+
+  function isStrike(p) {
+    var r = K.BALL_R, x = p.plate.x, z = p.plate.z;
+    return Math.abs(x) <= K.ZONE.xMax + r && z >= K.ZONE.zMin - r && z <= K.ZONE.zMax + r;
+  }
+
+  var YD = 0.08; // slight deceleration: y progress f(s) = s(1+YD) - YD s^2
+  function pos(p, t) {
+    var T = p.T, r = p.release, b = p._b, pl = p.plate;
+    if (t <= T) {
+      var s = Math.max(0, t / T), sp = Math.pow(s, p._p), x, z;
+      x = r.x + (pl.x - b.x - r.x) * s + b.x * sp;
+      z = r.z + (pl.z - b.z - r.z) * s + b.z * sp + p._arc * 4 * s * (1 - s);
+      if (p._wob) {
+        var env = Math.sin(Math.PI * s) * s; // grows toward the plate, zero at both ends
+        x += env * (p._wob[0].a * Math.sin(6.283 * p._wob[0].f * s + p._wob[0].ph) + 0.5 * p._wob[1].a * Math.sin(6.283 * p._wob[1].f * 2 * s + p._wob[1].ph));
+        z += env * (p._wob[2].a * Math.sin(6.283 * p._wob[2].f * s + p._wob[2].ph) + 0.5 * p._wob[3].a * Math.sin(6.283 * p._wob[3].f * 2 * s + p._wob[3].ph));
+      }
+      return { x: x, y: K.RELEASE_Y * (1 - (s * (1 + YD) - YD * s * s)), z: z };
+    }
+    // past the plate: carry on along the final direction to the catcher's mitt (y = -3), then stay there
+    var vy = K.RELEASE_Y * (1 - YD) / T;                         // ft/s along -y at the plate
+    var dxs = (pl.x - b.x - r.x) + b.x * p._p, dzs = (pl.z - b.z - r.z) + b.z * p._p - 4 * p._arc;
+    var d = Math.min(3, vy * (t - T)), k = d / (vy * T);
+    return { x: pl.x + dxs * k, y: -d, z: Math.max(0.4, pl.z + dzs * k) };
+  }
+
+  BB.Pitch = { TYPES: TYPES, make: make, pos: pos, isStrike: isStrike, flightTime: flightTime, releasePoint: release };
+})();
+
+// ===================== MODULE: 15-bat.js =====================
+// 15-bat.js — BB.Bat: swing -> contact (ev / launch / spray) and the batted-ball play. Owned by the physics agent.
+// World coords per docs/CONTRACT.md (feet; +y to centre field, +x to the first-base side). Spray 0 = centre,
+// negative = left field. All Play times (hang, catchT, dur, ballAt/fielderAt t) are ANIMATION seconds: the ball
+// physics runs in real seconds and is played back TS times faster so long flies don't drag.
+(function () {
+  var K = BB.K, U = BB.U, D2R = Math.PI / 180;
+  var TS = 1.25;                       // physics seconds per animation second
+  var DRAG = 0.00175, LIFT = 0.0005, G = 32.17;
+  var RUN = [0, 4.25, 7.7, 11.3];       // batter-runner arrival times (physics s) at 1B, 2B, 3B
+  var THROW = 120;                     // ft/s
+
+  // ---------------------------------------------------------------- fielders
+  var FIELDERS = {
+    P: { x: 0, y: 56 }, C: { x: 0, y: -4 }, '1B': { x: 66, y: 86 }, '2B': { x: 34, y: 142 }, SS: { x: -34, y: 142 },
+    '3B': { x: -64, y: 86 }, LF: { x: -150, y: 252 }, CF: { x: 0, y: 312 }, RF: { x: 150, y: 252 },
+  };
+  var ORDER = ['P', 'C', '1B', '2B', 'SS', '3B', 'LF', 'CF', 'RF'];
+  var NAMES = ['pitcher', 'catcher', 'first baseman', 'second baseman', 'shortstop', 'third baseman', 'left fielder', 'center fielder', 'right fielder'];
+  var SHORT = ['the mound', 'the catcher', 'first', 'second', 'short', 'third', 'left', 'center', 'right'];
+  function fSpeed(i) { return i >= 6 ? 27 : i >= 2 ? 24 : i === 0 ? 21 : 18; }
+  function fReact(i) { return i >= 6 ? 0.3 : 0.22; }
+
+  // ---------------------------------------------------------------- park
+  function fenceAt(park, spray) {
+    var f = (park && park.fence) || [[-45, 330, 10], [0, 400, 10], [45, 330, 10]];
+    if (spray <= f[0][0]) return { dist: f[0][1], height: f[0][2] };
+    for (var i = 1; i < f.length; i++) {
+      if (spray <= f[i][0]) {
+        var k = (spray - f[i - 1][0]) / (f[i][0] - f[i - 1][0] || 1);
+        return { dist: U.lerp(f[i - 1][1], f[i][1], k), height: U.lerp(f[i - 1][2], f[i][2], k) };
+      }
+    }
+    var l = f[f.length - 1]; return { dist: l[1], height: l[2] };
+  }
+  function angOf(x, y) { return Math.atan2(x, y) / D2R; }
+
+  // ---------------------------------------------------------------- swing
+  function swing(pitch, timingErr, bat, opts) {
+    bat = bat || {}; opts = opts || {};
+    var rng = opts.rng || U.rng(U.hashStr('sw' + timingErr + (pitch.id || 0)));
+    var power = !!opts.power, chase = !pitch.strike, e = timingErr;
+    var bt = (bat.timing || 1) * (power ? 0.75 : 1), w = bt * (chase ? 0.7 : 1), a = Math.abs(e) / w;
+    var px = pitch.plate.x, pz = pitch.plate.z;
+    var res = { contact: false, label: 'WHIFF', timingErr: e, quality: 0, sweet: false, ev: 0, la: 0, spray: 0, power: power, chase: chase };
+    var early = e < 0;
+
+    // how far outside the zone (ft) — reaching for it means more whiffs and weak contact
+    var off = Math.max(0, Math.abs(px) - K.ZONE.xMax, K.ZONE.zMin - pz, pz - K.ZONE.zMax);
+    var g1 = U.gauss(rng), g2 = U.gauss(rng), g3 = U.gauss(rng), r1 = rng(), r2 = rng();
+    if (chase && r1 < U.clamp(0.2 + off * 0.8, 0, 0.9)) return res;
+    if (a > 0.16) return res;
+    if (a > 0.10) { // way off: a tick foul or nothing
+      res.label = early ? 'WAY EARLY' : 'WAY LATE';
+      if (r2 > 0.5 * (1 - (a - 0.10) / 0.06)) return res;
+      res.contact = true; res.quality = 0.08;
+      res.ev = Math.round(48 + r2 * 30); res.la = Math.round(U.clamp(8 + g1 * 25, -20, 80));
+      res.spray = Math.round((early ? -1 : 1) * (52 + Math.abs(g2) * 25));
+      return res;
+    }
+    res.contact = true;
+    res.label = a <= 0.018 ? 'PERFECT' : a <= 0.035 ? 'GREAT' : a <= 0.06 ? 'GOOD' : early ? 'EARLY' : 'LATE';
+    var q = a <= 0.018 ? 1 - 0.05 * a / 0.018 : a <= 0.035 ? 0.95 - 0.12 * (a - 0.018) / 0.017
+      : a <= 0.06 ? 0.83 - 0.2 * (a - 0.035) / 0.025 : 0.63 - 0.35 * (a - 0.06) / 0.04;
+    var dz = (pz - 2.55) / 1.0, dx = px / 0.9;
+    q *= 1 - 0.1 * U.clamp(dx * dx + dz * dz, 0, 1.5);           // edges are a bit harder to barrel
+    if (chase) q = Math.min(q * 0.75, 0.5);
+    q = U.clamp(q + g3 * 0.025, 0.05, 1);
+    res.quality = Math.round(q * 1000) / 1000;
+    res.sweet = res.label === 'PERFECT' && q > 0.9 && !chase;
+
+    var top = 105 * (bat.power || 1) * (power ? 1.08 : 1);
+    res.ev = Math.round(U.clamp(48 + (top - 48) * Math.pow(q, 1.6) + g1 * 2.5, 45, 118));
+    var la = 9 + 18 * q * q + (pz - 2.5) * 12 + (power ? 5 : 0) + (bat.lift || 0);
+    res.la = Math.round(U.clamp(la + g2 * (5 + 20 * (1 - q)), -30, 80));
+    res.spray = Math.round(U.clamp(e / bt * 480 + px * 10 + U.gauss(rng) * 6, -80, 80));
+    return res;
+  }
+
+  // ---------------------------------------------------------------- ball flight
+  // returns samples [t, x, y, z] every 1/60 physics second plus key events
+  function fly(ev, la, spray, park) {
+    var v = ev * 1.4667, a = la * D2R, s = spray * D2R, h = v * Math.cos(a);
+    var vx = h * Math.sin(s), vy = h * Math.cos(s), vz = v * Math.sin(a);
+    var x = 0, y = 0.5, z = 3, t = 0, dt = 1 / 240, lift = la > 0 ? LIFT : -0.0002;
+    var pts = [[0, x, y, z]], out = { pts: pts, land: -1, wallT: -1, hr: false, grd: false, crossT: -1, apex: 3, stop: 0, rest: null };
+    var phase = 0, bounces = 0, rPrev = 0, step = 0;
+    while (t < 14) {
+      var vh = Math.hypot(vx, vy), sp = Math.hypot(vh, vz);
+      if (phase === 0 || phase === 2) {        // air (2 = cleared the fence, heading for the seats)
+        var ax = -DRAG * sp, lz = lift * sp * vh, lh = -lift * sp * vz;
+        var hx = vh > 0 ? vx / vh : 0, hy = vh > 0 ? vy / vh : 0;
+        vx += (ax * vx + lh * hx) * dt; vy += (ax * vy + lh * hy) * dt; vz += (ax * vz + lz - G) * dt;
+      } else {                                // phase 1 or 3: bouncing / rolling on the grass
+        vz -= G * dt;
+        if (z <= 0 && vz <= 4) {
+          z = 0; vz = 0;
+          var dec = (12 + 0.12 * vh) * dt;
+          if (vh <= dec) { vx = vy = 0; } else { vx *= 1 - dec / vh; vy *= 1 - dec / vh; }
+        }
+      }
+      x += vx * dt; y += vy * dt; z += vz * dt; t += dt;
+      if (z > out.apex) out.apex = z;
+      var r = Math.hypot(x, y), ang = angOf(x, y);
+      if (Math.abs(ang) <= K.FOUL_DEG && phase !== 2) {
+        var f = fenceAt(park, ang);
+        if (r >= f.dist && rPrev < f.dist) {
+          if (z > f.height) {
+            if (out.land < 0) { phase = 2; out.hr = true; out.crossT = t; }
+            else { out.grd = true; out.crossT = t; phase = 3; }
+          } else {                              // off the wall: carom back
+            if (out.wallT < 0) out.wallT = t;
+            var nx = x / r, ny = y / r, vr = vx * nx + vy * ny;
+            vx -= 1.3 * vr * nx; vy -= 1.3 * vr * ny; vx *= 0.6; vy *= 0.6;
+            x = nx * (f.dist - 0.5); y = ny * (f.dist - 0.5); r = f.dist - 0.5;
+          }
+        }
+      }
+      rPrev = r;
+      if (phase === 2) {                          // into the stands: stop on the bleachers
+        var f2 = fenceAt(park, U.clamp(ang, -45, 45));
+        if (z <= f2.height + 0.35 * (r - f2.dist) && t > out.crossT + 0.05) { out.rest = t; out.landT = t; break; }
+      } else if (z <= 0 && vz < 0) {
+        if (out.land < 0) { out.land = t; out.landX = x; out.landY = y; }
+        if (phase === 0) phase = 1;
+        if (phase === 3) { out.rest = t; break; }
+        z = 0;
+        if (vz < -4) { vz = -vz * (bounces ? 0.35 : 0.45); var fr = bounces ? 0.85 : 0.72; vx *= fr; vy *= fr; bounces++; }
+      }
+      if (phase === 1 && vx === 0 && vy === 0) { out.rest = t; break; }
+      if (++step % 4 === 0) pts.push([t, x, y, Math.max(0, z)]);
+    }
+    pts.push([t, x, y, Math.max(0, z)]);
+    out.stop = t;
+    return out;
+  }
+
+  function sampleAt(pts, t) {
+    if (t <= pts[0][0]) return pts[0];
+    var n = pts.length; if (t >= pts[n - 1][0]) return pts[n - 1];
+    var i = Math.min(n - 2, Math.floor(t * 60)); // samples are ~1/60 apart
+    while (i > 0 && pts[i][0] > t) i--;
+    while (i < n - 2 && pts[i + 1][0] < t) i++;
+    var A = pts[i], B = pts[i + 1], k = (t - A[0]) / ((B[0] - A[0]) || 1);
+    return [t, A[1] + (B[1] - A[1]) * k, A[2] + (B[2] - A[2]) * k, A[3] + (B[3] - A[3]) * k];
+  }
+
+  // can a fielder make a play on the ball at (x, y)? fair and inside the fence, or catchable foul ground
+  function playable(park, x, y, air) {
+    var r = Math.hypot(x, y), ang = angOf(x, y), aa = Math.abs(ang);
+    if (aa <= K.FOUL_DEG) return r <= fenceAt(park, ang).dist - 1.5;
+    if (!air) return false;
+    if (y < -25) return false;
+    var off = aa >= 135 ? r : r * Math.sin(Math.min(aa - 45, 90) * D2R);
+    return off <= 30 && r < 260;
+  }
+
+  // ---------------------------------------------------------------- keyframed paths
+  function track(keys) { // keys [[t, x, y], ...] in physics seconds, sorted
+    return function (t) {
+      if (t <= keys[0][0]) return { x: keys[0][1], y: keys[0][2] };
+      for (var i = 1; i < keys.length; i++) if (t <= keys[i][0]) {
+        var A = keys[i - 1], B = keys[i], k = (t - A[0]) / ((B[0] - A[0]) || 1);
+        return { x: A[1] + (B[1] - A[1]) * k, y: A[2] + (B[2] - A[2]) * k };
+      }
+      var L = keys[keys.length - 1]; return { x: L[1], y: L[2] };
+    };
+  }
+  function runTo(i, from, to, tStart, tLatest, stopShort) {
+    var dx = to.x - from.x, dy = to.y - from.y, d = Math.hypot(dx, dy), go = Math.max(0, d - (stopShort || 0));
+    var ex = from.x + (d ? dx / d * go : 0), ey = from.y + (d ? dy / d * go : 0);
+    var tArr = tStart + go / fSpeed(i);
+    if (tLatest != null) tArr = Math.min(tArr, Math.max(tStart + 0.05, tLatest));
+    return [[0, from.x, from.y], [tStart, from.x, from.y], [tArr, ex, ey]];
+  }
+
+  // ---------------------------------------------------------------- calls
+  function dirName(sp) {
+    return sp < -30 ? 'left' : sp < -11 ? 'left-center' : sp <= 11 ? 'center' : sp <= 30 ? 'right-center' : 'right';
+  }
+  function fill(rng, list, o) {
+    return U.pick(rng, list).replace(/\{(\w+)\}/g, function (m, k) { return o[k]; });
+  }
+  var CALLS = {
+    HR: ['Deep to {dir}... GONE!', 'Way back in {dir}... it\'s OUTTA HERE!', '{dist} feet to {dir}. See ya!',
+      'A no-doubter to {dir}!', 'Kiss it goodbye! {dist} feet to {dir}.', 'Launched into the {dir} field seats!'],
+    HRjust: ['Back, back, back... it\'s GONE! Just over in {dir}.', 'Wall-scraper in {dir}... it\'s gone!', 'Will it stay up? ... It\'s OUT in {dir}!'],
+    HRbomb: ['Absolutely CRUSHED. {dist} feet to {dir}!', 'Moonshot! {dist} feet and still rising!', 'Into the next zip code: {dist} feet!'],
+    '1Bline': ['Line drive single to {dir}.', 'Frozen rope into {dir}. Base hit!', 'Stung on a line to {dir} for a single.'],
+    '1Bground': ['Grounder through the hole into {dir}!', 'Seeing-eye single into {dir}.', 'Chopped past the infield, base hit.'],
+    '1Bbloop': ['Bloop... and it drops in {dir}!', 'Dunker falls in {dir}. Single.', 'Flare to shallow {dir}, nobody gets there.'],
+    '1Binf': ['Slow roller to {pos}... beats the throw!', 'Infield single, legged it out!', 'Chopper to {pos}, no play!'],
+    '1Bfly': ['Drops in front of the {name}. Single.', 'Lands in {dir}, single.'],
+    '2B': ['Into the gap in {dir}! Stand-up double.', 'Split the outfielders in {dir}. Two-bagger!', 'Ripped down the line in {dir}, double!'],
+    '2Bwall': ['Off the wall in {dir}! Double!', 'Clangs off the fence in {dir}, in with two.', 'Wall ball in {dir}! Double.'],
+    '2Bgrd': ['One hop over the wall. Ground-rule double!', 'Bounces into the seats in {dir}: ground-rule double.'],
+    '3B': ['Rolling to the corner in {dir}... he\'s in with a TRIPLE!', 'Into the gap and to the wall! Triple!', 'He\'s digging for third... SAFE! Triple!'],
+    OUTfly: ['Fly ball to {dir}, the {name} camps under it.', 'Lazy fly to {dir}. Out.', 'Routine fly, {name} squeezes it.'],
+    OUTdeep: ['Deep to {dir}... caught at the track!', 'Hit a ton, but the {name} hauls it in.', 'Back, back... and caught on the warning track.'],
+    OUTline: ['Lined right at the {name}.', 'Scorched... but snared by the {name}!', 'Hard liner, right at {pos}. Out.'],
+    OUTdive: ['DIVING CATCH by the {name}! Robbed!', 'What a grab by the {name}!', 'He lays out and makes the catch!'],
+    OUTground: ['Grounder to {pos}, throw to first. Out.', 'Routine two-hopper to {pos}.', 'Rolled over it, {pos} to first.'],
+    OUTpop: ['Pop-up, the {name} has it.', 'Sky-high pop... caught.', 'Got under that one. Infield fly, out.'],
+    OUTfoul: ['Foul pop... the {name} squeezes it.', 'Drifting into foul ground... caught by the {name}.'],
+    FOUL: ['Fouled back.', 'Foul ball, {side} side.', 'Hooked foul down the line.', 'Spun off foul.', 'Got a piece. Foul.'],
+  };
+
+  // ---------------------------------------------------------------- play
+  function play(sw, park, rng, opts) {
+    opts = opts || {}; rng = rng || U.rng(U.hashStr('pl' + sw.ev + sw.la + sw.spray));
+    var fl = fly(sw.ev, sw.la, sw.spray, park), pts = fl.pts;
+    var n = pts.length, i, k, F = ORDER.map(function (p) { return FIELDERS[p]; });
+    var landT = fl.land >= 0 ? fl.land : fl.stop, landX = fl.land >= 0 ? fl.landX : pts[n - 1][1], landY = fl.land >= 0 ? fl.landY : pts[n - 1][2];
+    var landAng = angOf(landX, landY), foulLand = Math.abs(landAng) > K.FOUL_DEG || landY < 0;
+    var hardness = sw.ev * 1.4667;
+
+    // ---- who gets to it first: scan the path; air catches need z <= 8.5, ground plays z <= 3.5
+    var by = -1, tf = -1, bx = 0, byy = 0, air = false, dive = false;
+    for (k = 1; k < n && by < 0; k++) {
+      var P = pts[k], t = P[0], isAir = fl.land < 0 || t < fl.land;
+      if (fl.hr && t >= fl.crossT) break;
+      if (isAir ? P[3] > 8.5 : P[3] > 3.5) continue;
+      if (!isAir && foulLand) break;
+      if (!playable(park, P[1], P[2], isAir)) continue;
+      for (i = 0; i < 9; i++) {
+        var d = Math.hypot(P[1] - F[i].x, P[2] - F[i].y);
+        var reach = isAir ? (i >= 6 ? 3.5 : 3) : (i >= 6 ? 4 : 5 * U.clamp(1.5 - hardness / 140, 0.45, 1));
+        if (t >= fReact(i) + Math.max(0, d - reach) / fSpeed(i)) {
+          by = i; tf = t; bx = P[1]; byy = P[2]; air = isAir;
+          dive = isAir && d > 25 && t < fReact(i) + d / fSpeed(i) - 0.05;
+          break;
+        }
+      }
+    }
+
+    var type, outKind = null, desc, call = 'OUT', throwTo = null, bases = 0, retrieve = by;
+    var o = { dir: dirName(landAng), dist: 0, name: '', pos: '', side: sw.spray < 0 ? 'third-base' : 'first-base' };
+    var carry = Math.hypot(landX, landY);
+    if (fl.hr) {
+      type = 'HR'; by = -1;
+      carry = Math.hypot(pts[n - 1][1], pts[n - 1][2]);
+    } else if (by >= 0 && air) {
+      type = 'OUT';
+      var deepFly = carry > 250;
+      outKind = sw.la >= 48 || (fl.apex > 70 && carry < 180) ? 'pop' : sw.la < 18 ? 'line' : 'fly';
+      throwTo = by >= 6 ? 2 : -1;
+      call = foulLand ? 'OUTfoul' : dive ? 'OUTdive' : outKind === 'pop' ? 'OUTpop' : outKind === 'line' ? 'OUTline' : deepFly ? 'OUTdeep' : 'OUTfly';
+    } else if (foulLand) {
+      type = 'FOUL'; by = -1; call = 'FOUL';
+    } else {
+      if (by < 0) { // ball stopped somewhere nobody reached in the scan: nearest fielder runs it down
+        var best = 1e9, end = pts[n - 1];
+        for (i = 0; i < 9; i++) {
+          var tt = fReact(i) + Math.hypot(end[1] - F[i].x, end[2] - F[i].y) / fSpeed(i);
+          if (tt < best) { best = tt; by = i; }
+        }
+        tf = Math.max(best, end[0]); bx = end[1]; byy = end[2];
+      }
+      retrieve = by;
+      var r0 = Math.hypot(bx, byy), b1 = K.BASES[1];
+      if (fl.grd) { type = '2B'; call = '2Bgrd'; throwTo = 2; }
+      else if (by < 6 && r0 < 175) { // infield play: throw to first
+        var arrive = tf + 0.55 + Math.hypot(bx - b1.x, byy - b1.y) / THROW;
+        throwTo = 1;
+        if (arrive < RUN[1]) { type = 'OUT'; outKind = 'ground'; call = 'OUTground'; }
+        else { type = '1B'; call = '1Binf'; }
+      } else { // outfield: take extra bases if the throw can't beat the runner
+        bases = 1;
+        for (var b = 2; b <= 3; b++) {
+          var B = K.BASES[b], dd = Math.hypot(bx - B.x, byy - B.y);
+          var thr = tf + 0.9 + dd / 110 + (dd > 220 ? 0.6 : 0);
+          if (RUN[b] + 0.3 < thr) bases = b; else break;
+        }
+        type = bases + 'B';
+        throwTo = bases === 3 ? 3 : 2;
+        if (bases === 1) call = sw.la < 6 ? '1Bground' : sw.la < 20 ? '1Bline' : carry < 230 ? '1Bbloop' : '1Bfly';
+        else if (bases === 2) call = fl.wallT >= 0 ? '2Bwall' : '2B';
+        else call = '3B';
+      }
+    }
+    if (by >= 0) { o.name = NAMES[by]; o.pos = SHORT[by]; }
+    o.dist = Math.round(carry);
+    if (type === 'HR') {
+      var fz = fenceAt(park, U.clamp(sw.spray, -45, 45));
+      call = carry < fz.dist + 25 ? 'HRjust' : carry > 445 ? 'HRbomb' : 'HR';
+    }
+    desc = fill(rng, CALLS[call], o);
+
+    // ---- ball path after the play is made: glove, then a throw
+    var HOLD = 0.35, thr0 = -1, thr1 = -1, tgt = null, glove = null;
+    if (by >= 0) {
+      glove = { x: bx, y: byy };
+      if (throwTo === -1) tgt = { x: FIELDERS.P.x, y: FIELDERS.P.y };
+      else if (throwTo != null) tgt = K.BASES[throwTo];
+      if (tgt) {
+        thr0 = tf + HOLD;
+        var td = Math.hypot(tgt.x - bx, tgt.y - byy);
+        thr1 = thr0 + td / (throwTo === -1 ? 60 : THROW) + (td > 230 ? 0.5 : 0);
+      }
+    }
+    var endPhys;
+    if (type === 'HR') endPhys = Math.min(Math.max(fl.stop + 0.8 * TS, fl.crossT + 0.7 * TS), 5 * TS);
+    else if (type === 'FOUL') endPhys = U.clamp(landT + 0.6 * TS, K.FIELD_MIN * TS, 3.5 * TS);
+    else endPhys = U.clamp((thr1 > 0 ? thr1 : tf + HOLD) + 0.35 * TS, K.FIELD_MIN * TS, 7.5 * TS);
+
+    function ballPhys(t) {
+      if (by < 0 || t < tf) { var s = sampleAt(pts, t); return { x: s[1], y: s[2], z: s[3] }; }
+      if (thr0 < 0 || t < thr0) return { x: glove.x, y: glove.y, z: 4 };
+      var u = Math.min(1, (t - thr0) / (thr1 - thr0)), dist = Math.hypot(tgt.x - glove.x, tgt.y - glove.y);
+      return { x: U.lerp(glove.x, tgt.x, u), y: U.lerp(glove.y, tgt.y, u), z: 4 + dist * 0.05 * 4 * u * (1 - u) };
+    }
+
+    // ---- fielder movement (keyframes in physics seconds)
+    var tracks = [], focus = by >= 0 ? { x: bx, y: byy } : { x: landX, y: landY };
+    if (type === 'HR') { var fc = fenceAt(park, U.clamp(sw.spray, -45, 45)); focus = { x: Math.sin(sw.spray * D2R) * (fc.dist - 6), y: Math.cos(sw.spray * D2R) * (fc.dist - 6) }; }
+    var cover = -1;
+    if (throwTo === 1) cover = by === 2 ? 0 : 2;
+    else if (throwTo === 2) cover = sw.spray > 0 ? 4 : 3;
+    else if (throwTo === 3) cover = 5;
+    var nearOF = -1, nd = 1e9;
+    for (i = 6; i < 9; i++) if (i !== by) { var q = Math.hypot(focus.x - F[i].x, focus.y - F[i].y); if (q < nd) { nd = q; nearOF = i; } }
+    for (i = 0; i < 9; i++) {
+      var keys;
+      if (i === by) {
+        keys = runTo(i, F[i], { x: bx, y: byy }, fReact(i), tf);
+      } else if (i === cover) {
+        var base = throwTo === -1 ? FIELDERS.P : K.BASES[throwTo];
+        keys = runTo(i, F[i], { x: base.x, y: base.y }, fReact(i), null, 1.5);
+      } else if ((type === 'HR' || (focus.y > 150 && by >= 6) || (by < 0 && type !== 'FOUL')) && i === nearOF) {
+        keys = runTo(i, F[i], focus, fReact(i), null, type === 'HR' ? 0 : 25);
+      } else if (i >= 2) { // a couple of steps toward the action
+        var dx = focus.x - F[i].x, dy = focus.y - F[i].y, dd2 = Math.hypot(dx, dy) || 1, st = Math.min(i >= 6 ? 30 : 8, dd2 * 0.3);
+        keys = [[0, F[i].x, F[i].y], [fReact(i), F[i].x, F[i].y], [fReact(i) + st / fSpeed(i) * 1.6, F[i].x + dx / dd2 * st, F[i].y + dy / dd2 * st]];
+      } else keys = [[0, F[i].x, F[i].y]];
+      tracks.push(track(keys));
+    }
+
+    var hangPhys = type === 'HR' ? fl.stop : by >= 0 && air ? tf : landT;
+    var res = {
+      type: type, outKind: outKind, ev: sw.ev, la: sw.la, spray: sw.spray,
+      dist: Math.round(by >= 0 && !air && type !== 'HR' ? Math.hypot(bx, byy) : carry),
+      landing: type === 'HR' ? { x: pts[n - 1][1], y: pts[n - 1][2] } : { x: landX, y: landY },
+      apex: Math.round(fl.apex), dur: endPhys / TS, hang: hangPhys / TS,
+      ballAt: function (t) { return ballPhys(Math.max(0, t) * TS); },
+      fielders: ORDER.slice(),
+      fielderAt: function (j, t) { return tracks[j](Math.max(0, t) * TS); },
+      catchBy: by, catchT: by >= 0 ? tf / TS : -1,
+      desc: desc, wall: fl.wallT >= 0,
+      // ---- extras (see report)
+      carry: Math.round(carry),                 // ft the ball travelled in the air (HR: to where it lands in the seats)
+      wallT: fl.wallT >= 0 ? fl.wallT / TS : -1,
+      fenceT: fl.crossT >= 0 ? fl.crossT / TS : -1, // HR / ground-rule double: when it crosses the fence
+      foulCaught: type === 'OUT' && foulLand,
+      throwTo: throwTo == null ? null : throwTo, // base index the ball is thrown to (1..3), -1 = back to the pitcher
+      throwT: thr0 >= 0 ? [thr0 / TS, thr1 / TS] : null,
+      deep: carry > 250,
+      sacFlyable: type === 'OUT' && outKind === 'fly' && carry > 250 && !foulLand,
+      dpable: type === 'OUT' && outKind === 'ground' && by >= 0 && by < 6 && tf < 2.3,
+      infieldHit: call === '1Binf',
+      groundRule: !!fl.grd,
+      timeScale: TS,
+    };
+    return res;
+  }
+
+  BB.Bat = { swing: swing, play: play, fenceAt: fenceAt, FIELDERS: FIELDERS, ORDER: ORDER, _fly: fly, TIME_SCALE: TS };
+})();
+
+// ===================== MODULE: 20-content.js =====================
+// 20-content.js — parks, pitchers, the Barnstorm Tour. Owned by the rules agent. Pure data + getters.
+BB.Content = (function () {
+  // ---------------------------------------------------------------- parks
+  // fence: [spray, dist, height] from -45 (LF line) to 45 (RF line); linear interpolation between points.
+  var PARKS = [
+    { id: 'p_haybale', name: 'Haybale Grounds', town: 'Haybale Junction', team: 'Hayseeds', inkset: 'classic',
+      fence: [[-45, 318, 6], [-30, 345, 6], [-15, 368, 6], [0, 384, 8], [15, 366, 6], [30, 340, 6], [45, 312, 6]],
+      features: { scoreboard: true, lights: false, billboard: 'FEED & SEED', water: 'none', hill: true, skyline: 'barns' },
+      flavor: 'Chicken-wire fences, a tractor parked in deep left, and mud that eats cleats whole.' },
+    { id: 'p_bandbox', name: 'Rivet Street Bandbox', town: 'Ironbridge', team: 'Rivets', inkset: 'grape',
+      fence: [[-45, 302, 37], [-30, 328, 37], [-20, 365, 37], [-12, 388, 18], [0, 402, 12], [15, 380, 10], [30, 352, 8], [45, 328, 8]],
+      features: { scoreboard: true, lights: true, billboard: 'RIVET ST. DELI · HIT ME, FREE PICKLE', water: 'none', hill: false, skyline: 'city' },
+      flavor: 'A 37-foot wall in left, tenements over right, and the el train rattling every third pitch.' },
+    { id: 'p_loonlake', name: 'Loon Lake Pines', town: 'Loon Lake', team: 'Loons', inkset: 'lawn',
+      fence: [[-45, 332, 8], [-30, 374, 8], [-22, 396, 8], [0, 412, 10], [22, 398, 8], [30, 378, 8], [45, 336, 8]],
+      features: { scoreboard: true, lights: false, billboard: 'BAIT & TACKLE', water: 'center', hill: false, skyline: 'pines' },
+      flavor: 'Deep alleys, tall pines, and a lake past center where the long ones go to swim.' },
+    { id: 'p_harbor', name: 'Gull Point Harbor Park', town: 'Gull Point', team: 'Gulls', inkset: 'harbor',
+      fence: [[-45, 345, 10], [-30, 372, 10], [-15, 392, 10], [0, 402, 10], [15, 376, 14], [30, 336, 20], [38, 318, 20], [45, 309, 20]],
+      features: { scoreboard: true, lights: true, billboard: 'CAPT. MO\'S CHOWDER', water: 'right', hill: false, skyline: 'harbor' },
+      flavor: 'A short porch in right with the bay just behind it. Kayaks wait for splash hits.' },
+    { id: 'p_desert', name: 'Saguaro Night Field', town: 'Dry Wash', team: 'Coyotes', inkset: 'dusk',
+      fence: [[-45, 335, 9], [-30, 366, 9], [-12, 392, 9], [0, 406, 9], [12, 392, 9], [30, 366, 9], [45, 335, 9]],
+      features: { scoreboard: true, lights: true, billboard: 'STARLITE MOTOR LODGE', water: 'none', hill: true, skyline: 'desert' },
+      flavor: 'Thin air, warm nights, a hill in center field and moths the size of baseballs.' },
+    { id: 'p_cathedral', name: 'Old Cathedral Park', town: 'Capitol City', team: 'Copperheads', inkset: 'ledger',
+      fence: [[-45, 341, 12], [-30, 385, 12], [-18, 414, 12], [0, 425, 14], [18, 408, 12], [30, 378, 8], [40, 332, 8], [45, 314, 8]],
+      features: { scoreboard: true, lights: true, billboard: 'PRESS ON · EST. 1911', water: 'none', hill: false, skyline: 'none' },
+      flavor: 'Arched brick, a hand-turned scoreboard and 425 to dead center. The last stop on the barnstorm.' },
+  ];
+
+  // ---------------------------------------------------------------- pitchers
+  function P(id, name, nick, hand, team, velo, arsenal, control, stuff, look, bio, boss) {
+    var l = look.split(' ');
+    return { id: id, name: name, nick: nick, hand: hand, team: team, velo: velo, arsenal: arsenal, control: control,
+      stuff: stuff, boss: !!boss, look: { build: l[0], hair: l[1], windup: l[2], number: +l[3] }, bio: bio };
+  }
+  var PITCHERS = [
+    // chapter 1 — Haybale Junction: slow, straight, friendly
+    P('p_hank', 'Hank Hollister', 'Pops', 'R', 'Hayseeds', 72, { FB: .85, CH: .15 }, .95, .15, 'stout mustache classic 44',
+      'Throws strikes, tells long stories, owns the feed store.'),
+    P('p_dottie', 'Dottie Fairweather', 'Sunshine', 'L', 'Hayseeds', 75, { FB: .8, CB: .2 }, .92, .22, 'lanky none highkick 9',
+      'Learned to pitch by plunking apples off the silo roof.'),
+    P('p_clem', 'Clem Bixby', 'The Mailman', 'R', 'Hayseeds', 78, { FB: .7, SI: .2, CH: .1 }, .9, .28, 'tall sideburns classic 21',
+      'Always delivers. Usually right down Main Street.'),
+    P('p_ox', 'Earl Oxley', 'The Ox', 'R', 'Hayseeds', 82, { FB: .6, SI: .25, CB: .15 }, .86, .4, 'stout beard classic 1',
+      'Farm-strong and grumpy about it. Holds the county record for strikeouts and blue ribbons.', true),
+    // chapter 2 — Ironbridge: city slickers, first sliders
+    P('p_vinnie', 'Vinnie Castellano', 'Two-Bit', 'R', 'Rivets', 81, { FB: .55, SL: .25, CH: .2 }, .82, .45, 'tall mustache sidearm 25',
+      'Will flip you a quarter for every swing and miss. Never runs out of quarters.'),
+    P('p_rosalind', 'Rosalind Park', 'Rooftop', 'L', 'Rivets', 83, { FB: .5, CB: .3, CH: .2 }, .82, .5, 'lanky none highkick 6',
+      'Grew up throwing at a fire escape six floors up. Rarely misses a rung.'),
+    P('p_marty', 'Marty Pinwheel', 'Subway', 'R', 'Rivets', 84, { FB: .5, SI: .3, SL: .2 }, .78, .5, 'lanky sideburns submarine 33',
+      'Throws from the third rail. The ball rises like a train out of a tunnel.'),
+    P('p_landlord', 'Lou Brodsky', 'The Landlord', 'R', 'Rivets', 88, { FB: .45, SL: .3, CH: .15, CT: .1 }, .8, .62, 'stout mustache classic 13',
+      'Collects rent on the inside corner, first of every month and every at-bat.', true),
+    // chapter 3 — Loon Lake: breaking balls and a knuckler
+    P('p_ellis', 'Ellis Thornbury', 'Woodsmoke', 'R', 'Loons', 85, { FB: .45, CB: .35, CH: .2 }, .78, .55, 'tall beard classic 38',
+      'Splits his own firewood. Would like to split your bat too.'),
+    P('p_june', 'June Larkspur', 'The Loon', 'L', 'Loons', 86, { KN: .5, FB: .3, CH: .2 }, .72, .6, 'lanky none classic 2',
+      'Her knuckleball flutters like a moth around a porch light.'),
+    P('p_otis', 'Otis Fernsby', 'Canoe', 'R', 'Loons', 88, { FB: .5, SL: .3, SP: .2 }, .76, .6, 'stout sideburns sidearm 17',
+      'Paddles to the park every morning. Arm like an outboard motor.'),
+    P('p_sasquatch', 'Gus Haldane', 'Sasquatch', 'R', 'Loons', 91, { FB: .45, CB: .25, SL: .2, SP: .1 }, .76, .72, 'tall beard highkick 0',
+      'Seven feet of flannel. Nobody has ever gotten a clear look at him, or his curveball.', true),
+    // chapter 4 — Gull Point: sinkers, cutters, sea legs
+    P('p_pearl', 'Pearl Marlowe', 'Foghorn', 'R', 'Gulls', 88, { FB: .45, SI: .3, CH: .25 }, .78, .62, 'stout none classic 11',
+      'You hear her before you see the pitch. Mostly you just hear her.'),
+    P('p_nils', 'Nils Brightwater', 'Barnacle', 'L', 'Gulls', 89, { CT: .4, FB: .3, CB: .3 }, .75, .65, 'tall beard classic 47',
+      'Sticks to the corners and will not be scraped off.'),
+    P('p_sully', 'Sully Tidewell', 'Low Tide', 'R', 'Gulls', 91, { SI: .5, SL: .3, CH: .2 }, .74, .66, 'lanky mustache submarine 29',
+      'Knuckles nearly scrape the mound. The sinker goes out with the tide.'),
+    P('p_admiral', 'Winifred Gale', 'The Admiral', 'R', 'Gulls', 94, { FB: .4, SL: .3, SP: .2, CB: .1 }, .78, .78, 'tall none highkick 8',
+      'Commands the strike zone like a flagship. Salutes after every strikeout.', true),
+    // chapter 5 — Dry Wash: heat, screwballs and an eephus under the stars
+    P('p_rio', 'Rio Calloway', 'Dust Devil', 'R', 'Coyotes', 91, { FB: .45, SL: .35, CH: .2 }, .72, .7, 'lanky sideburns sidearm 14',
+      'Spins like a whirlwind on the mound. So does the slider.'),
+    P('p_tess', 'Tess Rattigan', 'Tumbleweed', 'L', 'Coyotes', 90, { SC: .35, FB: .3, CB: .25, EE: .1 }, .74, .72, 'lanky none classic 31',
+      'Drifts in from nowhere, throws something weird, drifts back out.'),
+    P('p_cosmo', 'Cosmo Starling', 'Night Owl', 'R', 'Coyotes', 94, { FB: .5, SP: .3, CT: .2 }, .7, .74, 'tall mustache highkick 77',
+      'Only pitches after sundown. Claims the moon gives him an extra two miles an hour.'),
+    P('p_mirage', 'Dez Montoya', 'The Mirage', 'L', 'Coyotes', 96, { FB: .35, SL: .25, CB: .2, CH: .1, EE: .1 }, .74, .84, 'lanky beard sidearm 7',
+      'Now you see it. Now you are walking back to the dugout.', true),
+    // chapter 6 — Capitol City: the big leagues of the barnstorm
+    P('p_organist', 'Augustus Fairchild', 'The Organist', 'R', 'Copperheads', 93, { FB: .4, CB: .3, CH: .3 }, .76, .78, 'tall mustache classic 19',
+      'Plays the stadium organ between starts. Changes keys mid-at-bat.'),
+    P('p_belle', 'Belle Harrow', 'Gargoyle', 'L', 'Copperheads', 95, { CT: .4, FB: .35, SP: .25 }, .72, .8, 'stout none classic 66',
+      'Perches on the mound without blinking. The cutter bites stone.'),
+    P('p_thunder', 'Rex Underwood', 'Old Thunder', 'R', 'Copperheads', 97, { FB: .6, SL: .4 }, .66, .82, 'stout beard highkick 52',
+      'Two pitches, both loud. Catchers ice their hands for a week.'),
+    P('p_halo', 'Cornelius Vane', 'Halo', 'R', 'Copperheads', 99, { FB: .38, SL: .22, CB: .15, CH: .15, SP: .1 }, .8, .95, 'tall none highkick 10',
+      'The last ace of the old cathedral. Has never thrown the same pitch twice in a row. Probably.', true),
+    // derby / daily throwers
+    P('p_bpbob', 'Bobby Lobbs', 'Batting Practice Bob', 'R', 'Barnstormers', 70, { FB: .9, CH: .1 }, .97, .1, 'stout mustache classic 99',
+      'Has thrown four million meatballs and loved every one. Gets a little competitive after a few dingers.'),
+    P('p_mabel', 'Mabel Quigley', 'Grandma Gas', 'R', 'Barnstormers', 86, { FB: .5, SL: .3, CH: .2 }, .8, .55, 'stout none classic 72',
+      'Seventy-two years young. Still brings the cookies and the high cheese.'),
+    P('p_ike', 'Ike Penny', 'The Paperboy', 'L', 'Barnstormers', 84, { FB: .5, SI: .3, CB: .2 }, .82, .5, 'lanky none sidearm 5',
+      'Delivers to every corner of the zone before breakfast.'),
+  ];
+  var DERBY_PITCHER = 'p_bpbob';
+  var DAILY_POOL = ['p_vinnie', 'p_rosalind', 'p_marty', 'p_ellis', 'p_june', 'p_otis', 'p_pearl', 'p_nils', 'p_rio', 'p_tess',
+    'p_mabel', 'p_ike'];
+
+  // ---------------------------------------------------------------- scenarios
+  // Scenario = { kind, need, outs, metric, stars:[s1,s2,s3], goal, starText:[3], ...kind fields }
+  // stars: game won → 1 star; 2nd/3rd star when the metric reaches stars[1] / stars[2].
+  //   metric 'spare' = outs left when the walk-off happens; others count up (runs, hr, hits, onbase, dist ft).
+  var BASE_NAMES = ['1st', '2nd', '3rd'];
+  function onText(b) {
+    var n = b.filter(Boolean).length;
+    if (n === 0) return 'Bases empty';
+    if (n === 3) return 'Bases loaded';
+    if (b[0] && b[2] && !b[1]) return 'Runners on the corners';
+    var s = BASE_NAMES.filter(function (x, i) { return b[i]; }).join(' & ');
+    return (n === 1 ? 'Runner on ' : 'Runners on ') + s;
+  }
+  function outText(o) { return o === 0 ? 'nobody out' : o === 1 ? '1 out' : '2 outs'; }
+  // walk-off inning: you're home, down `down`; score down+1 to win before 3 outs.
+  function walkoff(o) {
+    var bases = o.bases || [0, 0, 0], so = o.startOuts || 0, down = o.down, you = o.home != null ? o.home : 2;
+    var sc = { kind: 'inning', walkoff: true, half: 'BOT', inning: o.inning || 9, you: you, them: you + down, need: down + 1,
+      bases: bases.map(Boolean), startOuts: so, count: o.count || [0, 0], outs: 3, metric: 'spare', stars: [0, 1, 2] };
+    sc.goal = 'Bottom ' + ord(sc.inning) + '. ' + (down ? 'Down ' + down : 'Tied') + ', ' + onText(bases).toLowerCase() + ', ' + outText(so) +
+      (o.count ? ', ' + o.count.join('-') + ' count' : '') + '. Score ' + sc.need + ' to win.';
+    sc.starText = ['Walk it off', 'Win with an out to spare', so ? 'Win without making an out' : 'Win with 2 outs to spare'];
+    return sc;
+  }
+  // rally inning: play a full half inning (top half, visitors), score `need` runs (more = more stars).
+  function rally(o) {
+    var them = o.them != null ? o.them : 4;
+    var sc = { kind: 'inning', walkoff: false, half: 'TOP', inning: o.inning || 8, you: them - o.down, them: them,
+      bases: [false, false, false], startOuts: 0, count: [0, 0], outs: 3, need: o.need, metric: 'runs', stars: o.stars };
+    sc.goal = 'Down ' + o.down + ' in the ' + ord(sc.inning) + '. Score ' + o.need + '+ runs this inning.';
+    sc.starText = ['Score ' + o.stars[0], 'Score ' + o.stars[1], 'Score ' + o.stars[2]];
+    return sc;
+  }
+  function ord(n) { return n + (n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th'); }
+  function derby(need, outs, stars) {
+    return { kind: 'derby', need: need, outs: outs, metric: 'hr', stars: stars,
+      goal: 'Hit ' + need + ' home runs before ' + outs + ' outs. Anything but a homer is an out.',
+      starText: [stars[0] + ' HR', stars[1] + ' HR', stars[2] + ' HR'] };
+  }
+  function hits(need, pitches, stars) {
+    return { kind: 'hits', need: need, pitches: pitches, outs: 0, metric: 'hits', stars: stars,
+      goal: 'Get ' + need + ' hits in ' + pitches + ' pitches.', starText: [stars[0] + ' hits', stars[1] + ' hits', stars[2] + ' hits'] };
+  }
+  function onbase(need, outs, stars) {
+    return { kind: 'onbase', need: need, outs: outs, metric: 'onbase', stars: stars,
+      goal: 'Reach base ' + need + ' times before ' + outs + ' outs. Walks count.',
+      starText: ['On base ' + stars[0] + 'x', 'On base ' + stars[1] + 'x', 'On base ' + stars[2] + 'x'] };
+  }
+  function distance(need, outs, stars) {
+    var f = BB.U.fmtInt;
+    return { kind: 'distance', need: need, outs: outs, metric: 'dist', stars: stars,
+      goal: 'Hit ' + f(need) + ' ft of home runs before ' + outs + ' outs. Anything but a homer is an out.',
+      starText: [f(stars[0]) + ' ft', f(stars[1]) + ' ft', f(stars[2]) + ' ft'] };
+  }
+
+  // ---------------------------------------------------------------- tour
+  function G(id, title, pitcher, scenario, blurb) { return { id: id, title: title, pitcher: pitcher, scenario: scenario, blurb: blurb }; }
+  var TOUR = [
+    { id: 'c1', title: 'County Fair Circuit', park: 'p_haybale', blurb: 'Slow pitches, loud fans, livestock in the bleachers.', games: [
+      G('t1g1', 'Opening Day', 'p_hank', hits(3, 15, [3, 4, 6]), 'Pops lobs them in nice and easy. Find the barrel.'),
+      G('t1g2', 'Sandlot Rules', 'p_dottie', onbase(3, 3, [3, 4, 5]), 'Lay off the curve in the dirt. A walk is as good as a hit.'),
+      G('t1g3', 'Barn Burner', 'p_clem', derby(2, 6, [2, 3, 5]), 'Hold to load a power swing and aim for the hayloft.'),
+      G('t1g4', 'Bottom of the Ninth', 'p_dottie', walkoff({ down: 1, home: 3, bases: [0, 1, 0] }), 'Runner in scoring position. Bring him home and then some.'),
+      G('t1g5', 'The Ox at Dusk', 'p_ox', walkoff({ down: 2, home: 2 }), 'Boss: The Ox has never lost at home. Never.'),
+    ] },
+    { id: 'c2', title: 'Ironbridge Nights', park: 'p_bandbox', blurb: 'A tiny park with a giant wall in left. Pull it high.', games: [
+      G('t2g1', 'Wall Ball', 'p_vinnie', distance(750, 6, [750, 1100, 1500]), 'Clear the 37-foot wall. It\'s only 302 down the line.'),
+      G('t2g2', 'Rush Hour', 'p_marty', hits(4, 16, [4, 5, 7]), 'The sinker dives. Wait on it.'),
+      G('t2g3', 'Down Two, Two On', 'p_rosalind', walkoff({ down: 2, home: 3, bases: [1, 1, 0] }), 'Rooftop fans are already chanting. Don\'t let them down.'),
+      G('t2g4', 'Rooftop Seats', 'p_vinnie', derby(3, 7, [3, 4, 6]), 'Free pickle for every homer off the deli sign.'),
+      G('t2g5', 'Rent Is Due', 'p_landlord', rally({ need: 3, down: 2, inning: 8, stars: [3, 4, 6] }), 'Boss: The Landlord owns the inside corner. Take it back.'),
+    ] },
+    { id: 'c3', title: 'Up at the Lake', park: 'p_loonlake', blurb: 'Deep alleys and a knuckleballer. Gap power pays here.', games: [
+      G('t3g1', 'Campfire Swings', 'p_ellis', onbase(4, 4, [4, 5, 6]), 'The curve drops off a table. Take it and wait for heat.'),
+      G('t3g2', 'Knuckleball Lake', 'p_june', hits(4, 15, [4, 5, 6]), 'Nobody knows where the knuckler is going. Including June.'),
+      G('t3g3', 'Two-Strike Hole', 'p_otis', walkoff({ down: 1, home: 4, bases: [1, 0, 1], startOuts: 1, count: [0, 2] }), 'You start in an 0-2 hole. Protect the plate.'),
+      G('t3g4', 'Splash Hits', 'p_ellis', distance(1100, 6, [1100, 1500, 2000]), 'Center field is 412 and then the lake.'),
+      G('t3g5', 'Sasquatch Sighting', 'p_sasquatch', walkoff({ down: 3, home: 1, bases: [1, 1, 1] }), 'Boss: Bases loaded, nobody out, and a seven-foot legend on the mound.'),
+    ] },
+    { id: 'c4', title: 'Harbor Lights', park: 'p_harbor', blurb: 'Fog, gulls and a short porch over the water.', games: [
+      G('t4g1', 'Fog Rolls In', 'p_pearl', hits(5, 18, [5, 6, 8]), 'Can\'t see the sinker? Listen for the foghorn.'),
+      G('t4g2', 'Splash Landing', 'p_nils', derby(3, 6, [3, 4, 6]), 'Go opposite field: it\'s 309 to the bay.'),
+      G('t4g3', 'Extra Innings', 'p_sully', walkoff({ down: 0, home: 3, inning: 10, bases: [0, 1, 0] }), 'Tied in the 10th with the ghost runner on second.'),
+      G('t4g4', 'Long Ball Tide', 'p_pearl', distance(1400, 6, [1400, 1800, 2300]), 'High tide, high fly balls.'),
+      G('t4g5', 'Admiral\'s Inspection', 'p_admiral', walkoff({ down: 2, home: 2, bases: [1, 0, 0], startOuts: 1 }), 'Boss: The Admiral has a 94 mph flagship. One out, man on.'),
+    ] },
+    { id: 'c5', title: 'Desert Night Tour', park: 'p_desert', blurb: 'Under the lights in Dry Wash, the ball carries and the junk floats.', games: [
+      G('t5g1', 'Night Game', 'p_cosmo', onbase(5, 5, [5, 6, 8]), 'The splitter vanishes in the dark. Don\'t chase.'),
+      G('t5g2', 'Dust Devil Derby', 'p_rio', derby(4, 8, [4, 5, 7]), 'Thin air. Lift it.'),
+      G('t5g3', 'Eephus Under the Stars', 'p_tess', hits(5, 16, [5, 6, 7]), 'Screwballs, curves and a 50 mph moonball. Patience.'),
+      G('t5g4', 'Rally Caps', 'p_rio', rally({ need: 3, down: 2, inning: 8, stars: [3, 4, 6] }), 'Turn your cap inside out and string some hits together.'),
+      G('t5g5', 'The Mirage', 'p_mirage', walkoff({ down: 3, home: 3, bases: [1, 1, 1], startOuts: 1, count: [0, 2] }), 'Boss: Bases loaded, one out, 0-2. Now you see it...'),
+    ] },
+    { id: 'c6', title: 'The Cathedral', park: 'p_cathedral', blurb: 'The grandest old yard in the land. 425 to center. Bring everything.', games: [
+      G('t6g1', 'Hymns & Homers', 'p_organist', distance(1500, 6, [1500, 2000, 2600]), 'The organist changes keys. Change your timing.'),
+      G('t6g2', 'Gargoyle\'s Gauntlet', 'p_belle', hits(5, 15, [5, 6, 7]), 'The cutter bites late. Stay back.'),
+      G('t6g3', 'Thunder Roll', 'p_thunder', derby(4, 7, [4, 5, 7]), 'Ninety-seven and straight. Mostly.'),
+      G('t6g4', 'Pennant Race', 'p_belle', rally({ need: 2, down: 1, inning: 9, stars: [2, 3, 5] }), 'Top of the 9th, one run down, the pennant on the line.'),
+      G('t6g5', 'The Last Ace', 'p_halo', walkoff({ down: 3, home: 1 }), 'Final boss: Halo at 99. Down three, bases empty. Legends start here.'),
+    ] },
+  ];
+  TOUR.forEach(function (c, ci) {
+    c.n = ci + 1;
+    c.games.forEach(function (g, gi) { g.park = c.park; g.chapter = c.id; g.n = gi + 1; g.boss = gi === 4; });
+  });
+
+  var byId = {};
+  PARKS.forEach(function (p) { byId[p.id] = p; });
+  PITCHERS.forEach(function (p) { byId[p.id] = p; });
+  var games = {};
+  TOUR.forEach(function (c) { c.games.forEach(function (g) { games[g.id] = g; }); });
+
+  return {
+    PARKS: PARKS, PITCHERS: PITCHERS, TOUR: TOUR, DERBY_PITCHER: DERBY_PITCHER, DAILY_POOL: DAILY_POOL,
+    getPitcher: function (id) { return typeof id === 'object' ? id : byId[id] && byId[id].velo ? byId[id] : null; },
+    getPark: function (id) { return typeof id === 'object' ? id : byId[id] && byId[id].fence ? byId[id] : null; },
+    getGame: function (id) { return games[id] || null; },
+    getChapter: function (id) { for (var i = 0; i < TOUR.length; i++) if (TOUR[i].id === id) return TOUR[i]; return null; },
+    allGames: function () { var a = []; TOUR.forEach(function (c) { a = a.concat(c.games); }); return a; },
+  };
+})();
+
+// ===================== MODULE: 25-rules.js =====================
+// 25-rules.js — count, outs, bases, scenarios, scoring, results and the daily share line. Owned by the rules agent.
+// Runner advancement (deterministic except the double-play roll):
+//   walk: forced runners only.  1B: R3 scores; R2 scores if the ball went to the outfield (play.dist >= 180) else
+//   stops at 3rd; R1 to 2nd (to 3rd on a single to right, spray > 18 and dist >= 200, when 3rd is free).
+//   2B: R2, R3 score; R1 scores if play.dist >= 290 else 3rd.  3B / HR: everybody scores.
+//   OUT ground, <2 outs: R1 on → double play with chance .7 (ev >= 85) / .4; otherwise every runner moves up one
+//   (R3 scores).  OUT fly, <2 outs: R3 tags and scores if dist > 250 (SF), R2 tags to 3rd if dist > 300.
+//   line / pop outs: runners hold.  Every run on the final play counts (a walk-off slam is 4 runs).
+// Derby rules (tour 'derby'/'distance', daily, endless): takes are free; any swing that is not a HR is an out.
+BB.Rules = (function () {
+  var U = BB.U;
+  var EMO = { HR: '💥', IP: '⚾', F: '〰️', W: '✖️', FIRE: '🔥' };
+  function content() { return BB.Content; }
+
+  function dailyCfg(dayKey) {
+    dayKey = dayKey || U.dayKey();
+    var seed = U.hashStr('daily' + dayKey), r = U.rng(seed), C = content(), n = U.dayNumber(dayKey);
+    var pitcher = U.pick(r, C.DAILY_POOL), park = U.pick(r, C.PARKS).id;
+    return { mode: 'daily', dayKey: dayKey, day: n, title: 'Daily Derby #' + n, seed: seed, pitcher: pitcher, park: park, outs: 10,
+      scenario: { kind: 'derby', need: 1, outs: 10, metric: 'hr', stars: [2, 4, 7], starText: ['2 HR', '4 HR', '7 HR'],
+        goal: 'Same pitches for everyone today. 10 outs: anything but a homer is an out.' } };
+  }
+  function endlessScenario(outs) {
+    return { kind: 'derby', need: 1, outs: outs, metric: 'hr', stars: [3, 6, 10], starText: ['3 HR', '6 HR', '10 HR'],
+      goal: 'Endless Derby. ' + outs + ' outs: takes are free, anything but a homer is an out.' };
+  }
+
+  function create(mode, cfg) {
+    cfg = cfg || {};
+    var C = content();
+    if (mode === 'daily' && !cfg.seed) cfg = dailyCfg(cfg.dayKey);
+    var seed = cfg.seed != null ? cfg.seed >>> 0 : ((Date.now() ^ Math.floor(Math.random() * 4294967296)) >>> 0);
+    var sc = mode === 'tour' ? cfg.scenario : mode === 'daily' ? cfg.scenario : endlessScenario(cfg.outs || 10);
+    var derbyRules = mode !== 'tour' || sc.kind === 'derby' || sc.kind === 'distance';
+    var park = C.getPark(cfg.park) || C.PARKS[seed % C.PARKS.length];
+    var pitcher = C.getPitcher(cfg.pitcher || C.DERBY_PITCHER);
+    var st = {
+      mode: mode, cfg: cfg, sc: sc, kind: sc.kind, derbyRules: derbyRules, seed: seed,
+      basePitcher: pitcher, pitcher: pitcher, park: park, title: cfg.title || (mode === 'derby' ? 'Endless Derby' : ''),
+      day: mode === 'daily' ? (cfg.day || U.dayNumber(cfg.dayKey)) : null,
+      balls: 0, strikes: 0, outs: 0, outsMax: sc.kind === 'hits' ? 0 : (sc.outs || 3),
+      bases: [false, false, false], runs: 0, thrown: 0, pa: 0, level: 0,
+      hr: 0, hrDist: 0, hits: 0, onbase: 0, startRunners: 0,
+      streak: 0, bestStreak: 0, onFire: false, over: false, win: false, last: null, log: [], vc: 0,
+      stats: { pitches: 0, swings: 0, contact: 0, hits: 0, hr: 0, k: 0, bb: 0, runs: 0, longest: 0, maxEV: 0, perfects: 0 },
+    };
+    if (sc.kind === 'inning') {
+      st.outs = sc.startOuts || 0; st.outsMax = 3; st.bases = sc.bases.slice();
+      st.balls = sc.count ? sc.count[0] : 0; st.strikes = sc.count ? sc.count[1] : 0;
+      st.startRunners = st.bases.filter(Boolean).length;
+    }
+    var mainR = U.rng(seed);
+    st._r = mainR;
+    st.rng = function () { return st._r(); };
+    // main uses swingRng(pitch) for BB.Bat.swing/play when present. Daily: depends only on (seed, pitch index).
+    st.swingRng = function (pitch) {
+      if (mode !== 'daily') return st.rng;
+      var i = pitch && pitch.id != null ? pitch.id : st.thrown - 1;
+      return U.rng((seed ^ 0x5bd1e995) ^ Math.imul(i + 1, 0x85EBCA6B));
+    };
+    return st;
+  }
+
+  function effPitcher(st) {
+    if (st.mode !== 'derby') return st.basePitcher;
+    // Batting Practice Bob gets competitive: a little faster and craftier with every homer.
+    var b = st.basePitcher, l = Math.min(st.hr, 20), p = {};
+    for (var k in b) p[k] = b[k];
+    p.velo = Math.round(b.velo + l * 0.9);
+    p.stuff = Math.min(0.8, b.stuff + l * 0.035);
+    p.control = Math.max(0.78, b.control - l * 0.01);
+    p.arsenal = l < 3 ? b.arsenal : l < 6 ? { FB: .7, CH: .15, CB: .15 } : l < 10 ? { FB: .55, CH: .15, CB: .15, SL: .15 } :
+      { FB: .45, SL: .2, CB: .15, CH: .1, SP: .1 };
+    st.level = l;
+    return p;
+  }
+
+  function nextPitch(st) {
+    if (st.over) return null;
+    var i = st.thrown++;
+    var ctx = { balls: st.derbyRules ? 0 : st.balls, strikes: st.derbyRules ? 0 : st.strikes, derby: st.derbyRules, id: i };
+    var r;
+    if (st.mode === 'daily') r = U.rng(st.seed ^ Math.imul(i + 1, 0x9E3779B1));
+    else r = st._r;
+    st.pitcher = effPitcher(st);
+    var p = BB.Pitch.make(st.pitcher, ctx, r);
+    p.id = i;
+    if (st.mode === 'daily') st._r = st.swingRng(p);
+    return p;
+  }
+
+  // ---------------------------------------------------------------- helpers
+  function pick(st, arr) { return arr[(st.vc++) % arr.length]; }
+  function countStr(st) { return st.balls + '-' + st.strikes; }
+  function outsStr(st) {
+    if (st.outsMax === 0) return pitchesLeft(st) + ' pitches left';
+    var l = st.outsMax - st.outs;
+    return st.derbyRules ? l + (l === 1 ? ' out left' : ' outs left') : st.outs + (st.outs === 1 ? ' out' : ' outs');
+  }
+  function pitchesLeft(st) { return st.kind === 'hits' ? Math.max(0, st.sc.pitches - st.stats.pitches) : null; }
+  function ev(call, text, sub) { return { call: call, runs: 0, outs: 0, runnerMoves: [], text: text, sub: sub || '', over: false }; }
+  function endPA(st) { st.balls = 0; st.strikes = 0; st.pa++; if (st.kind === 'hits') st.bases = [false, false, false]; }
+  function hitStreak(st) { st.streak++; if (st.streak > st.bestStreak) st.bestStreak = st.streak; st.onFire = st.streak >= 3; }
+  function coldStreak(st) { st.streak = 0; st.onFire = false; }
+  function tracksRunners(st) { return st.kind === 'inning' || st.kind === 'onbase'; }
+
+  // apply runner moves: clear origins first, then fill destinations; count runs and outs.
+  function apply(st, e, moves) {
+    var b = st.bases.slice();
+    moves.forEach(function (m) { if (m.from >= 1) b[m.from - 1] = false; });
+    moves.forEach(function (m) {
+      if (m.to >= 1 && m.to <= 3) b[m.to - 1] = true;
+      else if (m.to === 4) e.runs++;
+      else if (m.to === -1) e.outs++;
+    });
+    e.runnerMoves = moves;
+    if (tracksRunners(st)) st.bases = b;
+    if (st.kind !== 'hits') st.outs += e.outs;
+    st.runs += e.runs; st.stats.runs += e.runs;
+  }
+
+  function measure(st) {
+    switch (st.sc.metric) {
+      case 'spare': return st.outsMax - st.outs;
+      case 'runs': return st.runs;
+      case 'hr': return st.hr;
+      case 'hits': return st.hits;
+      case 'onbase': return st.onbase;
+      case 'dist': return Math.round(st.hrDist);
+    }
+    return 0;
+  }
+  function starsFor(st, win) {
+    if (!win) return 0;
+    var m = measure(st), s = st.sc.stars;
+    return 1 + (m >= s[1] ? 1 : 0) + (m >= s[2] ? 1 : 0);
+  }
+  function goalMet(st) {
+    var sc = st.sc;
+    if (sc.kind === 'inning') return st.runs >= sc.need;
+    return measure(st) >= (sc.metric === 'hr' || sc.metric === 'dist' ? sc.stars[0] : sc.need);
+  }
+
+  // decide whether the game just ended; decorate the event
+  function check(st, e) {
+    var sc = st.sc, over = false, win = false, met = goalMet(st);
+    if (sc.kind === 'inning' && sc.walkoff) {
+      if (met) { over = true; win = true; } else if (st.outs >= 3) over = true;
+    } else if (sc.kind === 'hits') {
+      var left = pitchesLeft(st);
+      if (met && measure(st) >= sc.stars[2]) over = true;
+      else if (left === 0 || st.hits + left < sc.need) over = true;
+      win = met;
+    } else {
+      if (st.mode === 'tour' && met && measure(st) >= sc.stars[2]) over = true;
+      if (st.outs >= st.outsMax) over = true;
+      win = met;
+    }
+    if (over) {
+      st.over = true; st.win = win; e.over = true; e.win = win;
+      if (win && sc.kind === 'inning' && sc.walkoff) {
+        e.text = e.call === 'HR' ? (e.runs === 4 ? 'WALK-OFF SLAM!' : 'WALK-OFF HOMER!') : 'WALK-OFF!';
+        e.sub = 'Final: ' + scoreStr(st);
+      } else if (st.mode === 'tour') {
+        e.sub = win ? 'Goal reached · ' + starsFor(st, true) + '★' : e.sub;
+      }
+    }
+    st.last = e;
+    return e;
+  }
+  function scoreStr(st) { return (st.sc.you + st.runs) + '–' + st.sc.them; }
+
+  // ---------------------------------------------------------------- take / whiff
+  function take(st, pitch) {
+    st.stats.pitches++;
+    var e;
+    if (st.derbyRules) {
+      e = ev(pitch.strike ? 'STRIKE' : 'BALL', pitch.strike ? 'TAKEN' : 'BALL', 'Takes are free · ' + outsStr(st));
+      return check(st, e);
+    }
+    if (!pitch.strike) {
+      st.balls++;
+      if (st.balls >= 4) return walk(st);
+      e = ev('BALL', pick(st, ['BALL', 'BALL', 'LOW', 'OUTSIDE', 'TOO HIGH']), 'Ball ' + st.balls + ' · ' + countStr(st));
+    } else {
+      st.strikes++;
+      if (st.strikes >= 3) return strikeout(st, true);
+      e = ev('STRIKE', pick(st, ['STEE-RIKE!', 'STRIKE!', 'CALLED STRIKE', 'PAINTED']), countStr(st) + ' count');
+    }
+    if (st.kind === 'hits') e.sub += ' · ' + outsStr(st);
+    return check(st, e);
+  }
+  function walk(st) {
+    var b = st.bases, moves = [];
+    if (tracksRunners(st)) {
+      if (b[0] && b[1] && b[2]) moves.push({ from: 3, to: 4 });
+      if (b[0] && b[1]) moves.push({ from: 2, to: 3 });
+      if (b[0]) moves.push({ from: 1, to: 2 });
+    }
+    moves.push({ from: 0, to: 1 });
+    var e = ev('WALK', pick(st, ['BALL FOUR', 'TAKE YOUR BASE', 'WALKED']), '');
+    apply(st, e, moves);
+    e.sub = e.runs ? 'Walked in a run! ' + outsStr(st) : outsStr(st);
+    st.onbase++; st.stats.bb++;
+    endPA(st);
+    return check(st, e);
+  }
+  function strikeout(st, looking) {
+    var e = ev('K', looking ? pick(st, ['CAUGHT LOOKING', 'FROZEN', 'STRIKE THREE']) : pick(st, ['STRUCK OUT', 'WHIFF! K', 'SIT DOWN']), '');
+    apply(st, e, [{ from: 0, to: -1 }]);
+    e.sub = outsStr(st);
+    st.stats.k++; coldStreak(st); endPA(st);
+    return check(st, e);
+  }
+  function swingStats(st, swing, inPlay) {
+    st.stats.pitches++; st.stats.swings++;
+    if (inPlay) st.stats.contact++;
+    if (swing) {
+      if (swing.label === 'PERFECT') st.stats.perfects++;
+      if (swing.ev > st.stats.maxEV) st.stats.maxEV = Math.round(swing.ev);
+    }
+  }
+  function whiff(st, pitch, swing) {
+    swingStats(st, swing, false);
+    st.log.push({ k: 'W' });
+    if (st.derbyRules) {
+      var e = ev('K', pick(st, ['WHIFF', 'SWING & MISS', 'WHIFF']), '');
+      apply(st, e, [{ from: 0, to: -1 }]);
+      e.sub = 'No dinger · ' + outsStr(st);
+      coldStreak(st);
+      return check(st, e);
+    }
+    st.strikes++;
+    if (st.strikes >= 3) return strikeout(st, false);
+    var w = ev('STRIKE', pick(st, ['WHIFF', 'SWING & MISS', 'WHIFF', 'FANNED']), countStr(st) + ' count');
+    if (st.kind === 'hits') w.sub += ' · ' + outsStr(st);
+    return check(st, w);
+  }
+
+  // ---------------------------------------------------------------- balls in play
+  var OUT_TEXT = { fly: ['CAN OF CORN', 'FLIED OUT', 'HAULED IN'], line: ['LINED OUT', 'ROBBED!', 'RIGHT AT HIM'],
+    ground: ['GROUNDED OUT', 'ROUTINE GROUNDER', 'BOUNCED OUT'], pop: ['POPPED UP', 'SKY-HIGH POP', 'INFIELD POP'] };
+
+  function inPlay(st, pitch, swing, play) {
+    var t = play.type, d = play.dist || 0, e;
+    swingStats(st, swing, true);
+    st.log.push({ k: t === 'HR' ? 'HR' : t === 'FOUL' ? 'F' : 'IP', type: t, dist: Math.round(d) });
+    if (t === 'FOUL') {
+      if (st.derbyRules) {
+        e = ev('FOUL', 'FOUL — OUT', '');
+        apply(st, e, [{ from: 0, to: -1 }]);
+        e.sub = 'Need it fair · ' + outsStr(st);
+        coldStreak(st);
+        return check(st, e);
+      }
+      if (st.strikes < 2) st.strikes++;
+      e = ev('FOUL', pick(st, ['FOUL BALL', 'FOUL', 'STRAIGHT BACK', 'JUST FOUL']), countStr(st) + ' count');
+      return check(st, e);
+    }
+    if (t === 'HR') {
+      st.hr++; st.stats.hr++; st.hits++; st.stats.hits++; st.onbase++;
+      st.hrDist += d;
+      if (d > st.stats.longest) st.stats.longest = Math.round(d);
+      var moves = [];
+      if (tracksRunners(st)) for (var i = 3; i >= 1; i--) if (st.bases[i - 1]) moves.push({ from: i, to: 4 });
+      moves.push({ from: 0, to: 4 });
+      e = ev('HR', '', '');
+      apply(st, e, moves);
+      e.text = e.runs === 4 ? 'GRAND SLAM!' : d >= 450 ? 'MOONSHOT!' : d >= 420 ? pick(st, ['DINGER!', 'GONE!', 'TATER!']) :
+        play.wall ? 'OFF THE POLE!' : pick(st, ['DINGER!', 'GONE!', 'OUTTA HERE!', 'SEE YA!']);
+      e.sub = U.fmtInt(d) + ' ft' + (st.derbyRules ? ' · ' + st.hr + ' HR' : e.runs > 1 ? ' · ' + e.runs + ' runs score' : '');
+      hitStreak(st); endPA(st);
+      return check(st, e);
+    }
+    if (st.derbyRules) { // a non-homer swing is an out
+      e = ev('OUT', t === 'OUT' ? pick(st, OUT_TEXT[play.outKind] || OUT_TEXT.fly) : pick(st, ['NOT ENOUGH', 'IN THE PARK', 'NO DICE']), '');
+      apply(st, e, [{ from: 0, to: -1 }]);
+      e.sub = (t !== 'OUT' && d > 330 ? 'Off the wall! ' : 'Need a homer · ') + outsStr(st);
+      coldStreak(st);
+      return check(st, e);
+    }
+    var b = tracksRunners(st) ? st.bases : [false, false, false], m = [], call = t, text, sp = play.spray || 0;
+    if (t === '1B') {
+      if (b[2]) m.push({ from: 3, to: 4 });
+      var r2 = b[1] ? (d >= 180 ? 4 : 3) : 0;
+      if (b[1]) m.push({ from: 2, to: r2 });
+      if (b[0]) m.push({ from: 1, to: (sp > 18 && d >= 200 && r2 !== 3) ? 3 : 2 });
+      m.push({ from: 0, to: 1 });
+      text = (play.outKind === 'line' || play.ev >= 100) && d >= 150 ? 'FROZEN ROPE' : d < 140 ? pick(st, ['INFIELD HIT', 'LEGGED IT OUT']) :
+        pick(st, ['SINGLE', 'BASE HIT', 'BLOOPER', 'SEEING-EYE SINGLE']);
+    } else if (t === '2B') {
+      if (b[2]) m.push({ from: 3, to: 4 });
+      if (b[1]) m.push({ from: 2, to: 4 });
+      if (b[0]) m.push({ from: 1, to: d >= 290 ? 4 : 3 });
+      m.push({ from: 0, to: 2 });
+      text = play.wall ? 'OFF THE WALL!' : pick(st, ['DOUBLE!', 'TWO-BAGGER', 'IN THE GAP!']);
+    } else if (t === '3B') {
+      for (var j = 3; j >= 1; j--) if (b[j - 1]) m.push({ from: j, to: 4 });
+      m.push({ from: 0, to: 3 });
+      text = 'TRIPLE!!';
+    } else { // OUT
+      var o = st.kind === 'hits' ? 2 : st.outs, k = play.outKind || 'fly';
+      text = pick(st, OUT_TEXT[k] || OUT_TEXT.fly);
+      if (k === 'ground' && b[0] && o < 2 && st.rng() < ((play.ev || 0) >= 85 ? 0.7 : 0.4)) {
+        call = 'DP'; text = pick(st, ['DOUBLE PLAY', 'TWIN KILLING', '6-4-3!']);
+        m.push({ from: 1, to: -1 });
+        if (o === 0) { if (b[2]) m.push({ from: 3, to: 4 }); if (b[1]) m.push({ from: 2, to: 3 }); }
+        m.push({ from: 0, to: -1 });
+      } else if (k === 'ground' && o < 2) {
+        if (b[2]) m.push({ from: 3, to: 4 });
+        if (b[1]) m.push({ from: 2, to: 3 });
+        if (b[0]) m.push({ from: 1, to: 2 });
+        m.push({ from: 0, to: -1 });
+        if (b[2]) text = 'RBI GROUNDOUT';
+      } else if (k === 'fly' && o < 2) {
+        var sf = b[2] && d > 250;
+        if (sf) { m.push({ from: 3, to: 4 }); call = 'SF'; text = 'SAC FLY'; }
+        if (b[1] && d > 300 && (!b[2] || sf)) m.push({ from: 2, to: 3 });
+        m.push({ from: 0, to: -1 });
+      } else m.push({ from: 0, to: -1 });
+    }
+    e = ev(call, text, '');
+    apply(st, e, m);
+    if (t === 'OUT') {
+      coldStreak(st);
+      e.sub = (e.runs ? e.runs + ' run' + (e.runs > 1 ? 's' : '') + ' score · ' : '') + outsStr(st);
+    } else {
+      st.hits++; st.stats.hits++; st.onbase++; hitStreak(st);
+      e.sub = e.runs ? (e.runs === 1 ? 'A run scores!' : e.runs + ' runs score!') : (play.desc || outsStr(st));
+    }
+    endPA(st);
+    return check(st, e);
+  }
+
+  // ---------------------------------------------------------------- hud / result
+  function hud(st) {
+    var sc = st.sc, f = U.fmtInt, k = sc.kind, inning, score, progress;
+    if (st.mode === 'daily') { inning = 'DAILY #' + st.day; score = st.hr + ' HR'; progress = f(st.hrDist) + ' ft'; }
+    else if (st.mode === 'derby') { inning = 'DERBY'; score = st.hr + ' HR'; progress = f(st.hrDist) + ' ft'; }
+    else if (k === 'inning') {
+      inning = sc.half + ' ' + sc.inning; score = scoreStr(st);
+      progress = sc.walkoff ? st.runs + ' / ' + sc.need + ' R' : st.runs + ' R · need ' + sc.need;
+    } else if (k === 'derby') { inning = 'DERBY'; score = st.hr + ' HR'; progress = st.hr + ' / ' + sc.need + ' HR'; }
+    else if (k === 'distance') { inning = 'LONG BALL'; score = f(st.hrDist) + ' FT'; progress = f(st.hrDist) + ' / ' + f(sc.need) + ' ft'; }
+    else if (k === 'hits') { inning = 'HITS'; score = st.hits + ' H'; progress = st.hits + ' / ' + sc.need + ' H · ' + pitchesLeft(st) + ' left'; }
+    else { inning = 'ON BASE'; score = st.onbase + ' OB'; progress = st.onbase + ' / ' + sc.need; }
+    return {
+      balls: st.balls, strikes: st.strikes, outs: st.outs, outsMax: st.outsMax, bases: st.bases.slice(),
+      inning: inning, score: score, goal: sc.goal, progress: progress, streak: st.streak, onFire: st.onFire,
+      mode: st.mode, kind: k, derby: st.derbyRules, title: st.title, hr: st.hr, dist: Math.round(st.hrDist),
+      pitchesLeft: pitchesLeft(st), outsLeft: st.outsMax ? st.outsMax - st.outs : null,
+      stars: starsFor(st, goalMet(st)), level: st.level,
+    };
+  }
+
+  function headline(st) {
+    var sc = st.sc, k = sc.kind, last = st.last || {}, s = starsFor(st, st.win);
+    if (st.mode !== 'tour') {
+      var h = st.hr;
+      return h === 0 ? 'POWER OUTAGE' : h <= 2 ? 'ON THE BOARD' : h <= 5 ? 'LONG BALL' : h <= 9 ? 'DINGER KING' : 'LEGENDARY';
+    }
+    if (st.win) {
+      if (k === 'inning' && sc.walkoff) return last.text || 'WALK-OFF!';
+      if (s === 3) return pick(st, ['PERFECT DAY', 'HALL OF FAMER', 'STANDING OVATION']);
+      return k === 'derby' || k === 'distance' ? 'DINGER CHAMP' : k === 'inning' ? 'RALLY!' : 'BALLGAME!';
+    }
+    var close = k === 'inning' ? st.runs >= sc.need - 1 : k === 'distance' ? st.hrDist >= sc.need * 0.75 : measure(st) >= sc.need - 1;
+    if (close) return pick(st, ['SO CLOSE', 'JUST MISSED', 'NEXT TIME']);
+    return { inning: 'STRANDED', derby: 'POWER OUTAGE', distance: 'WARNING TRACK', hits: 'COLD BATS', onbase: 'SAT DOWN' }[k] || 'GAME OVER';
+  }
+
+  function result(st) {
+    var sc = st.sc, f = U.fmtInt, k = sc.kind, win = !!st.win, stars = starsFor(st, win), score, label;
+    if (st.mode !== 'tour' || k === 'derby') { score = st.hr; label = st.hr + ' HR · ' + f(st.hrDist) + ' ft'; }
+    else if (k === 'inning') { score = st.runs; label = (win ? 'WON ' : 'LOST ') + scoreStr(st) + ' · ' + st.runs + ' R'; }
+    else if (k === 'distance') { score = Math.round(st.hrDist); label = f(st.hrDist) + ' ft · ' + st.hr + ' HR'; }
+    else if (k === 'hits') { score = st.hits; label = st.hits + ' hits in ' + st.stats.pitches + ' pitches'; }
+    else { score = st.onbase; label = 'On base ' + st.onbase + 'x'; }
+    var stats = {};
+    for (var key in st.stats) stats[key] = st.stats[key];
+    stats.onbase = st.onbase; stats.hrDist = Math.round(st.hrDist); stats.bestStreak = st.bestStreak;
+    stats.lob = st.bases.filter(Boolean).length;
+    var r = { mode: st.mode, win: win, stars: stars, score: score, scoreLabel: label, headline: headline(st), stats: stats,
+      tiebreak: Math.round(st.hrDist), share: null, log: st.log.slice(), day: st.day, dayKey: st.cfg.dayKey || null,
+      gameId: st.cfg.id || null };
+    if (st.mode === 'daily') r.share = shareText(st);
+    return r;
+  }
+
+  function shareText(st) {
+    var sy = st.log.map(function (l) { return EMO[l.k]; }), rows = [], MAX = 30;
+    var cut = sy.length > MAX;
+    if (cut) sy = sy.slice(0, MAX - 1).concat(['…']);
+    for (var i = 0; i < sy.length; i += 10) rows.push(sy.slice(i, i + 10).join(''));
+    var tail = st.hr + ' HR · ' + U.fmtInt(st.hrDist) + ' ft' + (st.bestStreak >= 2 ? ' · ' + EMO.FIRE + st.bestStreak : '');
+    return BB.TITLE + ' · Daily #' + st.day + '\n' + (rows.length ? rows.join('\n') : '—') + '\n' + tail;
+  }
+
+  return {
+    create: create, dailyCfg: dailyCfg, nextPitch: nextPitch, take: take, whiff: whiff, inPlay: inPlay, hud: hud, result: result,
+    isOver: function (st) { return !!st.over; },
+    LEGEND: { HR: EMO.HR + ' home run', IP: EMO.IP + ' in play, no homer', F: EMO.F + ' foul', W: EMO.W + ' whiff' },
+  };
+})();
+
+// ===================== MODULE: 40-audio.js =====================
+// 40-audio.js — BB.Audio + BB.Haptics. Owned by the audio agent.
+// Every sound is synthesized with the Web Audio API at call time: no files. Nothing here may throw: every public
+// entry point is wrapped, and with no AudioContext the whole module degrades to silent no-ops.
+//
+// Graph:  sources -> [sfx bus | crowd bus | organ bus] -> master gain -> compressor -> soft-clip shaper -> out
+//         sfx sends -> stadium slap-back echo -> sfx bus;  organ voices -> vibrato/tremolo "leslie" -> organ bus
+(function () {
+  var W = typeof window !== 'undefined' ? window : globalThis;
+  var R = Math.random;
+  function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+  function rr(a, b) { return a + (b - a) * R(); }
+  function mtof(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+  function safe(fn) { return function () { try { return fn.apply(null, arguments); } catch (e) { return undefined; } }; }
+  function later(fn, ms) { try { setTimeout(function () { try { fn(); } catch (e) { /* ignore */ } }, ms); } catch (e) { /* ignore */ } }
+
+  var LEVEL = { master: 0.9, sfx: 1.0, crowd: 0.6, organ: 0.55 };
+
+  // ------------------------------------------------------------------ buffers & waves (per context)
+  function makeBuffers(ctx) {
+    var sr = ctx.sampleRate, i, j;
+    var wn = Math.floor(sr * 2), white = ctx.createBuffer(1, wn, sr), d = white.getChannelData(0);
+    for (i = 0; i < wn; i++) d[i] = R() * 2 - 1;
+    var pn = Math.floor(sr * 4), pre = 512, tmp = new Float32Array(pn + pre), b0 = 0, b1 = 0, b2 = 0;
+    for (i = 0; i < pn + pre; i++) { // Paul Kellet's economy pink filter
+      var w = R() * 2 - 1;
+      b0 = 0.99765 * b0 + w * 0.0990460; b1 = 0.96300 * b1 + w * 0.2965164; b2 = 0.57000 * b2 + w * 1.0526913;
+      tmp[i] = (b0 + b1 + b2 + w * 0.1848) * 0.2;
+    }
+    var pink = ctx.createBuffer(1, pn, sr), p = pink.getChannelData(0);
+    for (i = 0; i < pn; i++) p[i] = tmp[i + pre];
+    for (i = 0; i < pre; i++) { var x = i / pre; p[pn - pre + i] = p[pn - pre + i] * (1 - x) + tmp[i] * x; } // seamless loop
+    // applause: a 3 s stereo loop of ~65 random hand claps per second (wraps around so it loops seamlessly)
+    var an = Math.floor(sr * 3), app = ctx.createBuffer(2, an, sr), peak = 0;
+    for (var ch = 0; ch < 2; ch++) {
+      var a = app.getChannelData(ch);
+      for (var k = 0; k < 200; k++) {
+        var st = Math.floor(R() * an), len = Math.floor(sr * rr(0.008, 0.025)), amp = rr(0.15, 1), tau = len * 0.25;
+        for (j = 0; j < len; j++) a[(st + j) % an] += (R() * 2 - 1) * amp * Math.exp(-j / tau);
+      }
+      for (j = 0; j < an; j++) peak = Math.max(peak, Math.abs(a[j]));
+    }
+    for (ch = 0; ch < 2; ch++) { a = app.getChannelData(ch); for (j = 0; j < an; j++) a[j] *= 0.9 / (peak || 1); }
+    return { white: white, pink: pink, app: app };
+  }
+  // Hammond-ish tone wheel: one PeriodicWave on a fundamental of f/2, so harmonic n of the wave = drawbar ratio n/2:
+  // n=1 sub 16', 2 = 8' (the note), 3 = 5 1/3', 4 = 4', 6 = 2 2/3', 8 = 2', 12 = 1 1/3', 16 = 1'.
+  function organWave(ctx) {
+    try {
+      var N = 17, re = new Float32Array(N), im = new Float32Array(N);
+      var bars = { 1: 0.35, 2: 1, 3: 0.4, 4: 0.7, 6: 0.38, 8: 0.45, 12: 0.18, 16: 0.22 };
+      for (var n in bars) im[+n] = bars[n];
+      return ctx.createPeriodicWave(re, im);
+    } catch (e) { return null; }
+  }
+  function softCurve() { // linear to 0.6, then a tanh knee that never exceeds ~0.9: the last line of defence vs clipping
+    var n = 2048, c = new Float32Array(n);
+    for (var i = 0; i < n; i++) {
+      var x = i / (n - 1) * 2 - 1, ax = Math.abs(x);
+      c[i] = (x < 0 ? -1 : 1) * (ax < 0.6 ? ax : 0.6 + 0.38 * Math.tanh((ax - 0.6) / 0.38));
+    }
+    return c;
+  }
+
+  // ------------------------------------------------------------------ graph
+  function organChain(g, dest) { // vibrato (modulated delay) + tremolo (leslie-ish) + warm lowpass
+    var c = g.ctx, inp = c.createGain(), dry = c.createGain(), vib = c.createDelay(0.05), wet = c.createGain();
+    var trem = c.createGain(), lp = c.createBiquadFilter(), l1 = c.createOscillator(), d1 = c.createGain();
+    var l2 = c.createOscillator(), d2 = c.createGain();
+    dry.gain.value = 0.7; wet.gain.value = 0.55; vib.delayTime.value = 0.0045; trem.gain.value = 0.85;
+    lp.type = 'lowpass'; lp.frequency.value = 5200; lp.Q.value = 0.4;
+    l1.frequency.value = 6.4; d1.gain.value = 0.0011; l1.connect(d1); d1.connect(vib.delayTime);
+    l2.frequency.value = 6.9; d2.gain.value = 0.12; l2.connect(d2); d2.connect(trem.gain);
+    inp.connect(dry); inp.connect(vib); vib.connect(wet); dry.connect(trem); wet.connect(trem); trem.connect(lp); lp.connect(dest);
+    l1.start(); l2.start();
+    return inp;
+  }
+  function buildGraph(ctx, offline) {
+    var g = { ctx: ctx, offline: !!offline };
+    g.buf = makeBuffers(ctx);
+    g.wave = organWave(ctx);
+    g.master = ctx.createGain();
+    g.master.gain.value = offline ? LEVEL.master : (S.muted ? 0 : LEVEL.master);
+    var comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -12; comp.knee.value = 10; comp.ratio.value = 5; comp.attack.value = 0.003; comp.release.value = 0.2;
+    var shaper = ctx.createWaveShaper(); shaper.curve = softCurve();
+    g.master.connect(comp); comp.connect(shaper); shaper.connect(ctx.destination);
+    function bus(v) { var b = ctx.createGain(); b.gain.value = v; b.connect(g.master); return b; }
+    g.sfx = bus(LEVEL.sfx); g.crowd = bus(LEVEL.crowd); g.organ = bus(offline || S.music ? LEVEL.organ : 0);
+    // stadium slap-back: a short dark echo off the grandstand
+    g.echoIn = ctx.createGain();
+    var dl = ctx.createDelay(1), lp = ctx.createBiquadFilter(), fb = ctx.createGain(), eo = ctx.createGain();
+    dl.delayTime.value = 0.17; lp.type = 'lowpass'; lp.frequency.value = 2200; fb.gain.value = 0.3; eo.gain.value = 0.55;
+    g.echoIn.connect(dl); dl.connect(lp); lp.connect(fb); fb.connect(dl); lp.connect(eo); eo.connect(g.sfx);
+    g.organIn = organChain(g, g.organ);     // music cues (obey setMusic)
+    g.organSfx = organChain(g, g.sfx);      // unlock / levelUp flourishes are sound effects
+    return g;
+  }
+
+  // ------------------------------------------------------------------ primitives
+  function env(p, t, a, v, d, hold) {
+    v = Math.max(v, 0.0002); hold = hold || 0;
+    p.setValueAtTime(0.0001, t);
+    p.linearRampToValueAtTime(v, t + a);
+    if (hold) p.setValueAtTime(v, t + a + hold);
+    p.exponentialRampToValueAtTime(0.0001, t + a + hold + d);
+    return t + a + hold + d;
+  }
+  function route(g, node, o, dest) {
+    var c = g.ctx;
+    if (o.pan && c.createStereoPanner) { var pn = c.createStereoPanner(); pn.pan.value = clamp(o.pan, -1, 1); node.connect(pn); pn.connect(dest); }
+    else node.connect(dest);
+    if (o.send) { var s = c.createGain(); s.gain.value = o.send; node.connect(s); s.connect(g.echoIn); }
+  }
+  // tone: {t, f, f2, glide, gd (glide delay), type|wave, a, hold, d, v, det, pan, send}
+  function tone(g, dest, o) {
+    var c = g.ctx, t = o.t, osc = c.createOscillator(), gn = c.createGain();
+    if (o.wave) osc.setPeriodicWave(o.wave); else osc.type = o.type || 'sine';
+    osc.frequency.setValueAtTime(o.f, t);
+    if (o.f2) { if (o.gd) osc.frequency.setValueAtTime(o.f, t + o.gd); osc.frequency.exponentialRampToValueAtTime(o.f2, t + (o.gd || 0) + (o.glide || 0.05)); }
+    if (o.det) osc.detune.value = o.det;
+    var end = env(gn.gain, t, o.a || 0.002, o.v, o.d || 0.1, o.hold);
+    osc.connect(gn); route(g, gn, o, dest);
+    osc.start(t); osc.stop(end + 0.03);
+    return osc;
+  }
+  // noise: {t, buf, filt, f, f2, glide, pts:[[dt,f]..], q, a, hold, d, v, pan, send}
+  function noise(g, dest, o) {
+    var c = g.ctx, t = o.t, src = c.createBufferSource(), bf = c.createBiquadFilter(), gn = c.createGain();
+    var buf = g.buf[o.buf || 'white'];
+    src.buffer = buf; src.loop = true;
+    bf.type = o.filt || 'bandpass'; bf.Q.value = o.q == null ? 1 : o.q;
+    bf.frequency.setValueAtTime(o.f || 1000, t);
+    if (o.f2) bf.frequency.exponentialRampToValueAtTime(o.f2, t + (o.glide || 0.1));
+    if (o.pts) for (var i = 0; i < o.pts.length; i++) bf.frequency.exponentialRampToValueAtTime(o.pts[i][1], t + o.pts[i][0]);
+    var end = env(gn.gain, t, o.a || 0.001, o.v, o.d || 0.05, o.hold);
+    src.connect(bf); bf.connect(gn); route(g, gn, o, dest);
+    src.start(t, R() * (buf.duration - 0.5)); src.stop(end + 0.03);
+    return bf;
+  }
+  function formants(g, dest, fs, qs, gs) { // parallel band-passes = a crude vocal tract
+    var c = g.ctx, inp = c.createGain(), fl = [];
+    for (var i = 0; i < fs.length; i++) {
+      var b = c.createBiquadFilter(), gn = c.createGain();
+      b.type = 'bandpass'; b.frequency.value = fs[i]; b.Q.value = qs[i]; gn.gain.value = gs[i];
+      inp.connect(b); b.connect(gn); gn.connect(dest); fl.push(b);
+    }
+    return { input: inp, f: fl };
+  }
+  function clap(g, dest, t, v, pan) {
+    var f = rr(900, 2300);
+    noise(g, dest, { t: t, f: f, q: rr(1, 2.2), a: 0.0006, d: rr(0.015, 0.04), v: v, pan: pan });
+    noise(g, dest, { t: t + 0.005, f: f * 1.3, q: 1.5, a: 0.0005, d: 0.012, v: v * 0.6, pan: pan });
+  }
+  function claps(g, dest, t, n, v) { for (var i = 0; i < n; i++) clap(g, dest, t + rr(-0.02, 0.035), v * rr(0.5, 1), rr(-0.8, 0.8)); }
+  function whistle(g, dest, t, v) { // two-finger "wheeet-whew"
+    var f = rr(1900, 2800), pan = rr(-0.7, 0.7);
+    tone(g, dest, { t: t, f: f, f2: f * 1.22, glide: 0.12, a: 0.03, hold: 0.12, d: 0.12, v: v, pan: pan });
+    tone(g, dest, { t: t + 0.33, f: f * 1.2, f2: f * 0.78, glide: 0.3, a: 0.02, hold: 0.08, d: 0.22, v: v * 0.85, pan: pan });
+  }
+  function woodblock(g, dest, t, f, v) {
+    noise(g, dest, { t: t, f: f, q: 18, a: 0.0005, d: 0.09, v: v * 2.2 });
+    tone(g, dest, { t: t, f: f, a: 0.0008, d: 0.07, v: v * 0.5 });
+    tone(g, dest, { t: t, f: f * 2.71, a: 0.0005, d: 0.025, v: v * 0.2 });
+  }
+  function voice(g, dest, t, f0, f1, fs, v, a, hold, d) { // a short formant-filtered sawtooth "vocal" blip
+    var fb = formants(g, dest, fs, [7, 9, 11], [1, 0.55, 0.22]);
+    tone(g, fb.input, { t: t, type: 'sawtooth', f: f0, f2: f1, glide: a + hold + d, a: a, hold: hold, d: d, v: v });
+  }
+
+  // ------------------------------------------------------------------ the bat
+  function crack(g, t, q, sweet, thin) {
+    q = clamp(+q || 0, 0, 1);
+    var c = g.ctx, vol = 0.5 + 0.5 * q, i;
+    var bus = c.createBiquadFilter(); bus.type = 'lowpass'; bus.Q.value = 0.5;
+    bus.frequency.value = thin ? 6000 : 1300 + 7000 * q * q;
+    var out = bus;
+    if (thin) { out = c.createBiquadFilter(); out.type = 'highpass'; out.frequency.value = 650; bus.connect(out); }
+    out.connect(g.sfx);
+    var snd = c.createGain(); snd.gain.value = sweet ? 0.4 : 0.2; out.connect(snd); snd.connect(g.echoIn);
+    // 1. the transient: a few ms of bright noise
+    noise(g, bus, { t: t, filt: 'highpass', f: 1500 + 2500 * q, q: 0.7, a: 0.0004, d: 0.01 + 0.01 * q, v: 0.9 * vol });
+    noise(g, bus, { t: t, f: 3800, q: 1.2, a: 0.0003, d: 0.006, v: 0.6 * vol });
+    // 2. the woody body: inharmonic partials with a fast pitch drop
+    var base = (thin ? 780 : 600) + 260 * q + rr(-25, 25), rat = [1, 1.58, 2.31, 3.1], amp = [0.6, 0.38, 0.22, 0.12];
+    for (i = 0; i < (thin ? 2 : 4); i++) {
+      tone(g, bus, { t: t, type: i ? 'sine' : 'triangle', f: base * rat[i] * 1.35, f2: base * rat[i], glide: 0.014, a: 0.0008,
+        v: vol * amp[i] * (thin ? 0.65 : 1), d: (0.11 - 0.02 * i) * (0.5 + 0.7 * q) * (thin ? 0.55 : 1) });
+    }
+    // 3. sweet spot: deep thock + a brief bright ring off the barrel
+    if (sweet) {
+      tone(g, bus, { t: t, f: 230, f2: 92, glide: 0.05, a: 0.001, d: 0.16, v: 0.8 });
+      noise(g, bus, { t: t, filt: 'lowpass', f: 700, q: 0.8, a: 0.001, d: 0.06, v: 0.6 });
+      tone(g, bus, { t: t + 0.002, f: 2730, a: 0.002, d: 0.45, v: 0.07 });
+      tone(g, bus, { t: t + 0.002, f: 4090, a: 0.002, d: 0.3, v: 0.045 });
+      tone(g, bus, { t: t + 0.002, f: 5470, a: 0.002, d: 0.18, v: 0.02 });
+    }
+    // 4. jammed / off the end: a dull thud and a little metallic tink
+    if (q < 0.45 && !thin) {
+      var k = (0.45 - q) / 0.45;
+      noise(g, bus, { t: t, filt: 'lowpass', f: 600, q: 0.7, a: 0.001, d: 0.07, v: 0.6 * k });
+      tone(g, bus, { t: t, f: 330, f2: 190, glide: 0.04, a: 0.001, d: 0.08, v: 0.45 * k });
+      tone(g, g.sfx, { t: t + 0.003, type: 'triangle', f: 2300, a: 0.001, d: 0.035, v: 0.1 * k });
+    }
+  }
+
+  // ------------------------------------------------------------------ sound effects
+  var SFX = {
+    crack: function (g, t, o) { crack(g, t, o.quality == null ? 0.8 : o.quality, !!o.sweet, false); },
+    foul: function (g, t, o) { crack(g, t, o.quality == null ? 0.4 : Math.min(o.quality, 0.6), false, true); },
+    whiff: function (g, t) {
+      noise(g, g.sfx, { t: t, f: 300, pts: [[0.11, 1700], [0.26, 450]], q: 1.4, a: 0.07, hold: 0.05, d: 0.15, v: 0.55, pan: -0.15 });
+      noise(g, g.sfx, { t: t + 0.02, buf: 'pink', filt: 'lowpass', f: 500, q: 0.7, a: 0.06, d: 0.15, v: 0.35 });
+    },
+    whoosh: function (g, t, o) {
+      var sp = clamp(((o.mph || 88) - 50) / 50, 0, 1);
+      noise(g, g.sfx, { t: t, f: 800 + 700 * sp, pts: [[0.16, 2300 + 1400 * sp], [0.3, 800]], q: 2, a: 0.14, d: 0.16, v: 0.25 + 0.2 * sp, pan: 0.25 });
+      tone(g, g.sfx, { t: t, f: 1500 + 900 * sp, f2: (1500 + 900 * sp) * 0.72, gd: 0.13, glide: 0.15, a: 0.12, d: 0.17, v: 0.03 + 0.02 * sp });
+    },
+    mitt: function (g, t, o) {
+      var sp = clamp(((o.mph || 88) - 50) / 50, 0, 1);
+      noise(g, g.sfx, { t: t, filt: 'highpass', f: 3000, q: 0.7, a: 0.0003, d: 0.005, v: 0.45 });
+      noise(g, g.sfx, { t: t, filt: 'lowpass', f: 2600, f2: 350, glide: 0.05, q: 1, a: 0.0008, d: 0.07, v: 0.6 + 0.3 * sp, send: 0.25 });
+      tone(g, g.sfx, { t: t, f: 160, f2: 70, glide: 0.06, a: 0.001, d: 0.09, v: 0.55 + 0.2 * sp });
+    },
+    strike: function (g, t) { // stylized umpire "HUP!"
+      noise(g, g.sfx, { t: t, f: 1800, q: 1, a: 0.008, d: 0.03, v: 0.16 });
+      var o = g.ctx.createGain(); route(g, o, { send: 0.3 }, g.sfx);
+      voice(g, o, t + 0.02, 175, 132, [700, 1220, 2600], 0.95, 0.012, 0.06, 0.09);
+    },
+    ball: function (g, t) { voice(g, g.sfx, t, 140, 118, [450, 820, 2500], 0.5, 0.02, 0.03, 0.08); },
+    out: function (g, t) { woodblock(g, g.sfx, t, 620, 0.5); woodblock(g, g.sfx, t + 0.12, 470, 0.42); },
+    wall: function (g, t) {
+      tone(g, g.sfx, { t: t, f: 95, f2: 48, glide: 0.12, a: 0.002, d: 0.25, v: 0.8 });
+      noise(g, g.sfx, { t: t, filt: 'lowpass', f: 380, q: 0.8, a: 0.001, d: 0.18, v: 0.6, send: 0.3 });
+      var p = [410, 627, 1043, 1389, 1820];
+      for (var i = 0; i < p.length; i++) tone(g, g.sfx, { t: t + 0.003, type: i % 2 ? 'triangle' : 'sine', f: p[i] * rr(0.98, 1.02), a: 0.001, d: 0.5 - 0.08 * i, v: 0.06, send: 0.2 });
+    },
+    stamp: function (g, t) { // rubber stamp on paper: thunk + squish + a little rustle
+      tone(g, g.sfx, { t: t, f: 150, f2: 58, glide: 0.05, a: 0.001, d: 0.11, v: 0.8 });
+      noise(g, g.sfx, { t: t, filt: 'lowpass', f: 900, f2: 250, glide: 0.06, q: 0.8, a: 0.001, d: 0.07, v: 0.55 });
+      noise(g, g.sfx, { t: t + 0.004, f: 380, q: 3, a: 0.002, d: 0.05, v: 0.25 });
+      for (var i = 0; i < 5; i++) noise(g, g.sfx, { t: t + 0.03 + i * 0.018 + rr(0, 0.01), filt: 'highpass', f: rr(3500, 6000), q: 0.8, a: 0.001, d: rr(0.008, 0.016), v: rr(0.06, 0.14) });
+    },
+    tap: function (g, t) {
+      tone(g, g.sfx, { t: t, f: 1700, f2: 1150, glide: 0.015, a: 0.0005, d: 0.03, v: 0.18 });
+      noise(g, g.sfx, { t: t, filt: 'highpass', f: 4000, q: 0.7, a: 0.0003, d: 0.004, v: 0.12 });
+    },
+    coin: function (g, t) {
+      [[988, 0], [1319, 0.075]].forEach(function (n) {
+        tone(g, g.sfx, { t: t + n[1], f: n[0], a: 0.001, d: 0.38, v: 0.22 });
+        tone(g, g.sfx, { t: t + n[1], f: n[0] * 2, a: 0.001, d: 0.2, v: 0.06 });
+        tone(g, g.sfx, { t: t + n[1], f: n[0] * 2.76, a: 0.001, d: 0.08, v: 0.03 });
+      });
+    },
+    packRip: function (g, t) {
+      var N = 26;
+      noise(g, g.sfx, { t: t, f: 2500, q: 0.8, a: 0.04, hold: 0.25, d: 0.1, v: 0.12 });
+      for (var i = 0; i < N; i++) {
+        var x = i / N;
+        noise(g, g.sfx, { t: t + Math.pow(x, 0.8) * 0.38 + rr(0, 0.01), f: 1600 + x * 2600 + rr(-300, 300), q: 1.5, a: 0.0005, d: rr(0.012, 0.03), v: 0.28 * rr(0.5, 1), pan: rr(-0.3, 0.3) });
+      }
+      noise(g, g.sfx, { t: t + 0.4, filt: 'lowpass', f: 1500, q: 0.7, a: 0.001, d: 0.04, v: 0.3 });
+    },
+    cardFlip: function (g, t) {
+      noise(g, g.sfx, { t: t, f: 1800, f2: 5200, glide: 0.05, q: 1.4, a: 0.003, d: 0.05, v: 0.35 });
+      tone(g, g.sfx, { t: t + 0.035, f: 220, f2: 140, glide: 0.03, a: 0.001, d: 0.04, v: 0.25 });
+    },
+    rare: function (g, t) { // shimmering maj9 arpeggio with an echo tail
+      var m = [72, 76, 79, 83, 86, 88, 91, 95, 98];
+      for (var i = 0; i < m.length; i++) {
+        var f = mtof(m[i]), tt = t + i * 0.055;
+        tone(g, g.sfx, { t: tt, f: f, a: 0.002, d: 0.6, v: 0.11, send: 0.4, pan: (i / m.length - 0.5) });
+        tone(g, g.sfx, { t: tt, type: 'triangle', f: f, det: 9, a: 0.002, d: 0.35, v: 0.04 });
+        tone(g, g.sfx, { t: tt, f: f * 2, det: -6, a: 0.002, d: 0.25, v: 0.03 });
+      }
+      noise(g, g.sfx, { t: t, filt: 'highpass', f: 7000, q: 0.7, a: 0.25, d: 0.6, v: 0.06 });
+    },
+    unlock: function (g, t) { playPiece(g, PIECES._unlock, t, g.organSfx, 1.1); },
+    levelUp: function (g, t) { playPiece(g, PIECES._levelUp, t, g.organSfx, 1.1); },
+    error: function (g, t) {
+      tone(g, g.sfx, { t: t, type: 'square', f: 196, f2: 185, glide: 0.08, a: 0.002, d: 0.09, v: 0.06 });
+      tone(g, g.sfx, { t: t + 0.11, type: 'square', f: 165, f2: 150, glide: 0.1, a: 0.002, d: 0.12, v: 0.06 });
+    },
+    toast: function (g, t) {
+      tone(g, g.sfx, { t: t, f: 1320, a: 0.002, d: 0.08, v: 0.1 });
+      tone(g, g.sfx, { t: t + 0.06, f: 1760, a: 0.002, d: 0.12, v: 0.09 });
+    },
+  };
+
+  // ------------------------------------------------------------------ crowd
+  function cheer(g, t, size, dest) {
+    size = clamp(+size || 0, 0, 1);
+    var rise = 0.18 + 0.25 * size, hold = 0.6 + 2.2 * size, dec = 1.4 + 1.2 * size, v = 0.35 + 0.65 * size, i;
+    var fb = formants(g, dest, [800, 1150, 2700], [3, 4, 5], [1, 0.55, 0.25]);
+    for (i = 0; i < 3; i++) fb.f[i].frequency.setTargetAtTime([900, 1300, 2900][i], t, rise); // "ahh" brightening to "yeahh"
+    noise(g, fb.input, { t: t, buf: 'pink', filt: 'lowpass', f: 1500, f2: 3500 + 2000 * size, glide: rise, q: 0.6, a: rise, hold: hold, d: dec, v: v * 1.6 });
+    var nv = 4 + Math.round(size * 8);
+    for (i = 0; i < nv; i++) {
+      var f0 = R() < 0.5 ? rr(150, 260) : rr(260, 420);
+      tone(g, fb.input, { t: t + rr(0, 0.15), type: 'sawtooth', f: f0 * 0.85, f2: f0 * 1.12, glide: rise + 0.2, a: rise, hold: hold * rr(0.6, 1), d: dec * rr(0.6, 1), v: v * 0.05 });
+    }
+    var c = g.ctx, src = c.createBufferSource(), bp = c.createBiquadFilter(), gn = c.createGain();
+    src.buffer = g.buf.app; src.loop = true; bp.type = 'bandpass'; bp.frequency.value = 2200; bp.Q.value = 0.6;
+    var end = env(gn.gain, t + 0.1, 0.3, 0.25 + 0.5 * size, dec + 0.6, hold + 0.4);
+    src.connect(bp); bp.connect(gn); gn.connect(dest); src.start(t + 0.1, R() * 2); src.stop(end + 0.05);
+    if (size > 0.45) for (i = 0; i < 1 + Math.floor(size * 3); i++) whistle(g, dest, t + rr(0.1, hold), 0.05);
+  }
+  function groan(g, t, dest) { // descending "awwww"
+    var fb = formants(g, dest, [700, 1100, 2500], [4, 5, 6], [1, 0.5, 0.2]), lo = [520, 820, 2300];
+    for (var i = 0; i < 3; i++) { fb.f[i].frequency.setValueAtTime(fb.f[i].frequency.value, t + 0.1); fb.f[i].frequency.linearRampToValueAtTime(lo[i], t + 1.3); }
+    noise(g, fb.input, { t: t, buf: 'pink', filt: 'lowpass', f: 1200, f2: 700, glide: 1.2, q: 0.6, a: 0.12, hold: 0.3, d: 0.9, v: 0.9 });
+    for (i = 0; i < 10; i++) {
+      var f0 = rr(130, 300);
+      tone(g, fb.input, { t: t + rr(0, 0.1), type: 'sawtooth', f: f0, f2: f0 * 0.72, gd: 0.15, glide: 1.1, a: 0.12, hold: 0.35, d: 0.9, v: 0.06 });
+    }
+  }
+  function bedBuild(g) {
+    var c = g.ctx, b = { level: 0, target: 0, applied: -1, nextSwell: 0, nextClap: 0, nextWhistle: 0 };
+    b.out = c.createGain(); b.out.gain.value = 0; b.swell = c.createGain(); b.swell.connect(b.out); b.out.connect(g.crowd);
+    function layer(f, q, v, buf) {
+      var s = c.createBufferSource(), bp = c.createBiquadFilter(), gn = c.createGain();
+      s.buffer = g.buf[buf]; s.loop = true; bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q; gn.gain.value = v;
+      s.connect(bp); bp.connect(gn); gn.connect(b.swell); s.start(c.currentTime, R() * 1.5);
+      return { f: bp, g: gn };
+    }
+    b.low = layer(380, 0.7, 1.4, 'pink');   // the murmur
+    b.mid = layer(1000, 1.8, 1.2, 'pink');  // babble: centre wanders like vowels
+    b.hi = layer(2600, 2.5, 0.1, 'white');  // excited hiss, grows with level
+    g.bed = b;
+    return b;
+  }
+  function bedTick(g, now) {
+    var b = g.bed; if (!b) return;
+    var L = b.target;
+    if (Math.abs(L - b.applied) > 0.004) {
+      b.applied = L;
+      b.out.gain.setTargetAtTime(L <= 0.001 ? 0 : 0.06 + 0.5 * Math.pow(L, 1.3), now, 0.45);
+      b.hi.g.gain.setTargetAtTime(0.05 + 0.5 * L * L, now, 0.5);
+      b.low.f.frequency.setTargetAtTime(330 + 200 * L, now, 0.5);
+    }
+    if (L <= 0.001) return;
+    if (now >= b.nextSwell) { b.swell.gain.setTargetAtTime(rr(0.7, 1.3), now, rr(0.4, 1.2)); b.nextSwell = now + rr(1.2, 3.5); }
+    if (R() < 0.3) b.mid.f.frequency.setTargetAtTime(rr(700, 1500), now, 0.2);
+    if (L > 0.3) {
+      var rate = 2 + (L - 0.3) * 40;
+      if (b.nextClap < now) b.nextClap = now + R() / rate;
+      while (b.nextClap < now + 0.3) { clap(g, b.swell, b.nextClap, rr(0.25, 0.6), rr(-0.9, 0.9)); b.nextClap += -Math.log(1 - R() * 0.999) / rate; }
+    }
+    if (L > 0.65) {
+      if (b.nextWhistle < now) b.nextWhistle = now + rr(0.5, 4);
+      if (b.nextWhistle < now + 0.3) { whistle(g, b.swell, b.nextWhistle, 0.3); b.nextWhistle += rr(1.5, 6) / (0.3 + L); }
+    }
+  }
+
+  // ------------------------------------------------------------------ the ballpark organ
+  var NOTE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+  function pm(s) { var r = /^([A-G])(#|b)?(-?\d)$/.exec(s); return 12 * (+r[3] + 1) + NOTE[r[1]] + (r[2] === '#' ? 1 : r[2] === 'b' ? -1 : 0); }
+  // "C5/.5 E5+G5/1 r/.5 E4/3w": pitch(+pitch)/beats, r = rest, trailing w = sad-trombone wobble
+  function seq(str, vel, out) {
+    var b = 0;
+    str.trim().split(/\s+/).forEach(function (tok) {
+      var p = tok.split('/'), l = p[1] != null ? parseFloat(p[1]) : 1;
+      if (p[0] !== 'r') out.push({ b: b, m: p[0].split('+').map(pm), l: l, v: vel, w: /w/.test(p[1] || '') });
+      b += l;
+    });
+    return b;
+  }
+  function piece(bpm, voices, claps, legato) {
+    var ev = [], len = 0;
+    voices.forEach(function (v) { len = Math.max(len, seq(v[0], v[1], ev)); });
+    ev.sort(function (a, b) { return a.b - b.b; });
+    return { bpm: bpm, ev: ev, len: len, claps: claps || [], legato: legato || 0.9 };
+  }
+  var CH = { C: ['C3', 'C4+E4+G4'], F: ['F2', 'C4+F4+A4'], Dm: ['D3', 'D4+F4+A4'], G7: ['G2', 'B3+D4+F4'], G: ['G2', 'B3+D4+G4'], Am: ['A2', 'C4+E4+A4'] };
+  function waltz(bars) { // oom-pah-pah accompaniment
+    return [bars.map(function (k) { return CH[k][0] + '/1 r/2'; }).join(' '), bars.map(function (k) { return 'r/1 ' + CH[k][1] + '/.8 r/.2 ' + CH[k][1] + '/.8 r/.2'; }).join(' ')];
+  }
+  var MENU_BARS = ['C', 'C', 'F', 'C', 'F', 'Dm', 'G7', 'G', 'C', 'C', 'F', 'Am', 'F', 'G', 'G7', 'C'], acc = waltz(MENU_BARS);
+  var PIECES = {
+    charge: piece(132, [['G4/.333 C5/.333 E5/.334 G5/.75 E5/.25 G5/2', 1], ['r/1 E4+G4+C5/.75 r/.25 E4+G4+C5/2', 0.6], ['r/1 C3/.75 r/.25 C3/2', 0.8]]),
+    homer: piece(160, [['C4/.25 D4/.25 E4/.25 F4/.25 G4/.25 A4/.25 B4/.25 C5/.25 D5/.25 E5/.25 F5/.25 G5/.25 A5/.25 B5/.25 C6/1 G5/.5 C6/.5 E6/.5 D6/.5 C6/2', 0.95],
+      ['r/3.5 C4+E4+G4/2 F4+A4+C5/.5 G4+B4+D5/.5 C4+E4+G4+C5/2', 0.6], ['r/3.5 C3/2 F2/.5 G2/.5 C3/2', 0.8]]),
+    walkup: piece(128, [['C4/.5 E4/.5 G4/.5 A4/.5 Bb4/.5 A4/.5 G4/.5 E4/.5 C5+E5+G5/.25 r/.25 C5+E5+G5/1', 0.95], ['C3/1 C3/1 C3/1 C3/1 C2/.25 r/.25 C3/1', 0.75]], null, 0.8),
+    win: piece(140, [['G4/.5 C5/.5 E5/.5 G5/1 E5/.5 G5/1.5 r/.5 A5/.5 G5/.5 F5/.5 E5/.5 D5/.5 E5/.5 C5/2', 1],
+      ['r/1.5 C4+E4+G4/3 r/.5 F4+A4+C5/1 G4+B4/1 G4+B4+D5/1 C4+E4+G4+C5/2', 0.55], ['r/1.5 C3/3 r/.5 F2/1 G2/1 G2/1 C3/2', 0.8]]),
+    lose: piece(76, [['G4/1 Gb4/1 F4/1 E4/3w', 1], ['G3/1 Gb3/1 F3/1 E3/3w', 0.6]], null, 0.95),
+    rally: piece(150, [['C4/.5 Db4/.5 D4/.5 Eb4/.5 E4/.5 F4/.5 F#4/.5 G4/.5 G#4/.5 A4/.5 Bb4/.5 B4/.5 C5+E5+G5/.4 r/1.6', 0.9],
+      ['C3/1 C3/1 C3/1 C3/1 C3/1 C3/1 C2+C3/.4 r/1.6', 0.7]], [7, 7.5], 0.75),
+    menu: piece(168, [['E5/2 D5/1 C5/1 E5/1 G5/1 A5/2 G5/1 E5/3 F5/2 E5/1 D5/1 F5/1 A5/1 G5/2 F5/1 D5/3 ' +
+      'E5/2 D5/1 C5/1 E5/1 G5/1 C6/2 B5/1 A5/3 F5/1 A5/1 C6/1 B5/2 G5/1 D5/1.5 E5/.5 D5/1 C5/3', 0.7], [acc[0], 0.55], [acc[1], 0.32]], null, 0.88),
+    _unlock: piece(180, [['C5/.25 E5/.25 G5/.25 C6+E5+G5/1.25', 0.9], ['r/.75 C3/1.25', 0.7]]),
+    _levelUp: piece(170, [['G4/.25 C5/.25 E5/.25 G5/.5 E5/.25 C5+E5+G5+C6/1.5', 0.9], ['r/1.5 C3+C4/1.5', 0.7]]),
+  };
+  function organNote(g, dest, t, m, dur, v, wob) {
+    var c = g.ctx, f = mtof(m), osc = c.createOscillator(), gn = c.createGain();
+    if (g.wave) { osc.setPeriodicWave(g.wave); osc.frequency.setValueAtTime(f / 2, t); }
+    else { osc.type = 'triangle'; osc.frequency.setValueAtTime(f, t); }
+    gn.gain.setValueAtTime(0, t); gn.gain.linearRampToValueAtTime(v, t + 0.006);
+    gn.gain.setValueAtTime(v, t + dur); gn.gain.linearRampToValueAtTime(0, t + dur + 0.05);
+    if (wob) { // sad-trombone wah-wah
+      var lfo = c.createOscillator(), dep = c.createGain();
+      lfo.frequency.value = 5; dep.gain.setValueAtTime(0, t); dep.gain.linearRampToValueAtTime(f * (g.wave ? 0.5 : 1) * 0.035, t + dur * 0.5);
+      lfo.connect(dep); dep.connect(osc.frequency); lfo.start(t); lfo.stop(t + dur + 0.1);
+      gn.gain.setValueAtTime(v, t + dur * 0.6); gn.gain.linearRampToValueAtTime(v * 0.4, t + dur);
+    }
+    osc.connect(gn); gn.connect(dest); osc.start(t); osc.stop(t + dur + 0.08);
+  }
+  function playEvent(g, P, ev, at, dest, gain) {
+    var spb = 60 / P.bpm, dur = Math.max(0.05, ev.l * spb * P.legato), v = 0.15 * ev.v * (gain || 1);
+    for (var i = 0; i < ev.m.length; i++) organNote(g, dest, at, ev.m[i], dur, v, ev.w);
+    noise(g, dest, { t: at, f: 2800, q: 0.8, a: 0.0003, d: 0.006, v: v * 0.6 }); // key click
+  }
+  function playPiece(g, P, t0, dest, gain) {
+    var spb = 60 / P.bpm;
+    for (var i = 0; i < P.ev.length; i++) playEvent(g, P, P.ev[i], t0 + P.ev[i].b * spb, dest, gain);
+    for (i = 0; i < P.claps.length; i++) claps(g, g.crowd, t0 + P.claps[i] * spb, 14, 0.3);
+    return P.len * spb;
+  }
+
+  // ------------------------------------------------------------------ live state
+  var S = { ctx: null, g: null, muted: false, music: true, menuWanted: false, menu: null, cue: null, timer: 0,
+    crowdTarget: 0, last: {}, hidden: false, unlocked: false };
+
+  function live() { // the live graph if it can make sound right now
+    var g = S.g;
+    return g && g.ctx.state === 'running' ? g : null;
+  }
+  function menuStart(g) {
+    if (S.menu || !S.music) return;
+    var c = g.ctx, gn = c.createGain(), now = c.currentTime;
+    gn.gain.setValueAtTime(0.0001, now); gn.gain.linearRampToValueAtTime(1, now + 0.4); gn.connect(g.organIn);
+    S.menu = { gain: gn, t0: now + 0.12, i: 0, it: 0 };
+    menuPump(g);
+  }
+  function menuPump(g) {
+    var m = S.menu; if (!m) return;
+    var P = PIECES.menu, spb = 60 / P.bpm, L = P.len * spb, now = g.ctx.currentTime;
+    for (var guard = 0; guard < 128; guard++) {
+      var ev = P.ev[m.i], at = m.t0 + m.it * L + ev.b * spb;
+      if (at > now + 0.5) break;
+      if (at > now - 0.02) playEvent(g, P, ev, at, m.gain);
+      if (++m.i >= P.ev.length) { m.i = 0; m.it++; }
+    }
+  }
+  function fadeOut(node, g, tc) {
+    try { var now = g.ctx.currentTime; node.gain.cancelScheduledValues(now); node.gain.setValueAtTime(node.gain.value, now); node.gain.setTargetAtTime(0, now, tc); } catch (e) { /* ignore */ }
+    later(function () { node.disconnect(); }, 1500);
+  }
+  function menuStop(g, tc) { if (S.menu) { fadeOut(S.menu.gain, g, tc || 0.12); S.menu = null; } }
+  function tick() {
+    var g = S.g; if (!g || g.ctx.state !== 'running') return;
+    var now = g.ctx.currentTime;
+    if (g.bed) { g.bed.target = S.crowdTarget; bedTick(g, now); }
+    else if (S.crowdTarget > 0) { bedBuild(g); bedTick(g, now); }
+    if (S.menu) menuPump(g);
+    else if (S.menuWanted && S.music && !S.cue) menuStart(g);
+  }
+  function create() {
+    if (S.g) return S.g;
+    var AC = W.AudioContext || W.webkitAudioContext;
+    if (!AC) return null;
+    try { if (W.navigator && W.navigator.audioSession) W.navigator.audioSession.type = 'ambient'; } catch (e) { /* ignore */ }
+    var ctx;
+    try { ctx = new AC({ latencyHint: 'interactive' }); } catch (e) { ctx = new AC(); }
+    S.ctx = ctx; S.g = buildGraph(ctx, false);
+    try { ctx.onstatechange = function () { if (ctx.state !== 'running' && !S.hidden && S.unlocked) resume(); }; } catch (e) { /* ignore */ }
+    S.timer = setInterval(safe(tick), 60);
+    return S.g;
+  }
+  function resume() {
+    var c = S.ctx; if (!c || S.hidden) return;
+    if (c.state !== 'running' && c.state !== 'closed') { try { var p = c.resume(); if (p && p.catch) p.catch(function () {}); } catch (e) { /* ignore */ } }
+  }
+  function unlock() {
+    var g = create(); if (!g) return false;
+    S.unlocked = true;
+    resume();
+    try { // the classic iOS kick: play one silent sample inside the gesture
+      var b = g.ctx.createBuffer(1, 1, g.ctx.sampleRate), s = g.ctx.createBufferSource();
+      s.buffer = b; s.connect(g.ctx.destination); s.start(0);
+    } catch (e) { /* ignore */ }
+    return true;
+  }
+  function onVisibility() {
+    S.hidden = !!(W.document && W.document.hidden);
+    var c = S.ctx; if (!c) return;
+    if (S.hidden) { if (c.state === 'running') { try { var p = c.suspend(); if (p && p.catch) p.catch(function () {}); } catch (e) { /* ignore */ } } }
+    else if (S.unlocked) resume();
+  }
+  if (W.document && W.addEventListener) {
+    try {
+      W.document.addEventListener('visibilitychange', safe(onVisibility));
+      W.addEventListener('pagehide', safe(function () { S.hidden = true; onVisibility(); S.hidden = true; }));
+      W.addEventListener('pageshow', safe(function () { onVisibility(); }));
+      W.addEventListener('focus', safe(function () { if (S.unlocked) resume(); }));
+      // any later gesture re-kicks a context iOS has 'interrupted' (calls, Siri, other apps' audio)
+      ['pointerdown', 'touchend', 'keydown'].forEach(function (ev) {
+        W.addEventListener(ev, safe(function () { if (S.unlocked && S.ctx && S.ctx.state !== 'running') resume(); }), { capture: true, passive: true });
+      });
+    } catch (e) { /* ignore */ }
+  }
+
+  function sfx(name, opts) {
+    var fn = SFX[name], g = live(); if (!fn || !g || S.muted) return;
+    opts = opts || {};
+    var now = g.ctx.currentTime;
+    if (S.last[name] != null && now - S.last[name] < 0.025 && name !== 'crack') return; // de-dupe double fires
+    S.last[name] = now;
+    fn(g, now + 0.004 + (opts.when || 0), opts);
+  }
+  function organ(name) {
+    var g = S.g;
+    if (name === 'stop') { S.menuWanted = false; if (g) { menuStop(g, 0.15); if (S.cue) { fadeOut(S.cue, g, 0.08); S.cue = null; } } return; }
+    if (name === 'menu') { S.menuWanted = true; if (live() && S.music && !S.cue) menuStart(g); return; }
+    var P = PIECES[name]; if (!P || name.charAt(0) === '_') return;
+    S.menuWanted = false;
+    g = live(); if (!g || !S.music || S.muted) return;
+    menuStop(g, 0.08);
+    if (S.cue) fadeOut(S.cue, g, 0.05);
+    var cue = g.ctx.createGain(); cue.connect(g.organIn); S.cue = cue;
+    var len = playPiece(g, P, g.ctx.currentTime + 0.03, cue, 1);
+    later(function () { if (S.cue === cue) S.cue = null; }, (len + 0.6) * 1000);
+  }
+  function setMuted(b) {
+    S.muted = !!b; var g = S.g; if (!g) return;
+    g.master.gain.setTargetAtTime(S.muted ? 0 : LEVEL.master, g.ctx.currentTime, 0.03);
+  }
+  function setMusic(b) {
+    S.music = !!b; var g = S.g; if (!g) return;
+    g.organ.gain.setTargetAtTime(S.music ? LEVEL.organ : 0, g.ctx.currentTime, 0.05);
+    if (!S.music) { menuStop(g, 0.1); if (S.cue) { fadeOut(S.cue, g, 0.05); S.cue = null; } }
+  }
+
+  // ------------------------------------------------------------------ offline rendering (tests / tuning)
+  // render(kind, name, opts, seconds) -> Promise<{peak, rms, seconds}> or null. kind: sfx | organ | cheer | groan | crowd
+  function render(kind, name, opts, secs) {
+    var OAC = W.OfflineAudioContext || W.webkitOfflineAudioContext;
+    if (!OAC) return Promise.resolve(null);
+    secs = secs || 2; opts = opts || {};
+    var sr = 44100, oc = new OAC(2, Math.ceil(sr * secs), sr), g = buildGraph(oc, true), t = 0.02;
+    if (kind === 'sfx') SFX[name](g, t, opts);
+    else if (kind === 'organ') playPiece(g, PIECES[name], t, g.organIn, 1);
+    else if (kind === 'cheer') cheer(g, t, opts.size == null ? 1 : opts.size, g.crowd);
+    else if (kind === 'groan') groan(g, t, g.crowd);
+    else if (kind === 'crowd') { var b = bedBuild(g); b.target = opts.level == null ? 0.7 : opts.level; for (var x = 0; x < secs; x += 0.1) bedTick(g, x); }
+    return new Promise(function (res, rej) {
+      function done(buf) {
+        var peak = 0, sum = 0, n = 0;
+        for (var ch = 0; ch < buf.numberOfChannels; ch++) {
+          var d = buf.getChannelData(ch);
+          for (var i = 0; i < d.length; i++) { var a = Math.abs(d[i]); if (a > peak) peak = a; sum += d[i] * d[i]; n++; }
+        }
+        res({ peak: peak, rms: Math.sqrt(sum / (n || 1)), seconds: secs });
+      }
+      var p = oc.startRendering();
+      if (p && p.then) p.then(done, rej); else oc.oncomplete = function (e) { done(e.renderedBuffer); };
+    });
+  }
+
+  var SFX_NAMES = Object.keys(SFX), ORGAN_NAMES = Object.keys(PIECES).filter(function (k) { return k.charAt(0) !== '_'; });
+  BB.Audio = {
+    unlock: safe(unlock),
+    setMuted: safe(setMuted),
+    isMuted: function () { return S.muted; },
+    setMusic: safe(setMusic),
+    isMusic: function () { return S.music; },
+    sfx: safe(sfx),
+    crowd: safe(function (level) { S.crowdTarget = clamp(+level || 0, 0, 1); }),
+    cheer: safe(function (size) { var g = live(); if (g && !S.muted) cheer(g, g.ctx.currentTime + 0.01, size == null ? 0.6 : size, g.crowd); }),
+    groan: safe(function () { var g = live(); if (g && !S.muted) groan(g, g.ctx.currentTime + 0.01, g.crowd); }),
+    organ: safe(organ),
+    // extras
+    state: function () { try { return S.ctx ? S.ctx.state : 'none'; } catch (e) { return 'none'; } },
+    ready: function () { return !!live(); },
+    render: function (kind, name, opts, secs) { try { return render(kind, name, opts, secs); } catch (e) { return Promise.resolve(null); } },
+    preview: safe(function (kind, name, opts) { // one entry point for harnesses / dev menus
+      if (kind === 'sfx') sfx(name, opts); else if (kind === 'organ') organ(name);
+      else if (kind === 'cheer') BB.Audio.cheer(opts && opts.size); else if (kind === 'groan') BB.Audio.groan();
+      else if (kind === 'crowd') BB.Audio.crowd(opts && opts.level);
+    }),
+    SFX: SFX_NAMES,
+    ORGAN: ORGAN_NAMES,
+  };
+
+  // ------------------------------------------------------------------ haptics
+  function vib(p) {
+    try { if (BB.Haptics.enabled && W.navigator && typeof W.navigator.vibrate === 'function') W.navigator.vibrate(p); } catch (e) { /* ignore */ }
+  }
+  BB.Haptics = {
+    enabled: true,
+    tap: function () { vib(8); },
+    thud: function () { vib(24); },
+    buzz: function () { vib([30, 40, 30]); },
+  };
+})();
+
+// ===================== MODULE: 50-save.js =====================
+// 50-save.js — persistent progress. Owned by the meta agent.
+// One JSON blob in localStorage under 'halftone.v1'. If storage is unavailable or throws (Safari private mode,
+// storage disabled, quota), everything keeps working from an in-memory copy for the session.
+// Schema is versioned: bump VERSION and add a MIGRATIONS[oldVersion] step that upgrades the blob in place.
+(function () {
+  var KEY = 'halftone.v1';
+  var VERSION = 1;
+
+  function defaults() {
+    return {
+      v: VERSION,
+      created: Date.now(),
+      seenHowTo: false,
+      settings: { sound: true, music: true, haptics: true, assist: true, latencyMs: 30 },
+      coins: 150,                    // enough for one pack on day one
+      xp: 0,
+      bat: 'b_hickory',
+      inkset: 'park',
+      bought: {},                    // item id -> true (things bought with coins)
+      seenUnlocks: {},               // item id -> true (so "NEW" badges show once)
+      cards: {},                     // card id -> copies owned
+      misprints: {},                 // card id -> misprint copies owned
+      packs: { opened: 0, sinceRare: 0, seed: 0 },
+      ach: {},                       // achievement id -> timestamp earned
+      stats: {
+        games: 0, wins: 0, pitches: 0, swings: 0, contact: 0, whiffs: 0, takes: 0,
+        hits: 0, singles: 0, doubles: 0, triples: 0, hr: 0, k: 0, bb: 0, runs: 0, outs: 0, fouls: 0,
+        longest: 0, maxEV: 0, perfects: 0, hrDist: 0, bestStreak: 0, onFire: 0,
+        coinsEarned: 0, stars: 0, tourGames: 0, dailyGames: 0, derbyGames: 0, playDays: 0, lastPlayDay: '',
+      },
+      tour: { stars: {}, won: {} },  // game id -> best stars / true
+      daily: { results: {}, streak: 0, bestStreak: 0, lastDay: '', best: 0, lastBonusDay: '' },
+      derby: { best: 0, bestDist: 0, games: 0 },
+      lastFirstWinDay: '',
+    };
+  }
+
+  // MIGRATIONS[n] upgrades a blob from version n to n + 1 (mutate and return it).
+  var MIGRATIONS = {
+    // 1: function (d) { d.newThing = 0; return d; },
+  };
+
+  // ---- storage backend
+  var mem = null, persistent = false, backend = null;
+  function probe() {
+    try {
+      var ls = (typeof window !== 'undefined' && window.localStorage) || (typeof localStorage !== 'undefined' ? localStorage : null);
+      if (!ls) return null;
+      var t = '__halftone_probe__';
+      ls.setItem(t, '1'); ls.removeItem(t);
+      return ls;
+    } catch (e) { return null; }
+  }
+  function readRaw() {
+    if (backend) { try { return backend.getItem(KEY); } catch (e) { persistent = false; backend = null; } }
+    return mem;
+  }
+  function writeRaw(s) {
+    mem = s;
+    if (backend) { try { backend.setItem(KEY, s); return true; } catch (e) { persistent = false; backend = null; } }
+    return false;
+  }
+
+  // fill missing keys from defaults (recursively for plain objects), so new fields appear for old saves
+  function fill(dst, def) {
+    for (var k in def) {
+      if (!Object.prototype.hasOwnProperty.call(def, k)) continue;
+      var dv = def[k];
+      if (dst[k] === undefined || dst[k] === null && dv !== null) dst[k] = dv;
+      else if (dv && typeof dv === 'object' && !Array.isArray(dv) && dst[k] && typeof dst[k] === 'object') fill(dst[k], dv);
+    }
+    return dst;
+  }
+
+  function migrate(d) {
+    var v = +d.v || 1;
+    while (v < VERSION) {
+      if (MIGRATIONS[v]) d = MIGRATIONS[v](d) || d;
+      v++;
+      d.v = v;
+    }
+    return fill(d, defaults());
+  }
+
+  var data = null;
+  function load() {
+    var raw = readRaw(), d = null;
+    if (raw) { try { d = JSON.parse(raw); } catch (e) { d = null; } }
+    if (!d || typeof d !== 'object') d = defaults();
+    data = migrate(d);
+    return data;
+  }
+
+  function init(storage) {
+    backend = storage === undefined ? probe() : storage;
+    persistent = !!backend;
+    mem = null;
+    load();
+  }
+
+  var timer = 0;
+  BB.Save = {
+    KEY: KEY,
+    VERSION: VERSION,
+    MIGRATIONS: MIGRATIONS,
+    defaults: defaults,
+    get: function () { if (!data) load(); return data; },
+    set: function (patch) {
+      var d = BB.Save.get();
+      for (var k in patch) d[k] = patch[k];
+      BB.Save.commit();
+      return d;
+    },
+    commit: function () {
+      if (!data) return false;
+      if (timer) { clearTimeout(timer); timer = 0; }
+      try { return writeRaw(JSON.stringify(data)); } catch (e) { return false; }
+    },
+    // debounced commit for chatty callers (per-pitch stats)
+    soon: function () {
+      if (timer) return;
+      timer = setTimeout(function () { timer = 0; BB.Save.commit(); }, 400);
+    },
+    reset: function () { data = defaults(); BB.Save.commit(); return data; },
+    persistent: function () { return persistent; },
+    exportText: function () { return JSON.stringify(BB.Save.get()); },
+    importText: function (s) { var d = JSON.parse(s); data = migrate(d); BB.Save.commit(); return data; },
+    // tests: re-initialise against a given storage object (null = memory only)
+    _init: init,
+  };
+
+  init();
+})();
+
+// ===================== MODULE: 55-meta.js =====================
+// 55-meta.js — the retention layer: bats, ink sets, the 72-card album, packs, coins/XP/levels, the Scorebook
+// (achievements + lifetime stats), Barnstorm Tour progress, Daily Derby streaks and the Endless Derby best.
+// Owned by the meta agent. Persists through BB.Save. Pure logic: no DOM here (BB.UI draws all of it).
+(function () {
+  var U = BB.U;
+  function S() { return BB.Save.get(); }
+  function commit() { BB.Save.commit(); }
+  function today() { return U.dayKey(); }
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+  function prevDay(key) {
+    var p = key.split('-');
+    var d = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2]) - 86400000);
+    return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1) + '-' + pad2(d.getUTCDate());
+  }
+  function inksetById(id) {
+    for (var i = 0; i < BB.INKSETS.length; i++) if (BB.INKSETS[i].id === id) return BB.INKSETS[i];
+    return null;
+  }
+
+  // ======================================================================= BATS
+  // timing multiplies every timing window, power multiplies exit velocity (0.9-1.12), lift adds launch degrees.
+  // look: hints for BB.CardArt.drawBat (wood tone, tape ink slot, flourish).
+  var BATS = [
+    { id: 'b_hickory', name: 'Old Hickory', timing: 1.0, power: 1.0, lift: 0, unlock: { kind: 'free' },
+      desc: 'Grandpa\'s bat. Honest wood, honest swings.', look: { wood: 'mid', tape: 'a', mark: 'none' } },
+    { id: 'b_slap', name: 'Slap Stick', timing: 1.25, power: 0.92, lift: -2, unlock: { kind: 'level', n: 2 },
+      desc: 'Forgiving timing, gentle pop. Singles all day.', look: { wood: 'light', tape: 'c', mark: 'stripes' } },
+    { id: 'b_twig', name: 'The Twig', timing: 1.4, power: 0.9, lift: -4, unlock: { kind: 'stat', key: 'hits', n: 40, label: 'lifetime hits' },
+      desc: 'Light as a pencil. You can\'t miss — you just can\'t lift it.', look: { wood: 'light', tape: 'b', mark: 'thin' } },
+    { id: 'b_lumber', name: 'The Lumberjack', timing: 0.8, power: 1.12, lift: 2, unlock: { kind: 'level', n: 5 },
+      desc: 'A felled oak with a handle. Tiny window, enormous thump.', look: { wood: 'dark', tape: 'b', mark: 'plaid' } },
+    { id: 'b_moon', name: 'Moon Shot', timing: 0.95, power: 1.03, lift: 7, unlock: { kind: 'tour', chapter: 1 },
+      desc: 'Uppercut built in. Everything goes up. Some of it comes down.', look: { wood: 'dark', tape: 'c', mark: 'moon' } },
+    { id: 'b_fungo', name: 'The Fungo', timing: 1.15, power: 0.95, lift: 9, unlock: { kind: 'ach', id: 'daily3' },
+      desc: 'Borrowed from the coach. Sky-high pop-ups and the odd miracle.', look: { wood: 'light', tape: 'a', mark: 'thin' } },
+    { id: 'b_corked', name: 'Corked', timing: 1.05, power: 1.1, lift: 3, unlock: { kind: 'coins', n: 1200 },
+      desc: 'Perfectly regulation. Please do not look inside. Or shake it.', look: { wood: 'mid', tape: 'b', mark: 'cork' } },
+    { id: 'b_riso', name: 'Riso Roller', timing: 1.15, power: 1.04, lift: 3, unlock: { kind: 'set', team: 1 },
+      desc: 'Inked on three drums. Leaves a mark on every ball.', look: { wood: 'ink', tape: 'c', mark: 'dots' } },
+    { id: 'b_barber', name: 'Barber Pole', timing: 1.08, power: 1.06, lift: 1, unlock: { kind: 'set', team: 3 },
+      desc: 'Candy-striped and smooth. A little of everything.', look: { wood: 'light', tape: 'b', mark: 'stripes' } },
+    { id: 'b_smudge', name: 'The Smudge', timing: 1.0, power: 1.09, lift: 5, unlock: { kind: 'ach', id: 'misprint' },
+      desc: 'Came off the press crooked. Hits crooked, too — crooked far.', look: { wood: 'ink', tape: 'b', mark: 'smudge' } },
+    { id: 'b_golden', name: 'Golden Ash', timing: 1.12, power: 1.08, lift: 2, unlock: { kind: 'set', team: 5 },
+      desc: 'Wider sweet spot, real pop. The collector\'s bat.', look: { wood: 'gold', tape: 'a', mark: 'star' } },
+  ];
+  var BAT_BY = {}; BATS.forEach(function (b) { BAT_BY[b.id] = b; });
+
+  // ======================================================================= INK SETS
+  // 'park' = no fixed press: every park prints in its own inks.
+  var INK_RULES = {
+    park: { kind: 'free' },
+    classic: { kind: 'free' },
+    lawn: { kind: 'level', n: 3 },
+    harbor: { kind: 'level', n: 7 },
+    dusk: { kind: 'set', team: 0 },
+    grape: { kind: 'set', team: 2 },
+    ledger: { kind: 'set', team: 4 },
+  };
+  var INK_DESC = {
+    park: 'Each ballpark prints in its own house inks.',
+    classic: 'Blue, fluorescent pink, yellow. The original run.',
+    dusk: 'Federal blue and orange for the night game.',
+    lawn: 'Green grass, pink seats, summer.',
+    grape: 'Purple and orange. Tastes like a doubleheader.',
+    harbor: 'Teal and red, salt in the air.',
+    ledger: 'Black and red. Strictly box score.',
+  };
+  function inkRule(id) { return INK_RULES[id] || { kind: 'level', n: 10 }; }
+
+  // ======================================================================= TEAMS & CARDS
+  var FALLBACK_TOWNS = ['Mudville', 'Cedar Falls', 'Port Juniper', 'Ironton', 'Dry Gulch', 'Big Prairie'];
+  var MASCOT_BY_SKYLINE = { barns: 'Barnstormers', city: 'Pigeons', pines: 'Night Owls', harbor: 'Gulls', desert: 'Jackrabbits', none: 'Comets' };
+  var MASCOTS = ['Mudcats', 'Comets', 'Gulls', 'Foundrymen', 'Jackrabbits', 'Prairie Dogs', 'Night Owls', 'Pigeons'];
+
+  function buildTeams() {
+    var parks = (BB.Content && BB.Content.PARKS) || [];
+    var used = {}, teams = [];
+    for (var t = 0; t < 6; t++) {
+      var park = parks[t] || null;
+      var town = (park && (park.town || park.name)) || FALLBACK_TOWNS[t];
+      var mascot = park && park.features && MASCOT_BY_SKYLINE[park.features.skyline];
+      if (!mascot || used[mascot]) { mascot = null; for (var m = 0; m < MASCOTS.length; m++) if (!used[MASCOTS[(t + m) % MASCOTS.length]]) { mascot = MASCOTS[(t + m) % MASCOTS.length]; break; } }
+      used[mascot] = true;
+      var ink = (park && park.inkset && inksetById(park.inkset)) ? park.inkset : BB.INKSETS[t % BB.INKSETS.length].id;
+      teams.push({ idx: t, id: park ? park.id : 'team' + (t + 1), park: park ? park.id : null, town: town, mascot: mascot,
+        name: town + ' ' + mascot, short: town.replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase(), inkset: ink,
+        colorSlot: ['a', 'b', 'c', 'a', 'b', 'c'][t] });
+    }
+    return teams;
+  }
+
+  var FIRST = ['Abner', 'Buck', 'Cletus', 'Dutch', 'Eddie', 'Ferris', 'Gus', 'Hap', 'Iggy', 'Jasper', 'Lefty', 'Moose',
+    'Nap', 'Ollie', 'Pee Wee', 'Quincy', 'Rube', 'Smoky', 'Tad', 'Virgil', 'Wally', 'Zeke', 'Boots', 'Cotton', 'Dizzy',
+    'Spud', 'Doc', 'Pops', 'Skeeter', 'Vern', 'Hoyt', 'Ike', 'Bix', 'Otis', 'Mort', 'Clem', 'Arlo', 'Rollie', 'Sal', 'Hubie',
+    'Junior', 'Red', 'Slim', 'Chick', 'Augie', 'Benny', 'Dewey', 'Elmer'];
+  var LAST_A = ['Grub', 'Bram', 'Fitz', 'Kettle', 'Dunk', 'Wim', 'Pot', 'Snod', 'Hal', 'Quill', 'Barn', 'Tumble', 'Mar',
+    'Pick', 'Wob', 'Crum', 'Dob', 'Fen', 'Gar', 'Hob', 'Lark', 'Mud', 'Nib', 'Pud', 'Rook', 'Sprock', 'Tib', 'Wex', 'Zub',
+    'Bunt', 'Cob', 'Dill', 'Plum', 'Ash', 'Thim', 'Gub'];
+  var LAST_B = ['bottom', 'worth', 'ley', 'ski', 'son', 'berry', 'field', 'wick', 'ham', 'strom', 'ford', 'man', 'well',
+    'ins', 'ner', 'stead', 'by', 'kins', 'hollow', 'smith', 'ows', 'ett'];
+  var NICKS = ['Two-Bag', 'The Hatchet', 'Specs', 'Ducky', 'Big Train', 'Noodles', 'Biscuit', 'Hambone', 'Peaches',
+    'The Rake', 'Choo-Choo', 'Sugar', 'Pickles', 'Turnip', 'The Count', 'Goose', 'Popcorn', 'Flapjack', 'Tater', 'Mittens',
+    'Smudge', 'Hot Corner', 'Lefty Jr.', 'Boom-Boom'];
+  var FLAVOR = [
+    'Once hit a triple off a bunt.', 'Eats sunflower seeds, shells and all.', 'Led the league in borrowed hot dogs.',
+    'Can read a curveball\'s mind.', 'Swears the moon is a changeup.', 'Keeps a lucky pickle in his back pocket.',
+    'Batted .400 in his dreams, .260 awake.', 'Has never once worn matching socks.',
+    'Signs autographs in pencil, just in case.', 'Struck out the side and the side\'s mascot.',
+    'Warms up by arguing with the umpire.', 'Owns a parakeet that calls balls and strikes.',
+    'Hit one so far it got its own zip code.', 'Drinks coffee out of his glove.',
+    'Throws a pitch the scouts call "the rumor".', 'Ran through a wall. The wall apologized.',
+    'Grew up shagging flies in a cornfield.', 'Thinks the infield fly rule is a conspiracy.',
+    'Rounds third like he\'s late for supper.', 'Collects ink smudges from old programs.',
+    'Got his nickname from a misunderstanding.', 'Hums the organ tune between pitches.',
+    'Once caught a fly ball in his cap.', 'Never met a fastball he didn\'t like.', 'Bunts for fun. Nobody knows why.',
+    'His glove is older than the ballpark.', 'Taught the bat boy everything he knows.', 'Tips his cap to pigeons.',
+    'Has a 12-step plan to steal home.', 'Breakfast: pancakes and pine tar.', 'Printed slightly off-center since birth.',
+    'Hit for the cycle. On a unicycle.', 'Spits in his glove for luck, then apologizes to it.',
+    'Can hear a slider coming.', 'Measures home runs in hot-dog lengths.', 'Wears the same cap since Little League.',
+  ];
+  var POSITIONS = ['P', 'P', 'P', 'C', '1B', '2B', 'SS', '3B', 'LF', 'CF', 'RF', 'DH'];
+  var POS_NAME = { P: 'Pitcher', C: 'Catcher', '1B': 'First Base', '2B': 'Second Base', SS: 'Shortstop', '3B': 'Third Base',
+    LF: 'Left Field', CF: 'Center Field', RF: 'Right Field', DH: 'Designated Hitter' };
+
+  function buildCards(teams) {
+    var cards = [], names = {};
+    teams.forEach(function (team, t) {
+      var rng = U.rng(U.hashStr('halftone-team-' + t));
+      // rarity layout: 2 foil, 3 rare, 7 common, shuffled per team
+      var rar = ['foil', 'foil', 'rare', 'rare', 'rare', 'common', 'common', 'common', 'common', 'common', 'common', 'common'];
+      for (var i = rar.length - 1; i > 0; i--) { var j = Math.floor(rng() * (i + 1)); var tmp = rar[i]; rar[i] = rar[j]; rar[j] = tmp; }
+      var numbers = {};
+      for (var k = 0; k < 12; k++) {
+        var id = 'c' + (t + 1) + '-' + pad2(k + 1);
+        var r = U.rng(U.hashStr('halftone-card-' + id));
+        var name, guard = 0;
+        do {
+          var last = U.pick(r, LAST_A) + U.pick(r, LAST_B);
+          if (r() < 0.12) last = 'Mc' + last;
+          name = U.pick(r, FIRST) + ' ' + last;
+        } while (names[name] && ++guard < 50);
+        names[name] = true;
+        var num; do { num = 1 + Math.floor(r() * 69); } while (numbers[num]); numbers[num] = true;
+        var pos = POSITIONS[k];
+        var stat;
+        if (pos === 'P') {
+          var w = 6 + Math.floor(r() * 16), l = 3 + Math.floor(r() * 12);
+          stat = w + '-' + l + ' · ' + (2 + r() * 2.6).toFixed(2) + ' ERA · ' + (80 + Math.floor(r() * 180)) + ' K';
+        } else {
+          var hr = Math.floor(2 + r() * r() * 46), avg = (0.215 + r() * 0.13).toFixed(3).slice(1);
+          stat = avg + ' AVG · ' + hr + ' HR · ' + (hr * 2 + 20 + Math.floor(r() * 50)) + ' RBI';
+        }
+        var nick = r() < 0.3 ? U.pick(r, NICKS) : null;
+        cards.push({
+          id: id, no: t * 12 + k + 1, name: name, nick: nick, pos: pos, posName: POS_NAME[pos],
+          team: team.name, teamIdx: t, teamShort: team.short, teamColorSlot: team.colorSlot, number: num,
+          rarity: rar[k], seed: U.hashStr(id), inkset: team.inkset, stat: stat, flavor: U.pick(r, FLAVOR),
+        });
+      }
+    });
+    return cards;
+  }
+
+  var TEAMS = buildTeams();
+  var CARDS = buildCards(TEAMS);
+  var CARD_BY = {}; CARDS.forEach(function (c) { CARD_BY[c.id] = c; });
+  // Team set completion rewards (index = team)
+  var SET_REWARDS = [
+    { kind: 'inkset', id: 'dusk' }, { kind: 'bat', id: 'b_riso' }, { kind: 'inkset', id: 'grape' },
+    { kind: 'bat', id: 'b_barber' }, { kind: 'inkset', id: 'ledger' }, { kind: 'bat', id: 'b_golden' },
+  ];
+
+  // Packs
+  var PACK = {
+    cost: 100, size: 3, guaranteeEvery: 3,
+    odds: { common: 0.72, rare: 0.21, foil: 0.07 }, misprint: 0.025,
+    newBias: 0.5,                         // chance a card is drawn from the ones you don't own yet (of that rarity)
+    refund: { common: 10, rare: 30, foil: 60, misprint: 120 },
+  };
+
+  // ======================================================================= ACHIEVEMENTS (Scorebook stamps)
+  var ACH = [
+    { id: 'first_hit', name: 'Ink on the Bat', desc: 'Get your first hit.', mark: '1B' },
+    { id: 'first_hr', name: 'Dinger Debut', desc: 'Hit your first home run.', mark: 'HR' },
+    { id: 'moonshot', name: 'Moonshot', desc: 'Hit a home run 450+ ft.', mark: '450' },
+    { id: 'tape', name: 'Tape Measure', desc: 'Hit a home run 500+ ft.', mark: '500' },
+    { id: 'rope', name: 'Frozen Rope', desc: 'Smoke a 110+ mph line drive.', mark: '110' },
+    { id: 'patient', name: 'Patient Eye', desc: 'Draw a walk.', mark: 'BB' },
+    { id: 'fullcount', name: 'Full-Count Hero', desc: 'Get a hit on a 3-2 count.', mark: '3-2' },
+    { id: 'cycle', name: 'Hit for the Cycle', desc: 'Single, double, triple and homer in one game.', mark: 'CYC' },
+    { id: 'sweet', name: 'Sweet Spot', desc: 'Time a swing PERFECT.', mark: '!' },
+    { id: 'sommelier', name: 'Barrel Sommelier', desc: '5 PERFECT swings in one game.', mark: '5!' },
+    { id: 'onfire', name: 'On Fire', desc: 'Three hits in a row.', mark: '3H' },
+    { id: 'inferno', name: 'Five-Alarm', desc: 'Five hits in a row.', mark: '5H' },
+    { id: 'slam', name: 'Grand Slam', desc: 'Homer with the bases loaded.', mark: '4R' },
+    { id: 'walkoff', name: 'Walk-Off', desc: 'Win a game with your final swing.', mark: 'W/O' },
+    { id: 'b2b', name: 'Back-to-Back Jacks', desc: 'Two home runs in a row.', mark: '2X' },
+    { id: 'hattrick', name: 'Hat Trick', desc: 'Three homers in one game.', mark: '3HR' },
+    { id: 'chasehr', name: 'Bad-Ball Bandit', desc: 'Homer on a pitch outside the zone.', mark: '?!' },
+    { id: 'oppo', name: 'Oppo Taco', desc: 'Homer to the opposite field.', mark: 'OPP' },
+    { id: 'sombrero', name: 'Golden Sombrero', desc: 'Strike out four times in one game. Oops.', mark: '4K' },
+    { id: 'derby10', name: 'Derby Darling', desc: '10 homers in one Endless Derby.', mark: '10' },
+    { id: 'derby20', name: 'Twenty Big Ones', desc: '20 homers in one Endless Derby.', mark: '20' },
+    { id: 'daily1', name: 'Morning Edition', desc: 'Play your first Daily Derby.', mark: 'D1' },
+    { id: 'daily3', name: 'Three-Day Run', desc: 'Daily Derby streak of 3 days.', mark: 'D3' },
+    { id: 'daily7', name: 'Weekly Circulation', desc: 'Daily Derby streak of 7 days.', mark: 'D7' },
+    { id: 'daily30', name: 'Monthly Subscriber', desc: 'Daily Derby streak of 30 days.', mark: 'D30' },
+    { id: 'gold', name: 'Gold Stars', desc: 'Earn 3 stars on a tour game.', mark: '★★★' },
+    { id: 'giant', name: 'Giant Killer', desc: 'Beat a boss pitcher.', mark: 'BOSS' },
+    { id: 'sweep', name: 'Back Issue', desc: 'Win all five games of an issue.', mark: '5/5' },
+    { id: 'collected', name: 'Collected Edition', desc: 'Beat all six bosses.', mark: '6/6' },
+    { id: 'stars45', name: 'Star Chaser', desc: 'Collect 45 tour stars.', mark: '45★' },
+    { id: 'firstpack', name: 'Fresh Pack Smell', desc: 'Open your first card pack.', mark: 'PK' },
+    { id: 'foil', name: 'Shiny!', desc: 'Pull a foil card.', mark: 'FL' },
+    { id: 'misprint', name: 'Misprint!', desc: 'Pull an ultra-rare misprint.', mark: 'ERR' },
+    { id: 'set', name: 'Complete Set', desc: 'Complete a team set.', mark: 'SET' },
+    { id: 'half', name: 'Halfway Album', desc: 'Own 36 different cards.', mark: '36' },
+    { id: 'full', name: 'Full Album', desc: 'Own all 72 cards.', mark: '72' },
+    { id: 'century', name: 'Century', desc: '100 lifetime hits.', mark: '100' },
+    { id: 'level10', name: 'Double Digits', desc: 'Reach level 10.', mark: 'L10' },
+    { id: 'changeup', name: 'Change of Lumber', desc: 'Equip a different bat.', mark: 'BAT' },
+    { id: 'freshink', name: 'Fresh Ink', desc: 'Load a different press.', mark: 'INK' },
+  ];
+  var ACH_BY = {}; ACH.forEach(function (a) { ACH_BY[a.id] = a; });
+  var ACH_COINS = 25;
+
+  // ======================================================================= levels
+  var MAX_LEVEL = 40, LEVEL_COINS = 60;
+  function xpNeed(level) { return 100 + 50 * (level - 1); }      // xp from `level` to `level + 1`
+  function levelInfo(xp) {
+    if (xp == null) xp = S().xp;
+    var L = 1, rest = xp;
+    while (L < MAX_LEVEL && rest >= xpNeed(L)) { rest -= xpNeed(L); L++; }
+    var need = L >= MAX_LEVEL ? 1 : xpNeed(L);
+    return { level: L, into: rest, need: need, frac: L >= MAX_LEVEL ? 1 : rest / need, xp: xp };
+  }
+
+  // ======================================================================= tour helpers
+  function TOUR() { return (BB.Content && BB.Content.TOUR) || []; }
+  function gameWon(id) { return !!S().tour.won[id]; }
+  function chapterUnlocked(i) {
+    if (i === 0) return true;
+    var prev = TOUR()[i - 1];
+    if (!prev) return false;
+    var boss = prev.games[prev.games.length - 1];
+    return !!boss && gameWon(boss.id);
+  }
+  function locate(game) {
+    var T = TOUR(), id = game && (game.id || game);
+    for (var i = 0; i < T.length; i++) for (var k = 0; k < T[i].games.length; k++) if (T[i].games[k].id === id) return { ch: i, k: k };
+    return null;
+  }
+  function gameUnlocked(game) {
+    var at = locate(game); if (!at) return false;
+    if (!chapterUnlocked(at.ch)) return false;
+    return at.k === 0 || gameWon(TOUR()[at.ch].games[at.k - 1].id);
+  }
+  function bossBeaten(ch) {
+    var c = TOUR()[ch]; if (!c) return false;
+    return gameWon(c.games[c.games.length - 1].id);
+  }
+  function tourStarsTotal() { var s = S().tour.stars, n = 0; for (var k in s) n += s[k] || 0; return n; }
+
+  // ======================================================================= conditions
+  function condMet(c) {
+    if (!c) return true;
+    var d = S();
+    switch (c.kind) {
+      case 'free': return true;
+      case 'level': return levelInfo().level >= c.n;
+      case 'tour': return bossBeaten(c.chapter);
+      case 'set': return teamComplete(c.team);
+      case 'ach': return !!d.ach[c.id];
+      case 'stat': return (d.stats[c.key] || 0) >= c.n;
+      case 'coins': return false; // must be bought
+    }
+    return false;
+  }
+  function condText(c) {
+    if (!c) return '';
+    switch (c.kind) {
+      case 'free': return 'Free';
+      case 'level': return 'Reach level ' + c.n;
+      case 'tour': var ch = TOUR()[c.chapter]; return 'Beat the Issue ' + (c.chapter + 1) + ' boss' + (ch && ch.title ? ' (' + ch.title + ')' : '');
+      case 'set': return 'Complete the ' + (TEAMS[c.team] ? TEAMS[c.team].name : 'team') + ' card set';
+      case 'ach': return 'Earn the "' + (ACH_BY[c.id] ? ACH_BY[c.id].name : c.id) + '" stamp';
+      case 'stat': return 'Get ' + c.n + ' ' + (c.label || c.key) + ' (' + Math.min(c.n, S().stats[c.key] || 0) + '/' + c.n + ')';
+      case 'coins': return 'Buy for ' + U.fmtInt(c.n) + ' coins';
+    }
+    return '';
+  }
+  function batUnlocked(id) { var b = BAT_BY[id]; return !!b && (!!S().bought[id] || condMet(b.unlock)); }
+  function inksetUnlocked(id) { return (id === 'park' || !!inksetById(id)) && (!!S().bought[id] || condMet(inkRule(id))); }
+
+  function snapshotUnlocks() {
+    var o = {};
+    BATS.forEach(function (b) { if (batUnlocked(b.id)) o['bat:' + b.id] = true; });
+    BB.INKSETS.forEach(function (s) { if (inksetUnlocked(s.id)) o['inkset:' + s.id] = true; });
+    TOUR().forEach(function (c, i) { if (chapterUnlocked(i)) o['chapter:' + i] = true; });
+    return o;
+  }
+  function diffUnlocks(before) {
+    var after = snapshotUnlocks(), out = [];
+    for (var k in after) if (!before[k]) {
+      var p = k.split(':'), kind = p[0], id = p[1], name = id;
+      if (kind === 'bat') name = BAT_BY[id].name;
+      else if (kind === 'inkset') name = (inksetById(id) || {}).name + ' inks';
+      else if (kind === 'chapter') { var ch = TOUR()[+id]; name = 'Issue ' + (+id + 1) + (ch && ch.title ? ': ' + ch.title : ''); }
+      out.push({ kind: kind, id: kind === 'chapter' ? +id : id, name: name });
+    }
+    return out;
+  }
+
+  // ======================================================================= album
+  function owned(id) { return S().cards[id] || 0; }
+  function teamComplete(t) {
+    for (var k = 0; k < 12; k++) if (!owned('c' + (t + 1) + '-' + pad2(k + 1))) return false;
+    return true;
+  }
+  function albumStats() {
+    var d = S(), n = 0, m = 0, byTeam = TEAMS.map(function () { return 0; });
+    CARDS.forEach(function (c) { if (d.cards[c.id]) { n++; byTeam[c.teamIdx]++; } if (d.misprints[c.id]) m++; });
+    return { owned: n, total: CARDS.length, misprints: m, byTeam: byTeam, sets: TEAMS.filter(function (t) { return teamComplete(t.idx); }).length };
+  }
+
+  // ======================================================================= awarding
+  var listeners = [];
+  var cur = null;            // the game in progress (per-game counters)
+  function newCur(mode, cfg) {
+    return { mode: mode || null, cfg: cfg || null, events: 0, hits: 0, hr: 0, k: 0, perfects: 0, streak: 0,
+      types: {}, balls: 0, strikes: 0, lastWasHR: false, earned: [], achCoins: 0, longest: 0, maxEV: 0, walkoff: false };
+  }
+  function award(id, into) {
+    var d = S();
+    if (d.ach[id] || !ACH_BY[id]) return null;
+    d.ach[id] = Date.now();
+    d.coins += ACH_COINS; d.stats.coinsEarned += ACH_COINS;
+    var a = { id: id, name: ACH_BY[id].name, desc: ACH_BY[id].desc, mark: ACH_BY[id].mark, coins: ACH_COINS };
+    if (cur) { cur.earned.push(a); cur.achCoins += ACH_COINS; }
+    if (into) into.push(a);
+    listeners.forEach(function (fn) { try { fn(a); } catch (e) {} });
+    return a;
+  }
+  function checkCollection(out) {
+    var a = albumStats();
+    if (a.owned >= 36) award('half', out);
+    if (a.owned >= CARDS.length) award('full', out);
+    if (a.sets > 0) award('set', out);
+    return out;
+  }
+  function checkLevel(out) { if (levelInfo().level >= 10) award('level10', out); return out; }
+  function checkStats(out) { if (S().stats.hits >= 100) award('century', out); return out; }
+
+  // ======================================================================= live tracking
+  var HIT = { '1B': 1, '2B': 1, '3B': 1, HR: 1 };
+  var TERMINAL = { WALK: 1, K: 1, '1B': 1, '2B': 1, '3B': 1, HR: 1, OUT: 1, DP: 1, SF: 1 };
+
+  function onEvent(o) {
+    o = o || {};
+    var ev = o.event || {}, sw = o.swing || null, play = o.play || null, c = ev.call;
+    if (!cur) cur = newCur(o.mode);
+    if (!cur.mode && o.mode) cur.mode = o.mode;
+    var d = S(), st = d.stats, out = [];
+    cur.events++;
+    st.pitches++;
+    var balls = cur.balls, strikes = cur.strikes;
+    if (sw) {
+      st.swings++;
+      if (sw.contact) {
+        st.contact++;
+        if (sw.ev > st.maxEV) st.maxEV = Math.round(sw.ev);
+        if (sw.ev > cur.maxEV) cur.maxEV = sw.ev;
+        if (sw.label === 'PERFECT' || sw.sweet) {
+          st.perfects++; cur.perfects++;
+          award('sweet', out);
+          if (cur.perfects >= 5) award('sommelier', out);
+        }
+        if (sw.ev >= 110 && sw.la >= 0 && sw.la <= 22 && c !== 'FOUL') award('rope', out);
+      } else st.whiffs++;
+    } else st.takes++;
+
+    if (c === 'FOUL') st.fouls++;
+    if (c === 'WALK') { st.bb++; award('patient', out); }
+    if (c === 'K') { st.k++; cur.k++; if (cur.k >= 4) award('sombrero', out); }
+    if (c === 'OUT' || c === 'DP' || c === 'SF') st.outs += (ev.outs || 1);
+    st.runs += ev.runs || 0;
+
+    if (HIT[c]) {
+      st.hits++; cur.hits++; cur.types[c] = true;
+      if (c === '1B') st.singles++; else if (c === '2B') st.doubles++; else if (c === '3B') st.triples++;
+      award('first_hit', out);
+      cur.streak++;
+      if (cur.streak > st.bestStreak) st.bestStreak = cur.streak;
+      if (cur.streak === 3) { st.onFire++; award('onfire', out); }
+      if (cur.streak >= 5) award('inferno', out);
+      if (balls === 3 && strikes === 2) award('fullcount', out);
+      if (cur.types['1B'] && cur.types['2B'] && cur.types['3B'] && cur.types.HR) award('cycle', out);
+      if (c === 'HR') {
+        st.hr++; cur.hr++;
+        var dist = (play && play.dist) || 0;
+        st.hrDist += Math.round(dist);
+        if (dist > st.longest) st.longest = Math.round(dist);
+        if (dist > cur.longest) cur.longest = dist;
+        award('first_hr', out);
+        if (dist >= 450) award('moonshot', out);
+        if (dist >= 500) award('tape', out);
+        if ((ev.runs || 0) >= 4) award('slam', out);
+        if (cur.lastWasHR) award('b2b', out);
+        if (cur.hr >= 3) award('hattrick', out);
+        if (sw && sw.chase) award('chasehr', out);
+        var spray = play && play.spray != null ? play.spray : sw && sw.spray;
+        if (spray != null && spray >= 15) award('oppo', out);
+      }
+      checkStats(out);
+    } else if (c === 'OUT' || c === 'DP' || c === 'SF' || c === 'K') cur.streak = 0;
+
+    if (TERMINAL[c]) cur.lastWasHR = c === 'HR';
+    if (ev.over && ev.win && HIT[c]) { cur.walkoff = true; award('walkoff', out); }
+
+    // own count tracking (only used for the full-count stamp)
+    if (TERMINAL[c]) { cur.balls = 0; cur.strikes = 0; }
+    else if (c === 'BALL') cur.balls = Math.min(3, cur.balls + 1);
+    else if (c === 'STRIKE') cur.strikes = Math.min(2, cur.strikes + 1);
+    else if (c === 'FOUL' && cur.strikes < 2) cur.strikes++;
+
+    BB.Save.soon();
+    return out;
+  }
+
+  function startGame(mode, cfg) { cur = newCur(mode, cfg); }
+
+  // ======================================================================= end of game -> rewards
+  var lastEnd = null;
+  function endGame(mode, cfg, result) {
+    result = result || {};
+    if (lastEnd && lastEnd.result === result) return lastEnd.rewards; // idempotent for the same result object
+    mode = mode || result.mode || (cur && cur.mode) || 'tour';
+    cfg = cfg || {};
+    if (!cur) cur = newCur(mode, cfg);
+    var d = S(), st = d.stats, out = [];
+    var before = snapshotUnlocks();
+    var lvBefore = levelInfo().level;
+    var rs = result.stats || {};
+    // if main never reported pitches, fold the summary stats in
+    if (cur.events === 0 && rs) {
+      st.pitches += rs.pitches || 0; st.swings += rs.swings || 0; st.contact += rs.contact || 0;
+      st.hits += rs.hits || 0; st.hr += rs.hr || 0; st.k += rs.k || 0; st.bb += rs.bb || 0; st.runs += rs.runs || 0;
+      st.perfects += rs.perfects || 0;
+      if ((rs.longest || 0) > st.longest) st.longest = Math.round(rs.longest);
+      if ((rs.maxEV || 0) > st.maxEV) st.maxEV = Math.round(rs.maxEV);
+      cur.hits = rs.hits || 0; cur.hr = rs.hr || 0;
+      if (rs.hr) award('first_hr', out);
+      if (rs.hits) award('first_hit', out);
+    }
+    var hits = Math.max(cur.hits, rs.hits || 0), hr = Math.max(cur.hr, rs.hr || 0);
+    var win = !!result.win, stars = result.stars || 0;
+    var day = today();
+    var lines = [];
+    function line(label, coins, xp) { if (coins || xp) lines.push({ label: label, coins: coins || 0, xp: xp || 0 }); }
+
+    st.games++;
+    if (win) st.wins++;
+    if (st.lastPlayDay !== day) { st.playDays++; st.lastPlayDay = day; }
+
+    line('Showed up', 10, 20);
+    if (hits) line(hits + (hits === 1 ? ' hit' : ' hits'), 4 * hits, 5 * hits);
+    if (hr) line(hr + (hr === 1 ? ' home run' : ' home runs'), 10 * hr, 10 * hr);
+
+    var rewards = { coins: 0, xp: 0, levelBefore: lvBefore, level: lvBefore, newAch: [], unlocks: [], tourStars: 0,
+      starsBefore: 0, best: false, daily: null, lines: lines, mode: mode };
+
+    if (mode === 'tour') {
+      st.tourGames++;
+      var id = cfg.id || (result.cfg && result.cfg.id);
+      var prevStars = (id && d.tour.stars[id]) || 0;
+      rewards.starsBefore = prevStars;
+      if (win) line('Win', 25, 30);
+      if (id) {
+        if (stars > prevStars) { d.tour.stars[id] = stars; rewards.best = prevStars > 0; line((stars - prevStars) + ' new star' + (stars - prevStars > 1 ? 's' : ''), 20 * (stars - prevStars), 15 * (stars - prevStars)); }
+        if (win && !d.tour.won[id]) { d.tour.won[id] = true; }
+        rewards.tourStars = d.tour.stars[id] || 0;
+      }
+      st.stars = tourStarsTotal();
+      if (stars >= 3) award('gold', out);
+      if (win) {
+        var at = locate(id);
+        if (at) {
+          var ch = TOUR()[at.ch];
+          if (at.k === ch.games.length - 1) award('giant', out);
+          if (ch.games.every(function (g) { return d.tour.won[g.id]; })) award('sweep', out);
+          if (TOUR().length && TOUR().every(function (c, i) { return bossBeaten(i); })) award('collected', out);
+        } else if (cfg.boss || (result.boss)) award('giant', out);
+      }
+      if (st.stars >= 45) award('stars45', out);
+    } else if (mode === 'daily') {
+      st.dailyGames++;
+      var key = cfg.dayKey || cfg.day || day;
+      var dd = d.daily, scored = !dd.results[key];
+      if (scored) {
+        dd.results[key] = { score: result.score || 0, stars: stars, win: win, label: result.scoreLabel || '', share: result.share || null, t: Date.now() };
+        if (dd.lastDay === prevDay(key)) dd.streak = (dd.streak || 0) + 1;
+        else if (dd.lastDay !== key) dd.streak = 1;
+        dd.lastDay = key;
+        if (dd.streak > dd.bestStreak) dd.bestStreak = dd.streak;
+        if ((result.score || 0) > dd.best) { rewards.best = dd.best > 0; dd.best = result.score || 0; }
+        var sb = 40 + 5 * Math.min(dd.streak, 10);
+        line('Daily Derby' + (dd.streak > 1 ? ' · ' + dd.streak + '-day streak' : ''), sb, 30);
+        if (stars) line(stars + ' daily star' + (stars > 1 ? 's' : ''), 10 * stars, 10 * stars);
+        award('daily1', out);
+        if (dd.streak >= 3) award('daily3', out);
+        if (dd.streak >= 7) award('daily7', out);
+        if (dd.streak >= 30) award('daily30', out);
+      }
+      rewards.daily = { streak: dd.streak, bestStreak: dd.bestStreak, played: true, scored: scored, replay: !scored,
+        number: U.dayNumber(key), dayKey: key, result: dd.results[key] };
+    } else if (mode === 'derby') {
+      st.derbyGames++;
+      d.derby.games++;
+      var sc = result.score || hr;
+      if (sc > d.derby.best) { rewards.best = true; rewards.prevBest = d.derby.best; d.derby.best = sc; line('New derby best', 30, 20); }
+      if ((rs.longest || cur.longest) > d.derby.bestDist) d.derby.bestDist = Math.round(rs.longest || cur.longest);
+      if (sc >= 10) award('derby10', out);
+      if (sc >= 20) award('derby20', out);
+    }
+    if (win && d.lastFirstWinDay !== day) { d.lastFirstWinDay = day; line('First win today', 50, 25); }
+
+    var coins = 0, xp = 0;
+    lines.forEach(function (l) { coins += l.coins; xp += l.xp; });
+    d.coins += coins; d.xp += xp; st.coinsEarned += coins;
+    var lv = levelInfo().level;
+    if (lv > lvBefore) {
+      var lc = LEVEL_COINS * (lv - lvBefore);
+      d.coins += lc; st.coinsEarned += lc; coins += lc;
+      lines.push({ label: 'Level up!', coins: lc, xp: 0 });
+    }
+    checkLevel(out); checkStats(out);
+
+    rewards.coins = coins + cur.achCoins; // achievement stamps were credited as they happened
+    rewards.xp = xp;
+    rewards.level = lv;
+    rewards.newAch = cur.earned.slice();
+    rewards.unlocks = diffUnlocks(before);
+    rewards.coinsTotal = d.coins;
+    rewards.levelInfo = levelInfo();
+    rewards.levelInfoBefore = levelInfo(d.xp - xp);
+    commit();
+    lastEnd = { result: result, rewards: rewards };
+    cur = null;
+    return rewards;
+  }
+
+  // ======================================================================= packs
+  function rollRarity(rng) {
+    var r = rng();
+    if (r < PACK.odds.foil) return 'foil';
+    if (r < PACK.odds.foil + PACK.odds.rare) return 'rare';
+    return 'common';
+  }
+  function packInfo() {
+    var p = S().packs, k = PACK.guaranteeEvery;
+    var left = k - (p.opened % k);       // packs until (and including) the guaranteed one
+    return { cost: PACK.cost, size: PACK.size, opened: p.opened, guaranteedIn: left, guaranteedNext: left === 1, canAfford: S().coins >= PACK.cost };
+  }
+  function openPack(opts) {
+    opts = opts || {};
+    var d = S();
+    var cost = opts.free ? 0 : PACK.cost;
+    if (d.coins < cost) return { error: 'coins', need: cost - d.coins };
+    var before = snapshotUnlocks();
+    var setsBefore = TEAMS.map(function (t) { return teamComplete(t.idx); });
+    d.coins -= cost;
+    d.packs.opened++;
+    d.packs.seed = (d.packs.seed + 1) >>> 0;
+    var rng = opts.rng || U.rng(U.hashStr('pack:' + d.created + ':' + d.packs.seed));
+    var guaranteed = d.packs.opened % PACK.guaranteeEvery === 0;
+    var rar = [];
+    for (var i = 0; i < PACK.size; i++) rar.push(rollRarity(rng));
+    if (guaranteed && rar.indexOf('rare') < 0 && rar.indexOf('foil') < 0) rar[PACK.size - 1] = rng() < 0.25 ? 'foil' : 'rare';
+    // order: commons first, best card last (for the reveal)
+    var order = { common: 0, rare: 1, foil: 2 };
+    rar.sort(function (a, b) { return order[a] - order[b]; });
+    var pulled = [], refund = 0, out = [], picked = {};
+    rar.forEach(function (r) {
+      var pool = CARDS.filter(function (c) { return c.rarity === r && !picked[c.id]; });
+      var fresh = pool.filter(function (c) { return !d.cards[c.id]; });
+      var src = fresh.length && rng() < PACK.newBias ? fresh : pool;
+      var card = src[Math.floor(rng() * src.length) % src.length];
+      picked[card.id] = true;
+      var mis = rng() < PACK.misprint;
+      var entry = { card: card, rarity: mis ? 'misprint' : card.rarity, misprint: mis, isNew: false, dupe: false, refund: 0 };
+      if (mis) {
+        entry.isNew = !d.misprints[card.id];
+        d.misprints[card.id] = (d.misprints[card.id] || 0) + 1;
+        if (!entry.isNew) { entry.dupe = true; entry.refund = PACK.refund.misprint; }
+        if (!d.cards[card.id]) { d.cards[card.id] = 1; entry.isNew = true; } // a misprint also fills the album slot
+        award('misprint', out);
+      } else {
+        entry.isNew = !d.cards[card.id];
+        d.cards[card.id] = (d.cards[card.id] || 0) + 1;
+        if (!entry.isNew) { entry.dupe = true; entry.refund = PACK.refund[card.rarity]; }
+      }
+      if (card.rarity === 'foil' && !mis) award('foil', out);
+      refund += entry.refund;
+      pulled.push(entry);
+    });
+    d.coins += refund;
+    award('firstpack', out);
+    checkCollection(out);
+    var setsDone = [];
+    TEAMS.forEach(function (t, i) { if (!setsBefore[i] && teamComplete(i)) setsDone.push({ team: t, reward: SET_REWARDS[i] }); });
+    commit();
+    return { cards: pulled, refund: refund, guaranteed: guaranteed, newAch: out, sets: setsDone, unlocks: diffUnlocks(before), coins: d.coins };
+  }
+
+  // ======================================================================= equip / buy
+  function equipBat(id) {
+    if (!batUnlocked(id)) return null;
+    var d = S(), out = [];
+    if (d.bat !== id) { d.bat = id; if (id !== 'b_hickory') award('changeup', out); }
+    commit(); return out;
+  }
+  function equipInkset(id) {
+    if (!inksetUnlocked(id)) return null;
+    var d = S(), out = [];
+    if (d.inkset !== id) { d.inkset = id; if (id !== 'park') award('freshink', out); }
+    commit(); return out;
+  }
+  function buy(kind, id) {
+    var item = kind === 'bat' ? BAT_BY[id] : null, rule = item ? item.unlock : inkRule(id);
+    if (!rule || rule.kind !== 'coins') return { error: 'notforsale' };
+    var d = S();
+    if (d.bought[id]) return { ok: true };
+    if (d.coins < rule.n) return { error: 'coins', need: rule.n - d.coins };
+    d.coins -= rule.n; d.bought[id] = true; commit();
+    return { ok: true };
+  }
+
+  // ======================================================================= daily helpers
+  function dailyInfo(key) {
+    key = key || today();
+    var dd = S().daily, played = !!dd.results[key];
+    var live = (dd.lastDay === key || dd.lastDay === prevDay(key)) ? dd.streak : 0;
+    return { dayKey: key, number: U.dayNumber(key), played: played, result: dd.results[key] || null, streak: live,
+      bestStreak: dd.bestStreak, best: dd.best, alive: dd.lastDay === prevDay(key) && !played };
+  }
+  function dailyHistory(n, key) {
+    key = key || today();
+    var out = [], k = key, dd = S().daily;
+    for (var i = 0; i < (n || 14); i++) { out.unshift({ dayKey: k, number: U.dayNumber(k), result: dd.results[k] || null }); k = prevDay(k); }
+    return out;
+  }
+
+  // ======================================================================= settings
+  function applySetting(k, v) {
+    var A = BB.Audio;
+    try {
+      if (k === 'sound' && A && A.setMuted) A.setMuted(!v);
+      if (k === 'music' && A && A.setMusic) A.setMusic(!!v);
+      if (k === 'haptics' && BB.Haptics) BB.Haptics.enabled = !!v;
+    } catch (e) {}
+  }
+
+  BB.Meta = {
+    BATS: BATS, CARDS: CARDS, TEAMS: TEAMS, ACH: ACH, PACK: PACK, INK_RULES: INK_RULES, INK_DESC: INK_DESC,
+    SET_REWARDS: SET_REWARDS, ACH_COINS: ACH_COINS, MAX_LEVEL: MAX_LEVEL,
+    getBat: function (id) { return BAT_BY[id] || null; },
+    getCard: function (id) { return CARD_BY[id] || null; },
+    getAch: function (id) { return ACH_BY[id] || null; },
+
+    // ---- contract
+    currentBat: function () { var id = S().bat; return BAT_BY[id] && batUnlocked(id) ? BAT_BY[id] : BAT_BY.b_hickory; },
+    currentInkset: function (park) {
+      var choice = S().inkset;
+      if (choice && choice !== 'park' && inksetUnlocked(choice)) return inksetById(choice) || BB.INKSETS[0];
+      if (typeof park === 'string' && BB.Content && BB.Content.getPark) park = BB.Content.getPark(park);
+      return (park && park.inkset && inksetById(park.inkset)) || BB.INKSETS[0];
+    },
+    inksetChoice: function () { return S().inkset; },
+    settings: function () { return S().settings; },
+    setSetting: function (k, v) {
+      var s = S().settings;
+      if (k === 'latencyMs') v = U.clamp(Math.round(+v || 0), 0, 150);
+      s[k] = v; commit(); applySetting(k, v);
+      if (BB.Game && BB.Game.applySettings) { try { BB.Game.applySettings(); } catch (e) {} }
+      return s;
+    },
+    onEvent: onEvent,
+    endGame: endGame,
+    startGame: startGame,
+    onAchievement: function (fn) { listeners.push(fn); },
+
+    // ---- economy
+    coins: function () { return S().coins; },
+    xp: function () { return S().xp; },
+    levelInfo: levelInfo,
+    xpNeed: xpNeed,
+    addCoins: function (n) { S().coins += n; commit(); return S().coins; },
+
+    // ---- unlocks
+    condMet: condMet, condText: condText,
+    batUnlocked: batUnlocked, inksetUnlocked: inksetUnlocked,
+    batRule: function (id) { return BAT_BY[id] ? BAT_BY[id].unlock : null; },
+    inksetRule: inkRule,
+    equipBat: equipBat, equipInkset: equipInkset, buy: buy,
+    isSeen: function (key) { return !!S().seenUnlocks[key]; },
+    markSeen: function (key) { S().seenUnlocks[key] = true; BB.Save.soon(); },
+
+    // ---- cards
+    owned: owned,
+    misprints: function (id) { return S().misprints[id] || 0; },
+    teamComplete: teamComplete,
+    albumStats: albumStats,
+    packInfo: packInfo,
+    openPack: openPack,
+
+    // ---- scorebook
+    achList: function () { var d = S(); return ACH.map(function (a) { return { id: a.id, name: a.name, desc: a.desc, mark: a.mark, earned: d.ach[a.id] || 0 }; }); },
+    stats: function () { return S().stats; },
+
+    // ---- tour
+    tour: TOUR,
+    chapterUnlocked: chapterUnlocked,
+    gameUnlocked: gameUnlocked,
+    gameWon: gameWon,
+    gameStars: function (game) { return S().tour.stars[game && (game.id || game)] || 0; },
+    bossBeaten: bossBeaten,
+    tourStars: tourStarsTotal,
+    chapterStars: function (i) { var c = TOUR()[i], n = 0; if (c) c.games.forEach(function (g) { n += S().tour.stars[g.id] || 0; }); return n; },
+    locate: locate,
+    nextTourGame: function (game) {
+      var at = locate(game); if (!at) return null;
+      var T = TOUR(), g = T[at.ch].games[at.k + 1] || (T[at.ch + 1] && T[at.ch + 1].games[0]);
+      return g && gameUnlocked(g) ? g : null;
+    },
+    currentTourGame: function () {
+      var T = TOUR(), last = null;
+      for (var i = 0; i < T.length; i++) for (var k = 0; k < T[i].games.length; k++) {
+        var g = T[i].games[k];
+        if (gameUnlocked(g)) { last = g; if (!gameWon(g.id)) return g; }
+      }
+      return last;
+    },
+
+    // ---- daily / derby
+    dailyInfo: dailyInfo,
+    dailyHistory: dailyHistory,
+    derbyBest: function () { return S().derby.best; },
+    derby: function () { return S().derby; },
+    prevDay: prevDay,
+
+    // ---- misc
+    seenHowTo: function () { return !!S().seenHowTo; },
+    markHowToSeen: function () { S().seenHowTo = true; commit(); },
+    resetProgress: function () {
+      var keep = S().settings, seen = S().seenHowTo;
+      var d = BB.Save.reset(); d.settings = keep; d.seenHowTo = seen; commit(); cur = null; lastEnd = null;
+    },
+    _cur: function () { return cur; },
+    _rebuildCards: function () {
+      TEAMS = buildTeams(); CARDS = buildCards(TEAMS); CARD_BY = {}; CARDS.forEach(function (c) { CARD_BY[c.id] = c; });
+      BB.Meta.TEAMS = TEAMS; BB.Meta.CARDS = CARDS;
+    },
+  };
+})();
+
+// ===================== MODULE: 60-main.js =====================
+// 60-main.js — boot, loop, input and the at-bat state machine. Owned by the lead.
+// Wires Rules -> Pitch/Bat -> Meta -> Audio -> Render. See docs/CONTRACT.md for the module APIs.
+(function () {
+  var K = BB.K, U = BB.U;
+  var canvas, cssW = 0, cssH = 0;
+  var clock = 0;                 // seconds since boot (real time, frozen while the page is hidden)
+  var lastNow = 0;               // performance.now() of the last frame
+  var raf = 0;
+
+  // Phases: menu | intro | windup | pitch | field | between | over
+  var G = {
+    phase: 'menu', paused: false, mode: null, cfg: null, rs: null, park: null, pitcher: null, bat: null, inkset: null,
+    pitch: null, pitchT: 0, windupT: 0, swing: null, loading: null, resolved: false, mittDone: false, whooshDone: false,
+    play: null, playT: 0, runners: [], event: null, pendingEvent: null, stamp: null, stampAt: 0, shake: 0, hitstopT: 0,
+    phaseT: 0, last: null, crowd: 0.25, auto: null, pitchNo: 0, hints: 0, titlePark: 0, results: null,
+  };
+
+  function has(mod, fn) { return BB[mod] && typeof BB[mod][fn] === 'function'; }
+  function call(mod, fn) {
+    if (!has(mod, fn)) return undefined;
+    try { return BB[mod][fn].apply(BB[mod], Array.prototype.slice.call(arguments, 2)); }
+    catch (e) { console.error('BB.' + mod + '.' + fn, e); return undefined; }
+  }
+  function settings() { return call('Meta', 'settings') || {}; }
+  function sfx(name, opts) { call('Audio', 'sfx', name, opts || {}); }
+  function haptic(kind) { if (settings().haptics !== false && BB.Haptics && BB.Haptics[kind]) { try { BB.Haptics[kind](); } catch (e) {} } }
+
+  // ---------------------------------------------------------------- layout
+  function resize() {
+    var w = window.innerWidth, h = window.innerHeight;
+    if (w === cssW && h === cssH) return;
+    cssW = w; cssH = h;
+    var dpr = Math.min(window.devicePixelRatio || 1, K.MAX_DPR);
+    canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+    call('Render', 'resize', w, h, dpr);
+  }
+
+  // ---------------------------------------------------------------- game lifecycle
+  function applySettings() {
+    var s = settings();
+    call('Audio', 'setMuted', s.sound === false);
+    call('Audio', 'setMusic', s.music !== false);
+    if (BB.Haptics) BB.Haptics.enabled = s.haptics !== false;
+  }
+
+  function start(mode, cfg) {
+    cfg = cfg || {};
+    var rs = call('Rules', 'create', mode, cfg);
+    if (!rs) { console.error('Rules.create failed'); return; }
+    G.mode = mode; G.cfg = cfg; G.rs = rs;
+    G.park = rs.park || (cfg.park && call('Content', 'getPark', cfg.park)) || (BB.Content && BB.Content.PARKS && BB.Content.PARKS[0]);
+    G.pitcher = rs.pitcher || (cfg.pitcher && call('Content', 'getPitcher', cfg.pitcher));
+    G.bat = call('Meta', 'currentBat') || { id: 'b_default', name: 'Bat', timing: 1, power: 1, lift: 0 };
+    G.inkset = call('Meta', 'currentInkset', G.park) || BB.INKSETS[0];
+    call('Render', 'setInks', G.inkset);
+    G.paused = false; G.pitchNo = 0; G.last = null; G.results = null; G.event = null;
+    resetPitch();
+    applySettings();
+    call('UI', 'hideAll');
+    call('UI', 'inGame', true);
+    call('Audio', 'organ', 'stop');
+    call('Audio', 'organ', 'walkup');
+    var hud = call('Rules', 'hud', rs) || {};
+    setStamp('PLAY BALL!', hud.goal || '', 'neutral');
+    setPhase('intro');
+  }
+
+  function quit() {
+    G.paused = false;
+    call('UI', 'inGame', false);
+    call('Audio', 'crowd', 0);
+    G.rs = null; G.loading = null;
+    setPhase('menu');
+    call('UI', 'show', 'title');
+  }
+
+  function resetPitch() {
+    G.pitch = null; G.pitchT = 0; G.windupT = 0; G.swing = null; G.loading = null; G.resolved = false;
+    G.mittDone = false; G.whooshDone = false; G.play = null; G.playT = 0; G.runners = []; G.pendingEvent = null;
+  }
+
+  function setPhase(p) { G.phase = p; G.phaseT = 0; }
+  function setStamp(text, sub, kind) { G.stamp = { text: text, sub: sub || '', kind: kind || 'neutral', t: 0 }; }
+
+  function nextPitch() {
+    resetPitch();
+    G.pitch = call('Rules', 'nextPitch', G.rs);
+    if (!G.pitch) { finish(); return; }
+    G.pitchNo++;
+    if (G.hints < 3 && !hintSeen()) {
+      setStamp(G.hints === 2 ? 'LAY OFF BALLS' : G.hints === 1 ? 'HOLD = POWER' : 'TAP TO SWING',
+        G.hints === 1 ? 'press during the windup, let go to swing' : G.hints === 2 ? 'pitches outside the box are hard to hit' : 'when the ball reaches the plate', 'neutral');
+      G.hints++;
+      if (G.hints === 3) markHintSeen();
+    }
+    setPhase('windup');
+  }
+
+  function hintSeen() { try { return localStorage.getItem('halftone.hints') === '1'; } catch (e) { return G.hints >= 3; } }
+  function markHintSeen() { try { localStorage.setItem('halftone.hints', '1'); } catch (e) {} }
+
+  // ---------------------------------------------------------------- input
+  function gameTimeAt(evStamp) {
+    // pitchT at the moment of the input event, not the moment of the next frame: precise timing matters.
+    var ahead = 0;
+    if (typeof evStamp === 'number' && evStamp > 0 && evStamp <= performance.now() + 1) ahead = (evStamp - lastNow) / 1000;
+    return G.pitchT + U.clamp(ahead, -0.05, 0.05);
+  }
+
+  function doSwing(power, evStamp) {
+    if (G.phase !== 'pitch' || G.swing) return;
+    var t = gameTimeAt(evStamp);
+    var lat = (settings().latencyMs != null ? settings().latencyMs : K.INPUT_LATENCY * 1000) / 1000;
+    var timingErr = (t - lat + K.SWING_LAG) - G.pitch.T;
+    var rng = swingRng();
+    var res = call('Bat', 'swing', G.pitch, timingErr, G.bat, { power: !!power, rng: rng }) ||
+      { contact: false, label: 'WHIFF', timingErr: timingErr, quality: 0, ev: 0, la: 0, spray: 0, power: !!power };
+    G.swing = { t: 0, start: t, result: res, power: !!power, rng: rng };
+    G.loading = null;
+    haptic('tap');
+  }
+
+  function swingRng() {
+    var rs = G.rs;
+    if (rs && typeof rs.swingRng === 'function') return rs.swingRng(G.pitch);
+    return (rs && rs.rng) || Math.random;
+  }
+
+  function onDown(e) {
+    call('Audio', 'unlock');
+    if (G.paused || !G.rs) return;
+    e.preventDefault();
+    var ts = e.timeStamp;
+    if (G.phase === 'windup' || (G.phase === 'intro' && G.phaseT > 0.6) || G.phase === 'between') {
+      if (!G.loading && G.phase === 'windup') G.loading = { since: G.windupT, level: 0, id: e.pointerId };
+      return;
+    }
+    if (G.phase === 'pitch' && !G.swing) {
+      if (G.loading) return; // the release will swing
+      doSwing(false, ts);
+      return;
+    }
+    if (G.phase === 'field') { G.playT = Math.max(G.playT, G.play ? G.play.dur : 0); }
+  }
+  function onUp(e) {
+    if (!G.loading || G.paused) return;
+    if (G.loading.id != null && e.pointerId != null && e.pointerId !== G.loading.id) return;
+    if (G.phase === 'pitch' && !G.swing) doSwing(G.loading.level >= 0.35, e.timeStamp);
+    G.loading = null;
+  }
+
+  // ---------------------------------------------------------------- update
+  function update(dt) {
+    G.phaseT += dt;
+    if (G.stamp) G.stamp.t += dt;
+    G.shake = Math.max(0, G.shake - dt * 2.2);
+    var rs = G.rs;
+
+    switch (G.phase) {
+      case 'intro':
+        if (G.phaseT > 1.6) nextPitch();
+        break;
+
+      case 'windup':
+        G.windupT += dt;
+        if (G.loading) G.loading.level = U.clamp((G.windupT - G.loading.since) / 0.35, 0, 1);
+        if (G.windupT >= K.WINDUP) { setPhase('pitch'); G.pitchT = 0; }
+        break;
+
+      case 'pitch':
+        G.pitchT += dt;
+        var p = G.pitch;
+        if (G.loading) G.loading.level = 1;
+        if (G.swing) G.swing.t += dt;
+        if (!G.whooshDone && G.pitchT > p.T - 0.25) { G.whooshDone = true; sfx('whoosh', { mph: p.mph }); }
+        if (G.auto && !G.swing) autoBat(p);
+        if (!G.resolved && G.swing && G.swing.result.contact) {
+          // the bat meets the ball when the ball reaches the plate (or a hair after, on a late swing)
+          var contactT = p.T + U.clamp(G.swing.result.timingErr, 0, 0.08);
+          if (G.pitchT >= contactT) contact();
+        } else if (!G.resolved && G.pitchT >= p.T + 0.12) {
+          G.resolved = true;
+          if (G.swing) resolveWhiff(); else resolveTake();
+        }
+        if (G.resolved && !G.play) {
+          if (!G.mittDone && G.pitchT >= p.T + 0.1) { G.mittDone = true; sfx('mitt', { mph: p.mph }); }
+          if (G.pitchT >= p.T + K.POST_PITCH) afterEvent();
+        }
+        break;
+
+      case 'field':
+        G.playT += dt;
+        if (G.playT < 0) { G.pitchT += dt; if (G.swing) G.swing.t += dt; }
+        var pl = G.play;
+        if (G.pendingEvent && G.playT >= stampTimeFor(pl)) showEvent(G.pendingEvent), G.pendingEvent = null;
+        if (pl.wall && !G.wallDone && pl.hang && G.playT >= pl.hang) { G.wallDone = true; sfx('wall'); G.shake = 0.4; }
+        if (G.playT >= pl.dur + 0.35) {
+          if (G.pendingEvent) { showEvent(G.pendingEvent); G.pendingEvent = null; }
+          afterEvent();
+        }
+        break;
+
+      case 'between':
+        var wait = G.event && (G.event.call === 'HR') ? 1.1 : 0.8;
+        if (G.event && G.event.over) wait = 1.5;
+        if (G.phaseT >= wait) {
+          if (G.event && G.event.over || call('Rules', 'isOver', rs)) finish(); else nextPitch();
+        }
+        break;
+    }
+
+    // crowd bed follows the drama
+    var target = 0.22;
+    if (rs) {
+      if (rs.onFire) target += 0.2;
+      if (G.phase === 'windup') target += 0.08 * G.windupT;
+      if (G.phase === 'field' && G.play && G.play.type !== 'FOUL' && G.play.type !== 'OUT') target = 0.85;
+    } else target = 0;
+    G.crowd += (target - G.crowd) * Math.min(1, dt * 2);
+    call('Audio', 'crowd', G.crowd);
+  }
+
+  function stampTimeFor(pl) {
+    if (pl.type === 'HR') return Math.min(pl.dur - 0.9, Math.max(0.6, (pl.hang || pl.dur) * 0.55));
+    if (pl.type === 'FOUL') return 0.35;
+    if (pl.catchT > 0) return Math.min(pl.catchT, pl.dur - 0.5);
+    return Math.min(pl.hang || 1, pl.dur - 0.5);
+  }
+
+  function contact() {
+    G.resolved = true;
+    var s = G.swing.result;
+    var play = call('Bat', 'play', s, G.park, G.swing.rng, { bases: G.rs.bases, outs: G.rs.outs }) ||
+      { type: 'OUT', outKind: 'ground', dur: K.FIELD_MIN, hang: 1, catchT: 1, catchBy: 5, ballAt: function () { return { x: 0, y: 60, z: 0 }; }, fielderAt: function () { return { x: 0, y: 60 }; }, fielders: [], desc: '' };
+    var ev = call('Rules', 'inPlay', G.rs, G.pitch, s, play) || { call: play.type, runs: 0, outs: 0, runnerMoves: [], text: play.type, sub: '' };
+    G.play = play; G.playT = 0; G.wallDone = false;
+    G.runners = ev.runnerMoves || [];
+    G.last = { mph: G.pitch.mph, name: G.pitch.name, ev: s.ev, la: s.la };
+    sfx(play.type === 'FOUL' ? 'foul' : 'crack', { quality: s.quality, sweet: s.sweet });
+    if (s.sweet) { G.hitstopT = 0.09; G.shake = 1; haptic('thud'); } else { G.shake = 0.35 + 0.4 * s.quality; haptic('tap'); }
+    track(ev, s, play);
+    if (play.type === 'HR') {
+      call('Audio', 'cheer', 1);
+      setTimeout(function () { call('Audio', 'organ', 'homer'); }, 700);
+    } else if (play.type !== 'FOUL' && play.type !== 'OUT') call('Audio', 'cheer', 0.5 + 0.1 * ['1B', '2B', '3B'].indexOf(play.type));
+    G.pendingEvent = ev;
+    G.event = ev;
+    // fouls and routine outs don't need the full park tour
+    if (play.type === 'FOUL') play.dur = Math.min(play.dur, 1.7);
+    G.fieldDelay = 0.22;
+    setPhase('field');
+    G.playT = -G.fieldDelay; // linger a beat on the bat scene with the ball rocketing away
+  }
+
+  function resolveWhiff() {
+    var ev = call('Rules', 'whiff', G.rs, G.pitch, G.swing.result) || { call: 'STRIKE', text: 'STRIKE', sub: '' };
+    G.last = { mph: G.pitch.mph, name: G.pitch.name };
+    sfx('whiff');
+    track(ev, G.swing.result, null);
+    showEvent(ev);
+    G.event = ev;
+  }
+
+  function resolveTake() {
+    var ev = call('Rules', 'take', G.rs, G.pitch) || { call: G.pitch.strike ? 'STRIKE' : 'BALL', text: '', sub: '' };
+    G.last = { mph: G.pitch.mph, name: G.pitch.name };
+    track(ev, null, null);
+    showEvent(ev);
+    G.event = ev;
+  }
+
+  function showEvent(ev) {
+    var c = ev.call, kind = 'neutral';
+    if (c === 'HR') kind = 'huge';
+    else if (c === '1B' || c === '2B' || c === '3B' || c === 'WALK' || c === 'SF') kind = 'good';
+    else if (c === 'K' || c === 'OUT' || c === 'DP') kind = 'bad';
+    else if (c === 'STRIKE' && G.swing) kind = 'bad';
+    setStamp(ev.text || c, ev.sub || '', kind);
+    if (c === 'STRIKE') sfx('strike'); else if (c === 'BALL') sfx('ball');
+    if (c === 'K' || c === 'OUT' || c === 'DP') { sfx('out'); if (c !== 'OUT' || ev.over) call('Audio', 'groan'); }
+    if (c === 'WALK') call('Audio', 'cheer', 0.3);
+    if (kind !== 'neutral') sfx('stamp');
+    if (G.rs && G.rs.onFire && (c === '1B' || c === '2B' || c === '3B' || c === 'HR') && G.rs.streak === 3) call('Audio', 'organ', 'rally');
+  }
+
+  function afterEvent() { setPhase('between'); }
+
+  function track(ev, swing, play) {
+    var got = call('Meta', 'onEvent', { mode: G.mode, event: ev, swing: swing, play: play, pitch: G.pitch });
+    if (got && got.length) got.forEach(function (a, i) {
+      setTimeout(function () { call('UI', 'toast', 'STAMPED: ' + a.name, 'ach'); sfx('unlock'); }, 900 + i * 700);
+    });
+  }
+
+  function finish() {
+    if (G.phase === 'over') return;
+    var result = call('Rules', 'result', G.rs) || { mode: G.mode, win: false, stars: 0, score: 0, stats: {} };
+    var rewards = call('Meta', 'endGame', G.mode, G.cfg, result) || {};
+    G.results = { mode: G.mode, cfg: G.cfg, result: result, rewards: rewards };
+    call('Audio', 'organ', result.win || G.mode !== 'tour' && result.score > 0 ? 'win' : 'lose');
+    setPhase('over');
+    G.loading = null;
+    setTimeout(function () {
+      if (G.phase !== 'over') return;
+      call('UI', 'inGame', false);
+      call('UI', 'show', 'results', G.results);
+    }, 900);
+  }
+
+  // ---------------------------------------------------------------- test / autoplay hook
+  function autoBat(p) {
+    // swings with a normal timing error of sd = G.auto.sd; lays off pitches outside the zone G.auto.eye of the time
+    if (G.autoPlan !== p) {
+      G.autoPlan = p;
+      var r = Math.random;
+      G.autoSwing = !(!p.strike && r() < (G.auto.eye || 0.6));
+      G.autoErr = U.gauss(r) * (G.auto.sd || 0.04);
+      G.autoPower = r() < (G.auto.power || 0.3);
+    }
+    if (!G.autoSwing) return;
+    var lat = (settings().latencyMs != null ? settings().latencyMs : K.INPUT_LATENCY * 1000) / 1000;
+    var at = p.T + G.autoErr - K.SWING_LAG + lat;
+    if (G.pitchT >= at) doSwing(G.autoPower);
+  }
+
+  // ---------------------------------------------------------------- render
+  function view() {
+    var rs = G.rs;
+    if (!rs || G.phase === 'menu') {
+      return { scene: 'title', time: clock, park: titlePark(), hud: null };
+    }
+    var v = {
+      scene: (G.phase === 'field' && G.playT >= 0) || (G.phase === 'between' && G.play) || (G.phase === 'over' && G.play) ? 'field' : 'bat',
+      time: clock, park: G.park, pitcher: G.pitcher, bat: G.bat,
+      windup: G.phase === 'windup' ? U.clamp(G.windupT / K.WINDUP, 0, 1) : null,
+      pitch: G.pitch && (G.phase === 'pitch' || G.phase === 'field' || G.phase === 'between') ? G.pitch : null,
+      pitchT: G.phase === 'windup' ? null : G.pitchT,
+      swing: G.swing ? { t: G.swing.t, result: G.swing.result, power: G.swing.power } : null,
+      loading: G.loading ? G.loading.level : null,
+      assist: settings().assist !== false,
+      play: G.play, playT: Math.max(0, G.play ? Math.min(G.playT, G.play.dur) : 0),
+      runners: G.runners,
+      hud: call('Rules', 'hud', rs) || null,
+      stamp: G.stamp && G.stamp.t < 2 ? G.stamp : null,
+      onFire: !!rs.onFire, shake: G.shake, hitstop: G.hitstopT > 0,
+      last: G.last,
+    };
+    return v;
+  }
+
+  function titlePark() {
+    var P = BB.Content && BB.Content.PARKS;
+    if (!P || !P.length) return null;
+    return P[Math.floor(clock / 20) % P.length];
+  }
+
+  var lastInkFor = null;
+  function frame(now) {
+    raf = requestAnimationFrame(frame);
+    var dt = lastNow ? (now - lastNow) / 1000 : 0;
+    lastNow = now;
+    dt = Math.min(Math.max(dt, 0), 0.05);
+    resize();
+    clock += dt;
+    if (G.hitstopT > 0) { G.hitstopT -= dt; dt = 0; }
+    if (!G.paused) update(dt);
+    var v = view();
+    if (v.scene === 'title') {
+      var ink = call('Meta', 'currentInkset', v.park) || BB.INKSETS[0];
+      if (ink !== lastInkFor) { lastInkFor = ink; call('Render', 'setInks', ink); }
+    } else lastInkFor = null;
+    call('Render', 'frame', v);
+  }
+
+  // ---------------------------------------------------------------- boot
+  function boot() {
+    canvas = document.getElementById('game');
+    if (!canvas) { canvas = document.createElement('canvas'); canvas.id = 'game'; document.body.prepend(canvas); }
+    call('Render', 'init', canvas);
+    resize();
+    canvas.addEventListener('pointerdown', onDown, { passive: false });
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    document.addEventListener('touchmove', function (e) { if (e.target === canvas) e.preventDefault(); }, { passive: false });
+    window.addEventListener('keydown', function (e) {
+      if (e.repeat) return;
+      if (e.code === 'Space') { onDown({ preventDefault: function () {}, timeStamp: e.timeStamp, pointerId: 'key' }); e.preventDefault(); }
+      if ((e.code === 'Escape' || e.code === 'KeyP') && G.rs && G.phase !== 'over') { if (G.paused) resume(); else { pause(); call('UI', 'show', 'pause'); } }
+    });
+    window.addEventListener('keyup', function (e) { if (e.code === 'Space') onUp({ timeStamp: e.timeStamp, pointerId: 'key' }); });
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) {
+        if (G.rs && G.phase !== 'over' && !G.paused) { pause(); call('UI', 'show', 'pause'); }
+        call('Audio', 'crowd', 0);
+      }
+      lastNow = 0;
+    });
+    window.addEventListener('resize', resize);
+    applySettings();
+    call('UI', 'init');
+    raf = requestAnimationFrame(frame);
+  }
+
+  function pause() { if (G.rs && G.phase !== 'over') { G.paused = true; G.loading = null; call('Audio', 'crowd', 0); } }
+  function resume() { if (G.paused) { G.paused = false; applySettings(); call('UI', 'hideAll'); call('UI', 'inGame', true); } }
+  function restart() { if (G.mode) { var m = G.mode, c = G.cfg; G.rs = null; start(m, c); } }
+
+  BB.Game = {
+    start: start, pause: pause, resume: resume, quit: quit, restart: restart,
+    running: function () { return !!G.rs && G.phase !== 'over'; },
+    paused: function () { return G.paused; },
+    applySettings: applySettings,
+  };
+
+  // Test hooks for tools/qa-*.js
+  window.__bb = {
+    G: G,
+    auto: function (opts) { G.auto = opts || null; },     // e.g. __bb.auto({sd: .04, eye: .7, power: .3})
+    swing: function (power) { doSwing(!!power); },
+    view: view,
+    clock: function () { return clock; },
+  };
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+})();
+
 </script>
 <script>
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && window.top === window.self) {
