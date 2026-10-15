@@ -6,7 +6,12 @@
 // 3. Offline renders of every sound: non-silent (peak > 0.005) and never clipping (peak < 1.0).
 // 4. The built bundle (dist/halftone.html) exposes BB.Audio without load errors, if it exists.
 const path = require('path'), fs = require('fs');
-const { chromium } = require('playwright');
+let chromium;
+try { ({ chromium } = require('playwright')); } catch (e) { ({ chromium } = require('/opt/node22/lib/node_modules/playwright')); }
+// every name the game may call; the cartoon re-skin added the gags and the two new cues
+const WANT_SFX = ['crack', 'foul', 'whiff', 'mitt', 'whoosh', 'strike', 'ball', 'out', 'wall', 'stamp', 'tap', 'coin', 'packRip',
+  'cardFlip', 'rare', 'unlock', 'levelUp', 'error', 'toast', 'boing', 'slide', 'bonk', 'zip', 'xylo', 'honk', 'pop', 'twinkle', 'kablam', 'splat'];
+const WANT_ORGAN = ['charge', 'homer', 'walkup', 'win', 'lose', 'rally', 'menu', 'sneak', 'iris'];
 const ROOT = path.join(__dirname, '..');
 const HARNESS = 'file://' + path.join(__dirname, 'audio-harness.html');
 
@@ -17,7 +22,10 @@ function exercise() { // runs in the page
   const A = BB.Audio, H = BB.Haptics, out = [];
   const all = () => {
     A.SFX.forEach(n => A.sfx(n, { quality: Math.random(), sweet: Math.random() < 0.5, mph: 60 + Math.random() * 40 }));
-    A.sfx('nope'); A.sfx(); A.sfx('crack', null); A.sfx('mitt', { mph: 'fast' });
+    A.sfx('nope'); A.sfx(); A.sfx('crack', null); A.sfx('mitt', { mph: 'fast' }); A.sfx('toString'); A.sfx('__proto__');
+    A.sfx('slide', { dir: 'up' }); A.sfx('slide', { dir: 'down', dur: 9 }); A.sfx('slide', { dir: 'sideways', dur: 'x' });
+    A.sfx('zip', { mph: 40 }); A.sfx('zip', { mph: 120 }); A.sfx('honk', { n: 1 }); A.sfx('twinkle', { dur: -1 }); A.sfx('boing', { f: 'big' });
+    A.sfx('kablam', { when: 0.05 }); A.sfx('pop', { when: 'soon' }); A.sfx('splat', 'x'); A.organ('toString'); A.organ('_unlock');
     A.ORGAN.forEach(n => A.organ(n)); A.organ('menu'); A.organ('stop'); A.organ('bogus'); A.organ();
     [0, 0.3, 0.8, 1, -1, 5, NaN, undefined].forEach(l => A.crowd(l));
     A.cheer(); A.cheer(1); A.cheer(-3); A.groan();
@@ -50,8 +58,21 @@ function exercise() { // runs in the page
       const rend = await page.evaluate(() => BB.Audio.render('sfx', 'crack', {}, 1));
       await page.click('#unlock'); await page.click('text=homer');
       check(errs.length === 0, 'no page errors ' + (errs.join('; ') || ''));
+      check(await page.evaluate(() => BB.Audio.organ('sneak') === undefined && BB.Audio.sfx('kablam') === undefined), 'new calls are silent no-ops');
       check(r[2] === 'none' && r[3] === false, 'state none / not ready (' + r.slice(2).join(',') + ')');
       check(rend === null, 'render() resolves null without OfflineAudioContext');
+      await page.close();
+    }
+
+    // ---- 1b. the name lists
+    console.log('names:');
+    {
+      const page = await browser.newPage();
+      await page.goto(HARNESS);
+      const names = await page.evaluate(() => ({ sfx: BB.Audio.SFX, organ: BB.Audio.ORGAN }));
+      for (const n of WANT_SFX) check(names.sfx.includes(n), 'SFX has ' + n);
+      for (const n of WANT_ORGAN) check(names.organ.includes(n), 'ORGAN has ' + n);
+      check(!names.organ.some(n => n.startsWith('_')), 'private flourishes hidden from ORGAN');
       await page.close();
     }
 
@@ -87,6 +108,16 @@ function exercise() { // runs in the page
       check(vis[0] === 'suspended' && vis[1] === 'running', 'hidden -> suspended, visible -> running (' + vis.join(' -> ') + ')');
       await page.click('text=charge'); await page.click('#mute'); await page.click('text=stamp'); await page.click('#mute');
       await page.click('#music'); await page.click('text=menu'); await page.click('#music');
+      // cartoon sequence: full-count sneak cue cut by a homer, gags layered, iris sting, then menu
+      await page.evaluate(() => { BB.Audio.organ('sneak'); });
+      await page.waitForTimeout(400);
+      await page.evaluate(() => { BB.Audio.sfx('zip', { mph: 97 }); BB.Audio.sfx('crack', { quality: 1, sweet: true }); BB.Audio.sfx('kablam'); BB.Audio.sfx('slide', { dir: 'up' }); BB.Audio.organ('homer'); });
+      await page.waitForTimeout(300);
+      await page.evaluate(() => { BB.Audio.sfx('whiff'); BB.Audio.sfx('xylo'); BB.Audio.sfx('twinkle'); BB.Audio.sfx('honk'); BB.Audio.sfx('boing'); BB.Audio.sfx('bonk'); BB.Audio.sfx('splat'); BB.Audio.sfx('pop'); BB.Audio.organ('iris'); });
+      await page.waitForTimeout(300);
+      await page.evaluate(() => { BB.Audio.setMusic(false); BB.Audio.organ('sneak'); BB.Audio.setMusic(true); BB.Audio.organ('menu'); });
+      await page.waitForTimeout(300);
+      await page.click('text=slide down'); await page.click('text=K: whiff+xylo+twinkle');
       await page.waitForTimeout(400);
       await page.evaluate(() => { BB.Audio.organ('stop'); BB.Audio.crowd(0); });
       check(await page.evaluate(() => BB.Audio.state()) === 'running', 'context running at end');
