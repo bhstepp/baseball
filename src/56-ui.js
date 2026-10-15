@@ -7,7 +7,7 @@
   var root, screensEl, pauseBtn, toastsEl;
   var cur = null, curData = null, curEl = null, inGameFlag = false;
   var redraws = [], timers = [], intervals = [];
-  var audioUnlocked = false, menuMusic = false, lastStart = null, artInk = null;
+  var audioUnlocked = false, menuMusic = false, lastStart = null, artInk = null, backdropInk = null;
 
   function M() { return BB.Meta; }
   function C() { return BB.Content || null; }
@@ -87,6 +87,8 @@
     return elm;
   }
   function menuInk() {
+    if (M().inksetChoice() !== 'park') return M().currentInkset(null);
+    if (backdropInk) return backdropInk;
     var g = M().currentTourGame && M().currentTourGame();
     return M().currentInkset(g ? getPark(g.park) : null);
   }
@@ -328,6 +330,15 @@
         ]),
       ]),
     ]);
+    // follow the ink of the park the title backdrop is printing (main rotates parks on the title)
+    var lastPark = null;
+    var sync = function () {
+      var v = null;
+      try { v = window.__bb && window.__bb.view && !inGameFlag ? window.__bb.view() : null; } catch (e) {}
+      var p = v && v.scene === 'title' ? v.park : null;
+      if (p && p !== lastPark) { lastPark = p; backdropInk = m.currentInkset(p); setInks(backdropInk); }
+    };
+    sync(); every(sync, 1000);
     return el;
   };
 
@@ -792,7 +803,7 @@
         slot.appendChild(holder);
         if (n > 1) slot.appendChild(h('span.cnt', { text: 'x' + n }));
         if (mp) slot.appendChild(h('span.mp', { text: 'ERR' }));
-        slot.appendChild(h('span.nm', { text: c.name }));
+        slot.appendChild(h('span.nm', { text: c.rarity === 'common' ? c.posName : c.rarity.toUpperCase() + ' · ' + c.pos }));
         slot.addEventListener('click', tap(function () { cardModal(el, c); }));
       } else {
         slot.appendChild(h('div.empty', { style: 'width:' + cw + 'px;height:' + Math.round(cw * 1.4) + 'px', text: '#' + ('00' + c.no).slice(-3) }));

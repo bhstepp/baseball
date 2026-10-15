@@ -712,17 +712,17 @@
 
   // ------------------------------------------------------------------ the batter: big flat figure, seen from behind
   function batterBase() {
-    var zl = proj(-K.ZONE.xMax, 0, 0).x, bs = S.cam.f / 16.6;
-    return { fx: zl - 1.45 * bs, fy: proj(0, 0.4, 0).y, s: bs };
+    var zl = proj(-K.ZONE.xMax, 0, 0).x, bs = S.cam.f / 16.6 * 0.86;
+    return { fx: zl - 1.5 * bs, fy: proj(0, 0.4, 0).y, s: bs };
   }
   var BK = {
-    stance: { hip: [0.05, 2.65], nsh: [-0.42, 4.42], fsh: [0.5, 4.64], head: [0.12, 5.12], hands: [0.5, 4.78], th: -122, k: 0.86, ff: [0.4, 0.42], bf: [-0.22, 0], turn: 0.1, tilt: 0 },
-    load:   { hip: [-0.06, 2.7], nsh: [-0.52, 4.44], fsh: [0.4, 4.68], head: [0.08, 5.1], hands: [0.2, 4.98], th: -142, k: 0.8, ff: [0.28, 0.85], bf: [-0.22, 0], turn: 0.0, tilt: 0 },
-    launch: { hip: [0.16, 2.6], nsh: [-0.25, 4.32], fsh: [0.5, 4.6], head: [0.15, 5.08], hands: [0.62, 4.25], th: -198, k: 0.45, ff: [0.58, 0.42], bf: [-0.18, 0.02], turn: 0.35, tilt: 0 },
-    contact:{ hip: [0.26, 2.55], nsh: [0.05, 4.25], fsh: [0.45, 4.62], head: [0.2, 5.05], hands: [0.6, 4], th: -356, k: 1.0, ff: [0.62, 0.42], bf: [-0.1, 0.1], turn: 0.75, tilt: 0 },
-    extend: { hip: [0.3, 2.56], nsh: [0.3, 4.3], fsh: [0.22, 4.7], head: [0.2, 5.06], hands: [1.1, 4.3], th: -392, k: 0.62, ff: [0.62, 0.42], bf: [-0.06, 0.22], turn: 0.92, tilt: 0 },
-    finish: { hip: [0.26, 2.6], nsh: [0.46, 4.45], fsh: [-0.15, 4.66], head: [0.16, 5.1], hands: [0.55, 5.12], th: -532, k: 0.8, ff: [0.62, 0.42], bf: [-0.02, 0.38], turn: 1.0, tilt: 0 },
-    whiff:  { hip: [0.12, 2.48], nsh: [0.52, 4.3], fsh: [-0.38, 4.48], head: [0.02, 4.96], hands: [0.3, 4.55], th: -648, k: 0.95, ff: [0.8, 0.32], bf: [-0.3, 0.3], turn: 1.0, tilt: 0.3 },
+    stance: { hip: [0.05, 2.35], nsh: [-0.42, 4.27], fsh: [0.5, 4.49], head: [0.12, 4.97], hands: [0.5, 4.63], th: -122, k: 0.86, ff: [0.6, 0.42], bf: [-0.52, 0.0], turn: 0.1, tilt: 0 },
+    load:   { hip: [-0.06, 2.4], nsh: [-0.52, 4.29], fsh: [0.4, 4.53], head: [0.08, 4.95], hands: [0.2, 4.83], th: -142, k: 0.8, ff: [0.48, 0.85], bf: [-0.52, 0.0], turn: 0.0, tilt: 0 },
+    launch: { hip: [0.16, 2.3], nsh: [-0.25, 4.17], fsh: [0.5, 4.45], head: [0.15, 4.93], hands: [0.62, 4.1], th: -198, k: 0.45, ff: [0.78, 0.42], bf: [-0.48, 0.02], turn: 0.35, tilt: 0 },
+    contact:{ hip: [0.26, 2.25], nsh: [0.05, 4.1], fsh: [0.45, 4.47], head: [0.2, 4.9], hands: [0.6, 3.85], th: -356, k: 1.0, ff: [0.82, 0.42], bf: [-0.4, 0.1], turn: 0.75, tilt: 0 },
+    extend: { hip: [0.3, 2.26], nsh: [0.3, 4.15], fsh: [0.22, 4.55], head: [0.2, 4.91], hands: [1.1, 4.15], th: -392, k: 0.62, ff: [0.82, 0.42], bf: [-0.36, 0.22], turn: 0.92, tilt: 0 },
+    finish: { hip: [0.26, 2.3], nsh: [0.46, 4.3], fsh: [-0.15, 4.51], head: [0.16, 4.95], hands: [0.55, 4.97], th: -532, k: 0.8, ff: [0.82, 0.42], bf: [-0.32, 0.38], turn: 1.0, tilt: 0 },
+    whiff:  { hip: [0.12, 2.18], nsh: [0.52, 4.15], fsh: [-0.38, 4.33], head: [0.02, 4.81], hands: [0.3, 4.4], th: -648, k: 0.95, ff: [1.0, 0.32], bf: [-0.6, 0.3], turn: 1.0, tilt: 0.3 },
   };
   function batterPose(view, bb) {
     var sw = view.swing, ld = view.loading, st = BK.stance;
@@ -817,11 +817,14 @@
     leg(hipN, pz.bf, 1.0);
     // torso (jersey, hero ink = B)
     var tp = new Path2D(), hr = [pz.hip[0] + 0.45, pz.hip[1] + 0.02], hl = [pz.hip[0] - 0.42, pz.hip[1] - 0.05];
-    tp.moveTo(X(pz.nsh), Y(pz.nsh));
-    tp.quadraticCurveTo((X(pz.nsh) + X(pz.fsh)) / 2, Math.min(Y(pz.nsh), Y(pz.fsh)) - 0.12 * s, X(pz.fsh), Y(pz.fsh));
-    tp.quadraticCurveTo(X(pz.fsh) + 0.12 * s, (Y(pz.fsh) + Y(hr)) / 2, X(hr), Y(hr));
+    // shoulders ordered left->right so the torso never twists into a bow-tie when he rotates through
+    var midS = [(pz.nsh[0] + pz.fsh[0]) / 2, (pz.nsh[1] + pz.fsh[1]) / 2], half = Math.max(0.42, Math.abs(pz.fsh[0] - pz.nsh[0]) / 2);
+    var lS = [midS[0] - half, pz.nsh[0] <= pz.fsh[0] ? pz.nsh[1] : pz.fsh[1]], rS = [midS[0] + half, pz.nsh[0] <= pz.fsh[0] ? pz.fsh[1] : pz.nsh[1]];
+    tp.moveTo(X(lS), Y(lS));
+    tp.quadraticCurveTo((X(lS) + X(rS)) / 2, Math.min(Y(lS), Y(rS)) - 0.12 * s, X(rS), Y(rS));
+    tp.quadraticCurveTo(X(rS) + 0.12 * s, (Y(rS) + Y(hr)) / 2, X(hr), Y(hr));
     tp.lineTo(X(hl), Y(hl));
-    tp.quadraticCurveTo(X(pz.nsh) - 0.2 * s, (Y(pz.nsh) + Y(hl)) / 2, X(pz.nsh), Y(pz.nsh));
+    tp.quadraticCurveTo(X(lS) - 0.2 * s, (Y(lS) + Y(hl)) / 2, X(lS), Y(lS));
     tp.closePath();
     stroke(tp, A1, kl * 2);
     fill(tp, B1);
@@ -867,8 +870,8 @@
 
   // ------------------------------------------------------------------ catcher (foreground, low) + mitt
   function catcherBase() {
-    var zb = proj(0, 0, K.ZONE.zMin).y, cs = S.cam.f / 14;
-    var top = Math.max(zb + 44, S.H * 0.75);
+    var zb = proj(0, 0, K.ZONE.zMin).y, cs = S.cam.f / 17.5;
+    var top = Math.max(zb + 62, S.H * 0.79);
     return { x: proj(0, 0, 0).x - 6, y: top + 2.9 * cs, s: cs };
   }
   function mittTarget(view) {
@@ -971,13 +974,15 @@
     var x0 = -K.ZONE.xMax, x1 = K.ZONE.xMax, z0 = K.ZONE.zMin, z1 = K.ZONE.zMax;
     var a = proj(x0, 0, z1), b = proj(x1, 0, z0);
     var p = rect(a.x, a.y, b.x - a.x, b.y - a.y);
-    stroke(p, { a: 1 }, 1.4, { over: true, dash: [0.1, 5.2] });
+    stroke(p, PAPER, 3.2, { dash: [0.1, 5.2] });
+    stroke(p, { a: 1 }, 1.7, { over: true, dash: [0.1, 5.2] });
     var L = 9, br = new Path2D();
     br.moveTo(a.x, a.y + L); br.lineTo(a.x, a.y); br.lineTo(a.x + L, a.y);
     br.moveTo(b.x - L, a.y); br.lineTo(b.x, a.y); br.lineTo(b.x, a.y + L);
     br.moveTo(b.x, b.y - L); br.lineTo(b.x, b.y); br.lineTo(b.x - L, b.y);
     br.moveTo(a.x + L, b.y); br.lineTo(a.x, b.y); br.lineTo(a.x, b.y - L);
-    stroke(br, { a: 1 }, 2, { over: true, cap: 'square' });
+    stroke(br, PAPER, 4.4, { cap: 'square' });
+    stroke(br, { a: 1 }, 2.4, { over: true, cap: 'square' });
     // knee / letters tick marks in C
     stroke(seg(a.x - 6, (a.y + b.y) / 2, a.x - 2, (a.y + b.y) / 2), C1, 2, { over: true });
     stroke(seg(b.x + 2, (a.y + b.y) / 2, b.x + 6, (a.y + b.y) / 2), C1, 2, { over: true });
@@ -987,11 +992,11 @@
     if (f < 0.45 || f > 1.02) return;
     var u = clamp((f - 0.45) / 0.55, 0, 1);
     var q = proj(pitch.plate.x, 0, pitch.plate.z), rb = ballR(q.s);
-    var r = rb * (1.25 + 4.2 * (1 - u) * (1 - u));
-    var dash = Math.max(2, r * 0.42);
-    var ring = circ(q.x, q.y, r);
-    stroke(ring, { b: 1 }, 2.4, { over: true, dash: [dash, dash * 0.7], cap: 'butt' });
-    stroke(circ(q.x, q.y, rb * 1.1), { c: 1 }, 1.6, { over: true });
+    var r = rb * (1.3 + 6 * (1 - u) * (1 - u));
+    var dash = Math.max(2.5, r * 0.36), ring = circ(q.x, q.y, r);
+    stroke(ring, PAPER, 5, { dash: [dash, dash * 0.6], cap: 'butt' });
+    stroke(ring, { a: 1, b: 0.5 }, 2.6, { over: true, dash: [dash, dash * 0.6], cap: 'butt' });
+    stroke(circ(q.x, q.y, rb * 1.12), { b: 1 }, 1.8, { over: true });
     if (u > 0.85) fill(circ(q.x, q.y, rb * 0.35), { b: 1 }, { over: true });
   }
   function contactInfo(view) {
@@ -1051,18 +1056,20 @@
     return { x: c.cx + xc * s, y: c.cy - yc * s, s: s };
   }
   function layoutField(park) {
-    var W = S.W, H = S.H, c = makeCam(0, -250, 300, 0, 205, 0);
-    var pts = [[0, 0, 0]], i;
-    for (i = -45; i <= 45; i += 5) {
+    var W = S.W, H = S.H, c = makeCam(0, -90, 470, 0, 190, 0);
+    var pts = [[0, 0, 0]], i, tops = [];
+    for (i = -45; i <= 45; i += 5) { var ff = fenceAt(park, i), rr0 = U.rad(i); tops.push([ff.dist * Math.sin(rr0), ff.dist * Math.cos(rr0), ff.height + 30]); }
+    for (i = -30; i <= 30; i += 5) {
       var f = fenceAt(park, i), r = U.rad(i);
       pts.push([f.dist * Math.sin(r), f.dist * Math.cos(r), f.height]);
     }
     var mnx = 1e9, mxx = -1e9, home = cproj(c, 0, 0, 0), mny = 1e9;
-    pts.forEach(function (p) { var q = cproj(c, p[0], p[1], p[2]); mnx = Math.min(mnx, q.x); mxx = Math.max(mxx, q.x); mny = Math.min(mny, q.y); });
-    var k = (W * 0.97) / (mxx - mnx);
-    var kh = (H * 0.79 - H * 0.24) / (home.y - mny);
+    pts.forEach(function (p) { var q = cproj(c, p[0], p[1], p[2]); mnx = Math.min(mnx, q.x); mxx = Math.max(mxx, q.x); });
+    tops.forEach(function (p) { var q = cproj(c, p[0], p[1], p[2]); mny = Math.min(mny, q.y); });
+    var k = (W * 1.0) / (mxx - mnx);
+    var kh = (H * 0.84 - H * 0.2) / (home.y - mny);
     k = Math.min(k, kh);
-    c.k = k; c.cx = W / 2 - k * (mnx + mxx) / 2; c.cy = H * 0.79 - k * home.y;
+    c.k = k; c.cx = W / 2; c.cy = H * 0.84 - k * home.y;
     S.fcam = c;
   }
   function fp(x, y, z) { return cproj(S.fcam, x, y, z || 0); }
@@ -1077,21 +1084,21 @@
   function drawFieldBackground(park) {
     var W = S.W, H = S.H, ft = feat(park), seed = hash(park.id), rng = U.rng(seed + 40), i, p, sp, q;
     // surroundings: a little town map around the park
-    var land = ft.skyline === 'desert' ? { b: 0.4, c: 0.75 } : ft.skyline === 'barns' ? { a: 0.22, c: 0.75 } :
-      ft.skyline === 'pines' ? { a: 0.5, c: 0.6 } : { a: 0.16, b: 0.08 };
+    var land = ft.skyline === 'desert' ? { b: 0.32, c: 0.6 } : ft.skyline === 'barns' ? { a: 0.2, c: 0.6 } :
+      ft.skyline === 'pines' ? { a: 0.4, c: 0.55 } : { a: 0.2, b: 0.1 };
     fill(rect(-M, -M, W + 2 * M, H + 2 * M), land);
     // street grid / field patches (world coords far beyond the fence)
     var grid = new Path2D(), patches = new Path2D(), trees = new Path2D();
-    for (var gx = -900; gx <= 900; gx += 120) { var a1 = fp(gx, 380, 0), a2 = fp(gx, 1400, 0); grid.moveTo(a1.x, a1.y); grid.lineTo(a2.x, a2.y); }
-    for (var gy = 420; gy <= 1400; gy += 110) { var b1 = fp(-900, gy, 0), b2 = fp(900, gy, 0); grid.moveTo(b1.x, b1.y); grid.lineTo(b2.x, b2.y); }
-    for (i = 0; i < 26; i++) {
+    for (var gx = -960; gx <= 960; gx += 240) { var a1 = fp(gx, 380, 0), a2 = fp(gx, 1400, 0); grid.moveTo(a1.x, a1.y); grid.lineTo(a2.x, a2.y); }
+    for (var gy = 460; gy <= 1400; gy += 220) { var b1 = fp(-900, gy, 0), b2 = fp(900, gy, 0); grid.moveTo(b1.x, b1.y); grid.lineTo(b2.x, b2.y); }
+    for (i = 0; i < 12; i++) {
       var px = -800 + rng() * 1600, py = 450 + rng() * 900;
       if (ft.skyline === 'barns' || ft.skyline === 'desert') patches.addPath(fpoly([[px, py], [px + 90, py], [px + 90, py + 70], [px, py + 70]]));
       else patches.addPath(fpoly([[px, py], [px + 60, py], [px + 60, py + 40], [px, py + 40]]));
     }
     fill(patches, ft.skyline === 'barns' ? { b: 0.3, c: 0.9 } : ft.skyline === 'desert' ? { b: 0.6, c: 0.9 } : { a: 0.4, b: 0.15 });
-    stroke(grid, PAPER, ft.skyline === 'barns' || ft.skyline === 'desert' ? 1.2 : 2.2);
-    for (i = 0; i < 120; i++) {
+    stroke(grid, PAPER, 3);
+    for (i = 0; i < 70; i++) {
       var tx = -900 + rng() * 1800, ty = 380 + rng() * 1000, tq = fp(tx, ty, 0), tr = Math.max(1.4, 9 * tq.s);
       trees.moveTo(tq.x + tr, tq.y); trees.arc(tq.x, tq.y, tr, 0, TAU);
     }
@@ -1115,10 +1122,10 @@
     var ring = [], ringCrowd = function (spA, spB, d0, d1, z0, z1, stepA, stepD) {
       var classes = CROWD, paths = classes.map(function () { return new Path2D(); }), r2 = U.rng(seed + 50);
       for (var d = d1; d >= d0; d -= stepD) {
-        for (var s3 = spA; s3 <= spB; s3 += stepA * (380 / d)) {
+        for (var s3 = spA; s3 <= spB; s3 += U.deg(stepA / (380 + d))) {
           var ci = Math.floor(r2() * classes.length), base = fenceAt(park, clamp(s3, -45, 45));
           var dd = base.dist + d, zz = lerp(z0, z1, (d - d0) / (d1 - d0)) + base.height;
-          var cq = fp.apply(null, sprayPt(s3, dd, zz)), cr = Math.max(0.9, 2.3 * cq.s);
+          var cq = fp.apply(null, sprayPt(s3, dd, zz)), cr = Math.max(1.3, 2.6 * cq.s);
           if (r2() < 0.08) continue;
           paths[ci].moveTo(cq.x + cr, cq.y); paths[ci].arc(cq.x, cq.y, cr, 0, TAU);
         }
@@ -1135,11 +1142,11 @@
       var wcut = []; for (sp = Math.max(-60, wa); sp <= Math.min(60, wb); sp += 2) wcut.push(sprayPt(sp, 1500)); wcut.push([0, 0, 0]);
       cl.addPath(fpoly(wcut)); P.clip(cl, 'evenodd');
       fill(ringP, { a: 0.9, b: 0.25 });
-      ringCrowd(-56, 56, 8, 76, 0, 44, 1.25, 7);
+      ringCrowd(-56, 56, 8, 76, 0, 44, 6.5, 6.5);
       P.restore();
     } else {
       fill(ringP, { a: 0.9, b: 0.25 });
-      ringCrowd(-56, 56, 8, 76, 0, 44, 1.25, 7);
+      ringCrowd(-56, 56, 8, 76, 0, 44, 6.5, 6.5);
     }
     // roof edge of the ring
     var roof = new Path2D(), rq;
@@ -1171,8 +1178,8 @@
       fill(fpoly(dg), A1);
     });
     var hs = [];
-    for (sp = 50; sp <= 310; sp += 6) hs.push(sprayPt(sp, 62, 2));
-    for (sp = 310; sp >= 50; sp -= 6) hs.push(sprayPt(sp, 150, 45));
+    for (sp = 50; sp <= 310; sp += 6) hs.push(sprayPt(sp, 64, 2));
+    for (sp = 310; sp >= 50; sp -= 6) hs.push(sprayPt(sp, 100, 25));
     fill(fpoly(hs), { a: 0.9, b: 0.25 });
     // the field: foul grass, fair checker grass clipped to the fence
     var fieldPts = [[0, -55, 0]];
@@ -1225,7 +1232,7 @@
     var wallP = fpoly(wallTop.concat(wallBot.slice().reverse()));
     fill(wallP, { a: 1, c: 0.15 });
     var wtl = new Path2D(); wallTop.forEach(function (w, j) { var wq = fp(w[0], w[1], w[2]); if (j) wtl.lineTo(wq.x, wq.y); else wtl.moveTo(wq.x, wq.y); });
-    stroke(wtl, C1, 1.6);
+    stroke(wtl, { a: 1 }, 4.5); stroke(wtl, C1, 1.8);
     // foul poles
     [-45, 45].forEach(function (sg) {
       var fa = fenceAt(park, sg), b0 = fp.apply(null, sprayPt(sg, fa.dist, 0)), b1 = fp.apply(null, sprayPt(sg, fa.dist, fa.height + 55));
@@ -1234,7 +1241,7 @@
     // distance stencils on the grass, map style
     [-45, -22, 0, 22, 45].forEach(function (sg) {
       var fa = fenceAt(park, sg), mq = fp.apply(null, sprayPt(sg, fa.dist - 30));
-      P.text(String(Math.round(fa.dist)), mq.x, mq.y + 3, R.mono(Math.max(7, 8.5 * S.W / 390), true), PAPER, { align: 'center', over: false, ko: [] });
+      P.text(String(Math.round(fa.dist)), mq.x, mq.y + 3, R.mono(Math.max(7, 8.5 * S.W / 390), true), PAPER, { align: 'center' });
     });
     // light towers at the corners of the stands
     if (ft.lights) {
@@ -1341,7 +1348,7 @@
   }
   function drawFieldDynamic(view, park, time) {
     var play = view.play, t = view.playT || 0, i;
-    var sc = function (q) { return Math.max(9, 6.2 * q.s * 2.1); };
+    var sc = function (q) { return Math.max(14, 6.2 * q.s * 3.2); };
     // runners (hero team, slot B)
     var runners = view.runners || [];
     var u = play ? clamp(t / Math.max(0.6, (play.dur || 2) * 0.92), 0, 1) : 1;
@@ -1407,14 +1414,14 @@
     var b = play.ballAt(tt), qb = fp(b.x, b.y, b.z), qs = fp(b.x, b.y, 0);
     var trail = new Path2D(), trail2 = new Path2D(), step = 0.055, n = Math.floor(tt / step);
     for (i = Math.max(0, n - 70); i <= n; i++) {
-      var bt = play.ballAt(i * step), q = fp(bt.x, bt.y, bt.z), r = 1.25;
-      if (i % 4 === 0) { trail2.moveTo(q.x + 1.7, q.y); trail2.arc(q.x, q.y, 1.7, 0, TAU); }
+      var bt = play.ballAt(i * step), q = fp(bt.x, bt.y, bt.z), r = 1.8;
+      if (i % 4 === 0) { trail2.moveTo(q.x + 2.6, q.y); trail2.arc(q.x, q.y, 2.6, 0, TAU); }
       else { trail.moveTo(q.x + r, q.y); trail.arc(q.x, q.y, r, 0, TAU); }
     }
-    fill(trail, C1, { over: true }); fill(trail2, { b: 1 }, { over: true });
-    fill(ell(qs.x, qs.y, 3.6, 1.5), { a: 0.6 }, { over: true });
+    fill(trail, { a: 1 }, { over: true }); fill(trail2, { b: 1, c: 0.4 }, { over: true });
+    fill(ell(qs.x, qs.y, 5.5, 2.2), { a: 0.65 }, { over: true });
     if (b.z > 4) stroke(seg(qs.x, qs.y, qb.x, qb.y), { a: 0.6 }, 0.8, { over: true, dash: [1.5, 3] });
-    var br = clamp(2.6 + b.z * 0.012, 2.6, 4.6);
+    var br = clamp(4.2 + b.z * 0.03, 4.2, 8);
     drawBallSprite(qb.x, qb.y, br, tt * 20);
     // catch pop
     if (play.catchBy >= 0 && play.catchT > 0 && tt >= play.catchT && tt < play.catchT + 0.5) {
@@ -1597,7 +1604,7 @@
   // ------------------------------------------------------------------ ON FIRE flood
   function drawFire(time, yTop, yBot) {
     var W = S.W, H = S.H;
-    fill(rect(-M, -M, W + 2 * M, H + 2 * M), { b: 0.2 }, { over: true });
+    P.flood('b', 0.2);
     var p = new Path2D(), n = 9;
     for (var i = 0; i < n; i++) {
       var x = -10 + (W + 20) * (i + 0.5) / n, hgt = (36 + 22 * Math.sin(time * 5 + i * 1.7)) * (S.H / 844), w = W / n * 0.75;
@@ -1742,6 +1749,8 @@
     var t0 = now();
     var scene = view.scene || 'title', park = parkOf(view), inks = inksFor(view), time = view.time || 0;
     P = S.P; P.setInks(inks);
+    var fr = R.fontsReady();
+    if (fr !== S.fontOK) { S.fontOK = fr; S.cache = {}; }   // baked text must use the real faces once they load
     if (view.hitstop) time = S.freezeT; else S.freezeT = time;
     if (scene !== S.lastScene) {
       if (scene === 'title') { for (var k in S.cache) if (k.indexOf('title|') < 0) delete S.cache[k]; }
@@ -1804,7 +1813,7 @@
     if (ci) drawContact(view, ci);
     drawHud(view);
     drawStamp(view.stamp, 'bat');
-    if (view.hitstop) fill(rect(-M, -M, S.W + 2 * M, S.H + 2 * M), { c: 0.3 }, { over: true });
+    if (view.hitstop) P.flood('c', 0.3);
     P.reset();
   }
   function flags(time, g) {
@@ -1825,7 +1834,7 @@
     view._fz = fv.z;
     P.reset();
     loadFieldBake(fv);
-    if (view.onFire) { P.reset(); fill(rect(-M, -M, S.W + 2 * M, S.H + 2 * M), { b: 0.16 }, { over: true }); }
+    if (view.onFire) P.flood('b', 0.16);
     P.reset(); P.save(); applyFieldView(fv);
     drawFieldDynamic(view, park, time);
     P.restore();
@@ -1877,5 +1886,6 @@
       return { frames: a.length, median: a[a.length >> 1] || 0, p95: a[Math.floor(a.length * 0.95)] || 0, lastBuildMs: S.built, caches: Object.keys(S.cache) };
     },
     _S: S,
+    _dbg: { batGeom: function (pk) { return batGeom(pk); }, drawPitcher: function(){return drawPitcher.apply(null, arguments);}, drawBatter: drawBatter, drawCatcherBody: drawCatcherBody, drawMitt: drawMitt, drawHud: drawHud, drawZone: drawZone, drawPitchBall: drawPitchBall, drawAssist: drawAssist, flags: flags, setP: function(){ P = S.P; } },
   };
 })();

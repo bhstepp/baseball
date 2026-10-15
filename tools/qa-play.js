@@ -26,7 +26,7 @@ const FAST = process.argv.includes('--fast');
       BB.Game.start(mode, cfg);
     }, [mode, cfgExpr, sd]);
     let shots = 0, t0 = Date.now();
-    const limit = FAST ? 90e3 : 240e3;
+    const limit = FAST ? 240e3 : 600e3;
     while (Date.now() - t0 < limit) {
       await page.waitForTimeout(FAST ? 250 : 400);
       const st = await page.evaluate(() => ({ phase: __bb.G.phase, scene: __bb.view().scene, pT: __bb.G.pitchT }));

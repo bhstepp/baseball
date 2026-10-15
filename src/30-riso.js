@@ -341,6 +341,24 @@
   };
   PP.measure = function (str, font) { var x = this.x.a; x.font = font; return x.measureText(str).width; };
 
+  // ---- full-layer tone flood from a cached sheet (a blit instead of a big pattern fill every frame)
+  PP.flood = function (s, v) {
+    this.sheets = this.sheets || {};
+    var key = s + '|' + this.ink[s] + '|' + q(v) + '|' + this.pw + 'x' + this.ph;
+    var sh = this.sheets[key];
+    if (!sh) {
+      sh = mk(this.pw, this.ph);
+      var x = sh.getContext('2d');
+      var cpx = Math.max(3, Math.round(this.cell * this.dpr));
+      var p = dotPattern(this.ink[s], cpx, Math.max(1, q(v)));
+      if (HAS_DOMMATRIX && p.setTransform) { try { p.setTransform(new DOMMatrix().rotate(ANGLE[s])); } catch (e) {} }
+      x.fillStyle = p; x.fillRect(0, 0, this.pw, this.ph);
+      this.sheets[key] = sh;
+    }
+    var l = this.x[s];
+    l.save(); l.setTransform(1, 0, 0, 1, 0, 0); l.drawImage(sh, 0, 0); l.restore();
+  };
+
   // ---- raw layer access (for special effects)
   PP.layer = function (s) { return this.x[s]; };
 

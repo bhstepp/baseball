@@ -202,7 +202,7 @@
         break;
 
       case 'between':
-        var wait = G.event && (G.event.call === 'HR') ? 1.1 : 0.8;
+        var wait = G.event && (G.event.call === 'HR') ? 1.1 : G.play ? 0.6 : 0.45;
         if (G.event && G.event.over) wait = 1.5;
         if (G.phaseT >= wait) {
           if (G.event && G.event.over || call('Rules', 'isOver', rs)) finish(); else nextPitch();
