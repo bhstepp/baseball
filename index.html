@@ -3345,7 +3345,9 @@ BB.Rules = (function () {
     tops.forEach(function (p) { var q = cproj(c, p[0], p[1], p[2]); mny = Math.min(mny, q.y); });
     var k = (W * 1.0) / (mxx - mnx);
     var kh = (H * 0.84 - H * 0.2) / (home.y - mny);
-    k = Math.min(k, kh);
+    var sbq = cproj(c, 0, fenceAt(park, 0).dist + 90, 130);          // top of the CF scoreboard must clear the HUD
+    var ks = (H * 0.84 - Math.max(150, H * 0.18)) / (home.y - sbq.y);
+    k = Math.min(k, kh, ks);
     c.k = k; c.cx = W / 2; c.cy = H * 0.84 - k * home.y;
     S.fcam = c;
   }
@@ -3395,74 +3397,62 @@ BB.Rules = (function () {
       }
       P.save(); P.clip(p); stroke(wv, PAPER, 1); P.restore();
     }
-    // grandstands: ring behind the outfield wall + wings down the lines + behind home
-    var ring = [], ringCrowd = function (spA, spB, d0, d1, z0, z1, stepA, stepD) {
-      var classes = CROWD, paths = classes.map(function () { return new Path2D(); }), r2 = U.rng(seed + 50);
-      for (var d = d1; d >= d0; d -= stepD) {
-        for (var s3 = spA; s3 <= spB; s3 += U.deg(stepA / (380 + d))) {
-          var ci = Math.floor(r2() * classes.length), base = fenceAt(park, clamp(s3, -45, 45));
-          var dd = base.dist + d, zz = lerp(z0, z1, (d - d0) / (d1 - d0)) + base.height;
-          var cq = fp.apply(null, sprayPt(s3, dd, zz)), cr = Math.max(1.3, 2.6 * cq.s);
-          if (r2() < 0.08) continue;
-          paths[ci].moveTo(cq.x + cr, cq.y); paths[ci].arc(cq.x, cq.y, cr, 0, TAU);
-        }
-      }
-      paths.forEach(function (pp, k) { fill(pp, classes[k]); });
-    };
-    for (sp = -56; sp <= 56; sp += 2) ring.push(sprayPt(sp, fenceAt(park, clamp(sp, -45, 45)).dist + 4, fenceAt(park, clamp(sp, -45, 45)).height));
-    for (sp = 56; sp >= -56; sp -= 2) ring.push(sprayPt(sp, fenceAt(park, clamp(sp, -45, 45)).dist + 80, 48));
-    var ringP = fpoly(ring);
-    if (water !== 'none') { // no stands over the water
-      var wa = water === 'left' ? -75 : water === 'right' ? 25 : -25, wb = wa + 50;
-      P.save();
+    // grandstands: one continuous seating bowl wrapping the field — down both lines, round the outfield and a
+    // backstop arc behind home. bowl(k): k = 0 is the field edge, 1 the top row.
+    var poleL = fenceAt(park, -45).dist, poleR = fenceAt(park, 45).dist, S2 = Math.SQRT1_2;
+    function bowl(k, zOver) {
+      var o = 40 + 75 * k, g = 4 + 72 * k, z = zOver != null ? zOver : 4 + 42 * k, pts = [], t, sp2;
+      for (t = o; t <= poleL; t += 12) pts.push([-S2 * t - S2 * o, S2 * t - S2 * o, z]);
+      for (sp2 = -45; sp2 <= 45; sp2 += 2) { var fa2 = fenceAt(park, sp2); pts.push(sprayPt(sp2, fa2.dist + g, zOver != null ? zOver : z + fa2.height * (1 - k))); }
+      for (t = poleR; t >= o; t -= 12) pts.push([S2 * t + S2 * o, S2 * t - S2 * o, z]);
+      for (sp2 = 90; sp2 <= 270; sp2 += 6) pts.push(sprayPt(sp2, 1.414 * o, z));
+      return pts;
+    }
+    var wa = water === 'left' ? -70 : water === 'right' ? 22 : -24, wb = wa + 48;
+    function wet(x, y) { if (water === 'none') return false; var sp3 = U.deg(Math.atan2(x, y)); return sp3 > wa && sp3 < wb && Math.sqrt(x * x + y * y) > fenceAt(park, clamp(sp3, -45, 45)).dist; }
+    P.save();
+    if (water !== 'none') {
       var cl = new Path2D(); cl.rect(-M, -M, W + 2 * M, H + 2 * M);
-      var wcut = []; for (sp = Math.max(-60, wa); sp <= Math.min(60, wb); sp += 2) wcut.push(sprayPt(sp, 1500)); wcut.push([0, 0, 0]);
+      var wcut = [[0, 0, 0]]; for (sp = wa; sp <= wb; sp += 2) wcut.push(sprayPt(sp, 1500));
       cl.addPath(fpoly(wcut)); P.clip(cl, 'evenodd');
-      fill(ringP, { a: 0.9, b: 0.25 });
-      ringCrowd(-56, 56, 8, 76, 0, 44, 6.5, 6.5);
-      P.restore();
-    } else {
-      fill(ringP, { a: 0.9, b: 0.25 });
-      ringCrowd(-56, 56, 8, 76, 0, 44, 6.5, 6.5);
     }
-    // roof edge of the ring
-    var roof = new Path2D(), rq;
-    for (sp = -56; sp <= 56; sp += 2) {
-      if (water !== 'none') { var wa2 = water === 'left' ? -75 : water === 'right' ? 25 : -25; if (sp > wa2 && sp < wa2 + 50) continue; }
-      rq = fp.apply(null, sprayPt(sp, fenceAt(park, clamp(sp, -45, 45)).dist + 82, 50)); roof.moveTo(rq.x - 3, rq.y); roof.lineTo(rq.x + 3, rq.y);
-    }
-    stroke(roof, A1, 3);
-    // wings along the lines and the grandstand behind home
-    [-1, 1].forEach(function (sg) {
-      var wpts = [], wd0 = 60, wd1 = fenceAt(park, 45 * sg).dist;
-      var ang = U.rad(45 * sg), nx = Math.cos(ang) * sg, ny = -Math.sin(ang) * sg;
-      wpts.push([Math.sin(ang) * wd0 + nx * 45, Math.cos(ang) * wd0 + ny * 45, 4]);
-      wpts.push([Math.sin(ang) * wd1 + nx * 45, Math.cos(ang) * wd1 + ny * 45, 4]);
-      wpts.push([Math.sin(ang) * wd1 + nx * 120, Math.cos(ang) * wd1 + ny * 120, 40]);
-      wpts.push([Math.sin(ang) * wd0 + nx * 120, Math.cos(ang) * wd0 + ny * 120, 40]);
-      fill(fpoly(wpts), { a: 0.9, b: 0.25 });
-      var cp = CROWD.map(function () { return new Path2D(); }), r3 = U.rng(seed + 60 + sg);
-      for (var dd = wd0 + 6; dd < wd1 - 4; dd += 7) for (var oo = 50; oo < 118; oo += 7) {
-        var zz = lerp(4, 40, (oo - 45) / 75), cq = fp(Math.sin(ang) * dd + nx * oo, Math.cos(ang) * dd + ny * oo, zz), cr = Math.max(0.9, 2.3 * cq.s);
-        var ci = Math.floor(r3() * CROWD.length); if (r3() < 0.08) continue;
-        cp[ci].moveTo(cq.x + cr, cq.y); cp[ci].arc(cq.x, cq.y, cr, 0, TAU);
+    var outer = fpoly(bowl(1));
+    fill(outer, { a: 0.9, b: 0.25 });
+    // crowd: rows of dots following the bowl, evenly spaced along each row
+    var cpaths = CROWD.map(function () { return new Path2D(); }), r2 = U.rng(seed + 50);
+    for (var kk = 0.94; kk > 0.05; kk -= 0.085) {
+      var row = bowl(kk), acc = 0;
+      for (i = 1; i < row.length; i++) {
+        var a0 = row[i - 1], a1 = row[i], dx = a1[0] - a0[0], dy = a1[1] - a0[1], L = Math.sqrt(dx * dx + dy * dy);
+        for (; acc < L; acc += 6.5) {
+          var f = acc / L, wx = a0[0] + dx * f, wy = a0[1] + dy * f;
+          var ci = Math.floor(r2() * CROWD.length);
+          if (r2() < 0.07 || wet(wx, wy)) continue;
+          var cq = fp(wx, wy, lerp(a0[2], a1[2], f)), cr = Math.max(1.3, 2.6 * cq.s);
+          cpaths[ci].moveTo(cq.x + cr, cq.y); cpaths[ci].arc(cq.x, cq.y, cr, 0, TAU);
+        }
+        acc -= L;
       }
-      cp.forEach(function (pp, k) { fill(pp, CROWD[k]); });
-      // dugout
-      var dg = [], dd0 = 40, dd1 = 85;
-      dg.push([Math.sin(ang) * dd0 + nx * 22, Math.cos(ang) * dd0 + ny * 22, 0]); dg.push([Math.sin(ang) * dd1 + nx * 22, Math.cos(ang) * dd1 + ny * 22, 0]);
-      dg.push([Math.sin(ang) * dd1 + nx * 34, Math.cos(ang) * dd1 + ny * 34, 6]); dg.push([Math.sin(ang) * dd0 + nx * 34, Math.cos(ang) * dd0 + ny * 34, 6]);
-      fill(fpoly(dg), A1);
-    });
-    var hs = [];
-    for (sp = 50; sp <= 310; sp += 6) hs.push(sprayPt(sp, 64, 2));
-    for (sp = 310; sp >= 50; sp -= 6) hs.push(sprayPt(sp, 100, 25));
-    fill(fpoly(hs), { a: 0.9, b: 0.25 });
-    // the field: foul grass, fair checker grass clipped to the fence
-    var fieldPts = [[0, -55, 0]];
-    for (sp = -50; sp <= 50; sp += 2) fieldPts.push(sprayPt(sp, fenceAt(park, clamp(sp, -45, 45)).dist + 3));
-    var fieldP = fpoly(fieldPts);
+    }
+    cpaths.forEach(function (pp, k) { fill(pp, CROWD[k]); });
+    // aisles (paper stair lines) radiating through the stands + the roof rim
+    var aisles = new Path2D(), inR = bowl(0.02), outR = bowl(1);
+    for (i = 3; i < inR.length; i += 7) { var qa = fp.apply(null, inR[i]), qb = fp.apply(null, outR[i]); if (wet(inR[i][0] * 1.2, inR[i][1] * 1.2)) continue; aisles.moveTo(qa.x, qa.y); aisles.lineTo(qb.x, qb.y); }
+    stroke(aisles, PAPER, 1.4);
+    stroke(outer, A1, 3.5);
+    P.restore();
+    // the field: foul grass inside the bowl, low backstop wall + front rail, dugouts
+    var fieldP = fpoly(bowl(0, 0));
     fill(fieldP, { a: 0.3, c: 0.8 });
+    stroke(fpoly(bowl(0, 3)), A1, 2.6);
+    stroke(fpoly(bowl(0, 3)), C1, 0.9, { over: true });
+    [-1, 1].forEach(function (sg) {
+      var dg = [], ux = S2 * sg, uy = S2, nx = S2 * sg, ny = -S2;
+      [[48, 30], [92, 30], [92, 39], [48, 39]].forEach(function (q) { dg.push([ux * q[0] + nx * q[1], uy * q[0] + ny * q[1], 0]); });
+      fill(fpoly(dg), A1);
+      var dgf = fp(ux * 70 + nx * 30, uy * 70 + ny * 30, 0);
+      fill(R.rect(dgf.x - 6, dgf.y - 1, 12, 2), { b: 1 });
+    });
     var fair = [[0, 0, 0]];
     for (sp = -45; sp <= 45; sp += 1.5) fair.push(sprayPt(sp, fenceAt(park, sp).dist));
     var fairP = fpoly(fair);
@@ -7412,6 +7402,7 @@ BB.Rules = (function () {
     G.bat = call('Meta', 'currentBat') || { id: 'b_default', name: 'Bat', timing: 1, power: 1, lift: 0 };
     G.inkset = call('Meta', 'currentInkset', G.park) || BB.INKSETS[0];
     call('Render', 'setInks', G.inkset);
+    call('Render', 'prepare', G.park, G.inkset);
     G.paused = false; G.pitchNo = 0; G.last = null; G.results = null; G.event = null;
     resetPitch();
     applySettings();

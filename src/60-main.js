@@ -53,6 +53,7 @@
     G.bat = call('Meta', 'currentBat') || { id: 'b_default', name: 'Bat', timing: 1, power: 1, lift: 0 };
     G.inkset = call('Meta', 'currentInkset', G.park) || BB.INKSETS[0];
     call('Render', 'setInks', G.inkset);
+    call('Render', 'prepare', G.park, G.inkset);
     G.paused = false; G.pitchNo = 0; G.last = null; G.results = null; G.event = null;
     resetPitch();
     applySettings();
