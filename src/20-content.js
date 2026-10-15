@@ -43,52 +43,52 @@ BB.Content = (function () {
       'Learned to pitch by plunking apples off the silo roof.'),
     P('p_clem', 'Clem Bixby', 'The Mailman', 'R', 'Hayseeds', 78, { FB: .7, SI: .2, CH: .1 }, .9, .28, 'tall sideburns classic 21',
       'Always delivers. Usually right down Main Street.'),
-    P('p_ox', 'Earl Oxley', 'The Ox', 'R', 'Hayseeds', 82, { FB: .6, SI: .25, CB: .15 }, .86, .4, 'stout beard classic 1',
+    P('p_ox', 'Earl Oxley', 'The Ox', 'R', 'Hayseeds', 80, { FB: .6, SI: .25, CB: .15 }, .86, .4, 'stout beard classic 1',
       'Farm-strong and grumpy about it. Holds the county record for strikeouts and blue ribbons.', true),
     // chapter 2 — Ironbridge: city slickers, first sliders
-    P('p_vinnie', 'Vinnie Castellano', 'Two-Bit', 'R', 'Rivets', 81, { FB: .55, SL: .25, CH: .2 }, .82, .45, 'tall mustache sidearm 25',
+    P('p_vinnie', 'Vinnie Castellano', 'Two-Bit', 'R', 'Rivets', 80, { FB: .55, SL: .25, CH: .2 }, .82, .45, 'tall mustache sidearm 25',
       'Will flip you a quarter for every swing and miss. Never runs out of quarters.'),
-    P('p_rosalind', 'Rosalind Park', 'Rooftop', 'L', 'Rivets', 83, { FB: .5, CB: .3, CH: .2 }, .82, .5, 'lanky none highkick 6',
+    P('p_rosalind', 'Rosalind Park', 'Rooftop', 'L', 'Rivets', 81, { FB: .5, CB: .3, CH: .2 }, .82, .5, 'lanky none highkick 6',
       'Grew up throwing at a fire escape six floors up. Rarely misses a rung.'),
-    P('p_marty', 'Marty Pinwheel', 'Subway', 'R', 'Rivets', 84, { FB: .5, SI: .3, SL: .2 }, .78, .5, 'lanky sideburns submarine 33',
+    P('p_marty', 'Marty Pinwheel', 'Subway', 'R', 'Rivets', 82, { FB: .5, SI: .3, SL: .2 }, .78, .5, 'lanky sideburns submarine 33',
       'Throws from the third rail. The ball rises like a train out of a tunnel.'),
-    P('p_landlord', 'Lou Brodsky', 'The Landlord', 'R', 'Rivets', 88, { FB: .45, SL: .3, CH: .15, CT: .1 }, .8, .62, 'stout mustache classic 13',
+    P('p_landlord', 'Lou Brodsky', 'The Landlord', 'R', 'Rivets', 85, { FB: .45, SL: .3, CH: .15, CT: .1 }, .8, .58, 'stout mustache classic 13',
       'Collects rent on the inside corner, first of every month and every at-bat.', true),
     // chapter 3 — Loon Lake: breaking balls and a knuckler
-    P('p_ellis', 'Ellis Thornbury', 'Woodsmoke', 'R', 'Loons', 85, { FB: .45, CB: .35, CH: .2 }, .78, .55, 'tall beard classic 38',
+    P('p_ellis', 'Ellis Thornbury', 'Woodsmoke', 'R', 'Loons', 84, { FB: .45, CB: .35, CH: .2 }, .78, .52, 'tall beard classic 38',
       'Splits his own firewood. Would like to split your bat too.'),
-    P('p_june', 'June Larkspur', 'The Loon', 'L', 'Loons', 86, { KN: .5, FB: .3, CH: .2 }, .72, .6, 'lanky none classic 2',
+    P('p_june', 'June Larkspur', 'The Loon', 'L', 'Loons', 85, { KN: .5, FB: .3, CH: .2 }, .74, .55, 'lanky none classic 2',
       'Her knuckleball flutters like a moth around a porch light.'),
-    P('p_otis', 'Otis Fernsby', 'Canoe', 'R', 'Loons', 88, { FB: .5, SL: .3, SP: .2 }, .76, .6, 'stout sideburns sidearm 17',
+    P('p_otis', 'Otis Fernsby', 'Canoe', 'R', 'Loons', 86, { FB: .5, SL: .3, SP: .2 }, .76, .56, 'stout sideburns sidearm 17',
       'Paddles to the park every morning. Arm like an outboard motor.'),
-    P('p_sasquatch', 'Gus Haldane', 'Sasquatch', 'R', 'Loons', 91, { FB: .45, CB: .25, SL: .2, SP: .1 }, .76, .72, 'tall beard highkick 0',
+    P('p_sasquatch', 'Gus Haldane', 'Sasquatch', 'R', 'Loons', 89, { FB: .45, CB: .25, SL: .2, SP: .1 }, .76, .66, 'tall beard highkick 0',
       'Seven feet of flannel. Nobody has ever gotten a clear look at him, or his curveball.', true),
     // chapter 4 — Gull Point: sinkers, cutters, sea legs
-    P('p_pearl', 'Pearl Marlowe', 'Foghorn', 'R', 'Gulls', 88, { FB: .45, SI: .3, CH: .25 }, .78, .62, 'stout none classic 11',
+    P('p_pearl', 'Pearl Marlowe', 'Foghorn', 'R', 'Gulls', 87, { FB: .45, SI: .3, CH: .25 }, .78, .58, 'stout none classic 11',
       'You hear her before you see the pitch. Mostly you just hear her.'),
-    P('p_nils', 'Nils Brightwater', 'Barnacle', 'L', 'Gulls', 89, { CT: .4, FB: .3, CB: .3 }, .75, .65, 'tall beard classic 47',
+    P('p_nils', 'Nils Brightwater', 'Barnacle', 'L', 'Gulls', 88, { CT: .4, FB: .3, CB: .3 }, .76, .6, 'tall beard classic 47',
       'Sticks to the corners and will not be scraped off.'),
-    P('p_sully', 'Sully Tidewell', 'Low Tide', 'R', 'Gulls', 91, { SI: .5, SL: .3, CH: .2 }, .74, .66, 'lanky mustache submarine 29',
+    P('p_sully', 'Sully Tidewell', 'Low Tide', 'R', 'Gulls', 89, { SI: .5, SL: .3, CH: .2 }, .75, .62, 'lanky mustache submarine 29',
       'Knuckles nearly scrape the mound. The sinker goes out with the tide.'),
-    P('p_admiral', 'Winifred Gale', 'The Admiral', 'R', 'Gulls', 94, { FB: .4, SL: .3, SP: .2, CB: .1 }, .78, .78, 'tall none highkick 8',
+    P('p_admiral', 'Winifred Gale', 'The Admiral', 'R', 'Gulls', 92, { FB: .4, SL: .3, SP: .2, CB: .1 }, .78, .72, 'tall none highkick 8',
       'Commands the strike zone like a flagship. Salutes after every strikeout.', true),
     // chapter 5 — Dry Wash: heat, screwballs and an eephus under the stars
-    P('p_rio', 'Rio Calloway', 'Dust Devil', 'R', 'Coyotes', 91, { FB: .45, SL: .35, CH: .2 }, .72, .7, 'lanky sideburns sidearm 14',
+    P('p_rio', 'Rio Calloway', 'Dust Devil', 'R', 'Coyotes', 90, { FB: .45, SL: .35, CH: .2 }, .74, .64, 'lanky sideburns sidearm 14',
       'Spins like a whirlwind on the mound. So does the slider.'),
-    P('p_tess', 'Tess Rattigan', 'Tumbleweed', 'L', 'Coyotes', 90, { SC: .35, FB: .3, CB: .25, EE: .1 }, .74, .72, 'lanky none classic 31',
+    P('p_tess', 'Tess Rattigan', 'Tumbleweed', 'L', 'Coyotes', 89, { SC: .35, FB: .3, CB: .25, EE: .1 }, .75, .66, 'lanky none classic 31',
       'Drifts in from nowhere, throws something weird, drifts back out.'),
-    P('p_cosmo', 'Cosmo Starling', 'Night Owl', 'R', 'Coyotes', 94, { FB: .5, SP: .3, CT: .2 }, .7, .74, 'tall mustache highkick 77',
+    P('p_cosmo', 'Cosmo Starling', 'Night Owl', 'R', 'Coyotes', 92, { FB: .5, SP: .3, CT: .2 }, .72, .68, 'tall mustache highkick 77',
       'Only pitches after sundown. Claims the moon gives him an extra two miles an hour.'),
-    P('p_mirage', 'Dez Montoya', 'The Mirage', 'L', 'Coyotes', 96, { FB: .35, SL: .25, CB: .2, CH: .1, EE: .1 }, .74, .84, 'lanky beard sidearm 7',
+    P('p_mirage', 'Dez Montoya', 'The Mirage', 'L', 'Coyotes', 95, { FB: .35, SL: .25, CB: .2, CH: .1, EE: .1 }, .74, .78, 'lanky beard sidearm 7',
       'Now you see it. Now you are walking back to the dugout.', true),
     // chapter 6 — Capitol City: the big leagues of the barnstorm
-    P('p_organist', 'Augustus Fairchild', 'The Organist', 'R', 'Copperheads', 93, { FB: .4, CB: .3, CH: .3 }, .76, .78, 'tall mustache classic 19',
+    P('p_organist', 'Augustus Fairchild', 'The Organist', 'R', 'Copperheads', 92, { FB: .4, CB: .3, CH: .3 }, .76, .7, 'tall mustache classic 19',
       'Plays the stadium organ between starts. Changes keys mid-at-bat.'),
-    P('p_belle', 'Belle Harrow', 'Gargoyle', 'L', 'Copperheads', 95, { CT: .4, FB: .35, SP: .25 }, .72, .8, 'stout none classic 66',
+    P('p_belle', 'Belle Harrow', 'Gargoyle', 'L', 'Copperheads', 93, { CT: .4, FB: .35, SP: .25 }, .74, .72, 'stout none classic 66',
       'Perches on the mound without blinking. The cutter bites stone.'),
-    P('p_thunder', 'Rex Underwood', 'Old Thunder', 'R', 'Copperheads', 97, { FB: .6, SL: .4 }, .66, .82, 'stout beard highkick 52',
+    P('p_thunder', 'Rex Underwood', 'Old Thunder', 'R', 'Copperheads', 95, { FB: .7, SL: .3 }, .7, .72, 'stout beard highkick 52',
       'Two pitches, both loud. Catchers ice their hands for a week.'),
-    P('p_halo', 'Cornelius Vane', 'Halo', 'R', 'Copperheads', 99, { FB: .38, SL: .22, CB: .15, CH: .15, SP: .1 }, .8, .95, 'tall none highkick 10',
+    P('p_halo', 'Cornelius Vane', 'Halo', 'R', 'Copperheads', 98, { FB: .38, SL: .22, CB: .15, CH: .15, SP: .1 }, .8, .86, 'tall none highkick 10',
       'The last ace of the old cathedral. Has never thrown the same pitch twice in a row. Probably.', true),
     // derby / daily throwers
     P('p_bpbob', 'Bobby Lobbs', 'Batting Practice Bob', 'R', 'Barnstormers', 70, { FB: .9, CH: .1 }, .97, .1, 'stout mustache classic 99',
@@ -120,18 +120,21 @@ BB.Content = (function () {
   function walkoff(o) {
     var bases = o.bases || [0, 0, 0], so = o.startOuts || 0, down = o.down, you = o.home != null ? o.home : 2;
     var sc = { kind: 'inning', walkoff: true, half: 'BOT', inning: o.inning || 9, you: you, them: you + down, need: down + 1,
-      bases: bases.map(Boolean), startOuts: so, count: o.count || [0, 0], outs: 3, metric: 'spare', stars: [0, 1, 2] };
-    sc.goal = 'Bottom ' + ord(sc.inning) + '. ' + (down ? 'Down ' + down : 'Tied') + ', ' + onText(bases).toLowerCase() + ', ' + outText(so) +
-      (o.count ? ', ' + o.count.join('-') + ' count' : '') + '. Score ' + sc.need + ' to win.';
-    sc.starText = ['Walk it off', 'Win with an out to spare', so ? 'Win without making an out' : 'Win with 2 outs to spare'];
+      bases: bases.map(Boolean), startOuts: so, count: o.count || [0, 0], outs: 3, metric: 'spare' };
+    sc.goal = 'Bottom ' + ord(sc.inning) + '. ' + (down ? 'Down ' + down : 'Tied') + ', ' + onText(bases).toLowerCase() + ', ' +
+      outText(so) + (o.count ? ', ' + o.count.join('-') + ' count' : '') + '. Score ' + sc.need + ' to win.';
+    // metric 'spare' = outs left when it ends; 2nd star = no outs made, 3rd = that plus an extra-base walk-off hit
+    sc.stars = [1, 3 - so, 3 - so]; sc.xbh3 = true;
+    sc.starText = ['Walk it off', 'Win without making an out', 'No outs, and end it with an extra-base hit'];
     return sc;
   }
   // rally inning: play a full half inning (top half, visitors), score `need` runs (more = more stars).
   function rally(o) {
-    var them = o.them != null ? o.them : 4;
+    var them = o.them != null ? o.them : 4, bases = o.bases || [0, 0, 0];
     var sc = { kind: 'inning', walkoff: false, half: 'TOP', inning: o.inning || 8, you: them - o.down, them: them,
-      bases: [false, false, false], startOuts: 0, count: [0, 0], outs: 3, need: o.need, metric: 'runs', stars: o.stars };
-    sc.goal = 'Down ' + o.down + ' in the ' + ord(sc.inning) + '. Score ' + o.need + '+ runs this inning.';
+      bases: bases.map(Boolean), startOuts: o.startOuts || 0, count: [0, 0], outs: 3, need: o.need, metric: 'runs', stars: o.stars };
+    sc.goal = 'Top ' + ord(sc.inning) + ', down ' + o.down + (bases.some(Boolean) ? ', ' + onText(bases).toLowerCase() : '') +
+      '. Score ' + o.need + '+ runs this inning.';
     sc.starText = ['Score ' + o.stars[0], 'Score ' + o.stars[1], 'Score ' + o.stars[2]];
     return sc;
   }
@@ -215,7 +218,7 @@ BB.Content = (function () {
   TOUR.forEach(function (c) { c.games.forEach(function (g) { games[g.id] = g; }); });
 
   return {
-    PARKS: PARKS, PITCHERS: PITCHERS, TOUR: TOUR, DERBY_PITCHER: DERBY_PITCHER, DAILY_POOL: DAILY_POOL,
+    PARKS: PARKS, PITCHERS: PITCHERS, TOUR: TOUR, SCN: { walkoff: walkoff, rally: rally, derby: derby, hits: hits, onbase: onbase, distance: distance }, DERBY_PITCHER: DERBY_PITCHER, DAILY_POOL: DAILY_POOL,
     getPitcher: function (id) { return typeof id === 'object' ? id : byId[id] && byId[id].velo ? byId[id] : null; },
     getPark: function (id) { return typeof id === 'object' ? id : byId[id] && byId[id].fence ? byId[id] : null; },
     getGame: function (id) { return games[id] || null; },

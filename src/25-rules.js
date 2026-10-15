@@ -114,6 +114,7 @@ BB.Rules = (function () {
       else if (m.to === -1) e.outs++;
     });
     e.runnerMoves = moves;
+    st.lastCall = e.call;
     if (tracksRunners(st)) st.bases = b;
     if (st.kind !== 'hits') st.outs += e.outs;
     st.runs += e.runs; st.stats.runs += e.runs;
@@ -133,7 +134,9 @@ BB.Rules = (function () {
   function starsFor(st, win) {
     if (!win) return 0;
     var m = measure(st), s = st.sc.stars;
-    return 1 + (m >= s[1] ? 1 : 0) + (m >= s[2] ? 1 : 0);
+    // walk-offs with sc.xbh3: the 3rd star also needs the winning hit to go for extra bases
+    var x3 = !st.sc.xbh3 || /^(2B|3B|HR)$/.test(st.lastCall || '');
+    return 1 + (m >= s[1] ? 1 : 0) + (m >= s[2] && x3 ? 1 : 0);
   }
   function goalMet(st) {
     var sc = st.sc;

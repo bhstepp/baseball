@@ -733,7 +733,7 @@
     if (!sw) {
       var p = start;
       var bob = Math.sin((view.time || 0) * 2.3) * 0.04;
-      p = lerpPose(p, p, 0); p.hands = [p.hands[0], p.hands[1] + bob]; p.th += Math.sin((view.time || 0) * 1.7) * 2;
+      p = lerpPose(p, p, 0); p.hands = [p.hands[0], p.hands[1] + bob]; p.th += Math.sin((view.time || 0) * 2.3 + 1) * 2.5;
       return p;
     }
     if (sw.power && ld == null) start = BK.load;
@@ -1574,7 +1574,11 @@
       P.text('MPH', tx - 5, ty + 2, R.mono(7.5, true), A1, { align: 'right', over: true });
       P.text(nm, tx - tw + 4, ty + 12, R.mono(7, true), { b: 1 }, { over: true });
     }
-    // streak / on fire
+  }
+  function drawHudFlames(view) {
+    var hud = view.hud;
+    if (!hud) return;
+    var x0 = 10, y0 = 52, h = 58;
     var streak = hud.streak || 0;
     if (streak > 0 || view.onFire) {
       var fx = x0 + 4, fy = y0 + h + 16;
@@ -1660,6 +1664,63 @@
       if (tone > 0.2) { fill(rib, kind === 'bad' ? { b: tone } : { a: tone }); P.text(sub, 0, sy + 14.5, sf, PAPER, { align: 'center', ko: ['a', 'b', 'c'] }); }
     }
     P.restore();
+  }
+
+  // ------------------------------------------------------------------ sprites
+  // Static-looking pieces (catcher, idle batter / pitcher poses, the HUD plate) are printed once into a small press
+  // with a coverage layer, then knocked into the live layers with a few blits per frame instead of ~100 path fills.
+  var spr = {}, sprKeys = [];
+  function sprite(key, box, fn) {
+    key = key + '|' + S.P.inks.id + '|' + S.W + 'x' + S.H + '@' + S.dpr + '|' + (S.fontOK ? 1 : 0);
+    var e = spr[key];
+    if (!e) {
+      var bx = Math.floor(box.x), by = Math.floor(box.y), bw = Math.ceil(box.w) + 1, bh = Math.ceil(box.h) + 1;
+      var sp = R.press({ w: bw, h: bh, dpr: S.dpr, margin: 0, inks: S.P.inks, cell: S.P.cell });
+      sp.enableCover(); sp.clear();
+      var prev = P; P = sp; P.reset(); P.translate(-bx, -by);
+      var ret = fn();
+      P = prev;
+      e = spr[key] = { x: bx, y: by, w: bw, h: bh, p: sp, ret: ret };
+      sprKeys.push(key);
+      while (sprKeys.length > 14) delete spr[sprKeys.shift()];
+    }
+    var d = S.dpr;
+    for (var i = 0; i < 3; i++) {
+      var sl = R.SLOTS[i], l = S.P.layer(sl);
+      l.save(); l.setTransform(d, 0, 0, d, M * d, M * d);
+      l.globalCompositeOperation = 'destination-out'; l.drawImage(e.p.covC, e.x, e.y, e.w, e.h);
+      l.globalCompositeOperation = 'source-over'; l.drawImage(e.p.c[sl], e.x, e.y, e.w, e.h);
+      l.restore();
+    }
+    return e.ret;
+  }
+  function batterIdle(view) { return !view.swing && view.loading == null; }
+  function drawBatterCached(view) {
+    if (!batterIdle(view)) return drawBatter(view);
+    var bb = batterBase(), s = bb.s, n = 3, ph = Math.floor(((view.time || 0) * 2.3 / TAU) * n) % n;
+    var tq = (ph + 0.5) / n * TAU / 2.3, v2 = { time: tq, bat: view.bat, pitch: null, swing: null, loading: null };
+    var x0 = Math.max(-M, bb.fx - 1.8 * s), y0 = bb.fy - 7.2 * s;
+    return sprite('batter|' + ph + '|' + ((view.bat && view.bat.id) || ''), { x: x0, y: y0, w: bb.fx + 2.6 * s - x0, h: 7.9 * s }, function () { return drawBatter(v2); });
+  }
+  function drawPitcherCached(pitcher, ph, time, pitch) {
+    if (ph !== 0) return drawPitcher(pitcher, ph, time, pitch);
+    var base = proj(0, PY, MOUND_Z), s = base.s * PE, n = 6, k = Math.floor((time * 2.1 / TAU) * n) % n, tq = (k + 0.5) / n * TAU / 2.1;
+    var h = sprite('pitcher|' + (pitcher.id || '') + '|' + (pitcher.hand || 'R') + '|' + k, { x: base.x - 3.2 * s, y: base.y - 9.5 * s, w: 6.4 * s, h: 10.2 * s },
+      function () { return drawPitcher(pitcher, 0, tq, null); });
+    S.hand = h;
+    return h;
+  }
+  function drawCatcherCached(view) {
+    var cb = catcherBase(), s = cb.s, num = hash(view.pitcher && view.pitcher.id);
+    sprite('catcher|' + num, { x: cb.x - 1.7 * s, y: cb.y - 3.1 * s, w: 3.4 * s, h: S.H + 4 - (cb.y - 3.1 * s) }, function () { drawCatcherBody(view); });
+  }
+  function drawHudCached(view) {
+    var hud = view.hud;
+    if (!hud) return;
+    var key = 'hud|' + [hud.balls, hud.strikes, hud.outs, hud.outsMax, (hud.bases || []).join(), hud.inning, hud.score, hud.goal, hud.progress,
+      view.last ? Math.round(view.last.mph) + view.last.name : ''].join('~');
+    sprite(key, { x: 0, y: 44, w: S.W, h: 100 }, function () { drawHud(view); });
+    drawHudFlames(view);
   }
 
   // ------------------------------------------------------------------ caches
@@ -1790,13 +1851,13 @@
     var ph = 0;
     if (view.windup != null) ph = clamp(view.windup, 0, 1);
     else if (pitch && view.pitchT != null) ph = 1 + clamp(view.pitchT / 0.5, 0, 1);
-    drawPitcher(pitcher, ph, time, pitch);
+    drawPitcherCached(pitcher, ph, time, pitch);
     drawZone(view);
     var ci = contactInfo(view), T = pitch ? (pitch.T || 0.8) : 0;
     var flying = pitch && view.pitchT != null && view.windup == null && !ci;
     var arrived = flying && view.pitchT >= T;
-    drawBatter(view);
-    drawCatcherBody(view);
+    drawBatterCached(view);
+    drawCatcherCached(view);
     drawMitt(view, false);
     if (!arrived) drawMitt(view, true);
     if (flying && !arrived && view.assist) drawAssist(view);
@@ -1807,7 +1868,7 @@
       fill(R.star(m.x, m.y - 6, 26 + 16 * pe, 12, 10, 0.2, 0.2, U.rng(2)), { c: 1 - pe }, { over: true });
     }
     if (ci) drawContact(view, ci);
-    drawHud(view);
+    drawHudCached(view);
     drawStamp(view.stamp, 'bat');
     if (view.hitstop) P.flood('c', 0.3);
     P.reset();
@@ -1835,7 +1896,7 @@
     drawFieldDynamic(view, park, time);
     P.restore();
     if (view.onFire) drawFire(time, S.H * 0.82, S.H + 4);
-    drawHud(view);
+    drawHudCached(view);
     drawStamp(view.stamp, 'field');
     P.reset();
   }
@@ -1857,7 +1918,7 @@
     S.dpr = d;
     if (S.canvas) { S.canvas.width = Math.round(S.W * d); S.canvas.height = Math.round(S.H * d); }
     if (S.P) S.P.resize(S.W, S.H, d);
-    S.cache = {};
+    S.cache = {}; spr = {}; sprKeys = [];
   }
 
   // ------------------------------------------------------------------ API
@@ -1900,6 +1961,6 @@
       return { frames: a.length, median: a[a.length >> 1] || 0, p95: a[Math.floor(a.length * 0.95)] || 0, lastBuildMs: S.built, caches: Object.keys(S.cache) };
     },
     _S: S,
-    _dbg: { batGeom: function (pk) { return batGeom(pk); }, drawPitcher: function(){return drawPitcher.apply(null, arguments);}, drawBatter: drawBatter, drawCatcherBody: drawCatcherBody, drawMitt: drawMitt, drawHud: drawHud, drawZone: drawZone, drawPitchBall: drawPitchBall, drawAssist: drawAssist, flags: flags, setP: function(){ P = S.P; } },
+    _dbg: { drawBatterCached: drawBatterCached, drawCatcherCached: drawCatcherCached, drawHudCached: drawHudCached, frameBat: function (v) { var pk = parkOf(v); frameBat(v, pk, inksFor(v), v.time); }, batGeom: function (pk) { return batGeom(pk); }, drawPitcher: function(){return drawPitcher.apply(null, arguments);}, drawBatter: drawBatter, drawCatcherBody: drawCatcherBody, drawMitt: drawMitt, drawHud: drawHud, drawZone: drawZone, drawPitchBall: drawPitchBall, drawAssist: drawAssist, flags: flags, setP: function(){ P = S.P; } },
   };
 })();

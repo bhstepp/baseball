@@ -226,28 +226,36 @@
   };
   // user space = css px of the visible area (origin top-left of the screen, margin outside it)
   PP.reset = function () {
-    var d = this.dpr, m = this.margin * d;
-    for (var i = 0; i < 3; i++) {
-      var x = this.x[SLOTS[i]];
+    var d = this.dpr, m = this.margin * d, all = this.ctxs();
+    for (var i = 0; i < all.length; i++) {
+      var x = all[i];
       x.setTransform(d, 0, 0, d, m, m);
       x.globalCompositeOperation = 'source-over'; x.globalAlpha = 1;
       x.setLineDash([]);
     }
   };
   PP.clear = function () {
-    for (var i = 0; i < 3; i++) {
-      var x = this.x[SLOTS[i]];
+    var all = this.ctxs();
+    for (var i = 0; i < all.length; i++) {
+      var x = all[i];
       x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, this.pw, this.ph); x.restore();
     }
   };
   // ---- transform helpers (applied to all three layers)
-  PP.save = function () { for (var i = 0; i < 3; i++) this.x[SLOTS[i]].save(); };
-  PP.restore = function () { for (var i = 0; i < 3; i++) this.x[SLOTS[i]].restore(); };
-  PP.translate = function (a, b) { for (var i = 0; i < 3; i++) this.x[SLOTS[i]].translate(a, b); };
-  PP.rotate = function (a) { for (var i = 0; i < 3; i++) this.x[SLOTS[i]].rotate(a); };
-  PP.scale = function (a, b) { for (var i = 0; i < 3; i++) this.x[SLOTS[i]].scale(a, b == null ? a : b); };
-  PP.alpha = function (a) { for (var i = 0; i < 3; i++) this.x[SLOTS[i]].globalAlpha = a; };
-  PP.clip = function (path, rule) { for (var i = 0; i < 3; i++) this.x[SLOTS[i]].clip(path, rule || 'nonzero'); };
+  PP.ctxs = function () { return this.cov ? [this.x.a, this.x.b, this.x.c, this.cov] : [this.x.a, this.x.b, this.x.c]; };
+  PP.save = function () { this.ctxs().forEach(function (x) { x.save(); }); };
+  PP.restore = function () { this.ctxs().forEach(function (x) { x.restore(); }); };
+  PP.translate = function (a, b) { this.ctxs().forEach(function (x) { x.translate(a, b); }); };
+  PP.rotate = function (a) { this.ctxs().forEach(function (x) { x.rotate(a); }); };
+  PP.scale = function (a, b) { this.ctxs().forEach(function (x) { x.scale(a, b == null ? a : b); }); };
+  PP.alpha = function (a) { this.ctxs().forEach(function (x) { x.globalAlpha = a; }); };
+  PP.clip = function (path, rule) { this.ctxs().forEach(function (x) { x.clip(path, rule || 'nonzero'); }); };
+  // coverage layer: records every opaque area (including paper knockouts) so the print can be reused as a sprite
+  PP.enableCover = function () {
+    if (!this.covC) { this.covC = mk(this.pw, this.ph); this.cov = this.covC.getContext('2d'); }
+    if (this.covC.width !== this.pw || this.covC.height !== this.ph) { this.covC.width = this.pw; this.covC.height = this.ph; }
+    this.reset();
+  };
 
   // ---- fill styles
   // tone for slot s at coverage v (0..1). Solid ink when v ~ 1. The dot screen is locked to device pixels and the
@@ -288,6 +296,7 @@
   // opts.ko = ['a'] limits the knockout to those slots.
   PP.fill = function (path, inks, o) {
     var over = o && o.over, rule = (o && o.rule) || 'nonzero', ko = o && o.ko;
+    if (this.cov && !over) { this.cov.fillStyle = '#000'; this.cov.fill(path, rule); }
     for (var i = 0; i < 3; i++) {
       var s = SLOTS[i], x = this.x[s], v = inks ? inks[s] : 0;
       if (!over && (!ko || ko.indexOf(s) >= 0)) {
@@ -299,6 +308,7 @@
     }
   };
   PP.knock = function (path, rule) {
+    if (this.cov) { this.cov.fillStyle = '#000'; this.cov.fill(path, rule || 'nonzero'); }
     for (var i = 0; i < 3; i++) {
       var x = this.x[SLOTS[i]];
       x.globalCompositeOperation = 'destination-out';
@@ -309,6 +319,7 @@
   // stroke a path. o: { over, dash: [..], cap, join, ko }
   PP.stroke = function (path, inks, width, o) {
     o = o || {};
+    if (this.cov && !o.over) { var cv = this.cov; cv.lineWidth = width; cv.lineCap = o.cap || 'round'; cv.lineJoin = o.join || 'round'; if (o.dash) cv.setLineDash(o.dash); cv.strokeStyle = '#000'; cv.stroke(path); if (o.dash) cv.setLineDash([]); }
     for (var i = 0; i < 3; i++) {
       var s = SLOTS[i], x = this.x[s], v = inks ? inks[s] : 0;
       var doKo = !o.over && (!o.ko || o.ko.indexOf(s) >= 0);
@@ -327,6 +338,7 @@
   // text. o: { align, baseline, over, outline: px (adds a knocked-out keyline around the text), ko }
   PP.text = function (str, px, py, font, inks, o) {
     o = o || {};
+    if (this.cov && !o.over) { var cv = this.cov; cv.font = font; cv.textAlign = o.align || 'left'; cv.textBaseline = o.baseline || 'alphabetic'; cv.fillStyle = '#000'; cv.fillText(str, px, py); if (o.outline) { cv.lineWidth = o.outline * 2; cv.lineJoin = 'round'; cv.strokeStyle = '#000'; cv.strokeText(str, px, py); } }
     for (var i = 0; i < 3; i++) {
       var s = SLOTS[i], x = this.x[s], v = inks ? inks[s] : 0;
       x.font = font; x.textAlign = o.align || 'left'; x.textBaseline = o.baseline || 'alphabetic';
