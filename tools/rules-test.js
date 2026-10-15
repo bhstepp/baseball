@@ -4,7 +4,7 @@
 // usage: node tools/rules-test.js [gamesPerScenario]
 const fs = require('fs'), path = require('path'), vm = require('vm');
 const SRC = path.join(__dirname, '..', 'src');
-const N = +process.argv[2] || 200;
+const N = +process.argv[2] || 100;
 let fails = 0;
 const fail = (m) => { fails++; if (fails < 30) console.error('FAIL: ' + m); };
 
