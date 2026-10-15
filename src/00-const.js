@@ -5,7 +5,7 @@
 var BB = (typeof window !== 'undefined' ? (window.BB = window.BB || {}) : (globalThis.BB = globalThis.BB || {}));
 
 BB.VERSION = '1.0.0';
-BB.TITLE = 'Halftone Hardball';
+BB.TITLE = 'Screwball Slugger';
 
 BB.K = {
   // ---- world, in feet. Origin = centre of home plate (the strike-zone plane is y = 0).
@@ -56,8 +56,8 @@ BB.INKSETS = [
 ];
 
 BB.FONTS = {
-  display: '"Bungee", "Arial Black", "Helvetica Neue", sans-serif',   // chunky stamp/headline face
-  body: '"Space Mono", ui-monospace, "SF Mono", Menlo, monospace',     // scorebook / typewriter face
+  display: '"Luckiest Guy", "Arial Black", "Helvetica Neue", sans-serif', // bulgy cartoon lettering
+  body: '"Fredoka", ui-rounded, "SF Pro Rounded", system-ui, sans-serif', // friendly rounded body text
 };
 
 // ---- utilities

@@ -16,7 +16,9 @@ if (missing.length) console.warn('build: skipping missing modules: ' + missing.j
 const js = ORDER.filter(have).map(f => `// ===================== MODULE: ${f} =====================\n` + S(f)).join('\n');
 const head = have('shell.head.html') ? S('shell.head.html') : '<style>html,body{margin:0;background:#F4EEE1}</style>';
 const body = have('shell.body.html') ? S('shell.body.html') : '<canvas id="game"></canvas><div id="ui"></div>';
-const script = `<script>\n"use strict";\n${js}\n</script>\n`;
+// Vendored libraries go in their own script tag, ahead of the game bundle (three.js r149, MIT: src/vendor/three.LICENSE).
+const VENDOR = ['vendor/three.min.js'].filter(have).map(f => `<script>\n${S(f)}\n</script>\n`).join('');
+const script = `${VENDOR}<script>\n"use strict";\n${js}\n</script>\n`;
 
 const full = `<!doctype html>
 <html lang="en">
