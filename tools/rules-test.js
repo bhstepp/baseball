@@ -43,7 +43,7 @@ function play(BB, mode, cfg, policy, trace) {
     const p = R.nextPitch(st);
     if (!p) { fail('nextPitch returned null before game over'); break; }
     if (trace) trace.push([p.type, p.mph, +p.T.toFixed(5), +p.plate.x.toFixed(5), +p.plate.z.toFixed(5), p.strike]);
-    const before = st.bases.slice(), act = policy(p, n);
+    const before = st.bases.slice(), act = policy(p, n, st);
     let e;
     if (!act) e = R.take(st, p);
     else {
@@ -72,8 +72,9 @@ function play(BB, mode, cfg, policy, trace) {
   return { st, res: R.result(st) };
 }
 const rnd = Math.random;
-const randomPolicy = (skill) => (p) => (!p.strike && rnd() < .7) || rnd() < .12 ? null :
-  { err: (rnd() + rnd() + rnd() - 1.5) * skill, power: rnd() < .4 };
+// same bot as tools/rules-tune.js: timing spread grows with the pitcher's velo and secondary stuff
+const randomPolicy = (skill) => (p, n, st) => (!p.strike && rnd() < .7) || rnd() < .12 ? null :
+  { err: (rnd() + rnd() + rnd() - 1.5) * 2 * skill * Math.pow(st.pitcher.velo / 85, 1.5) * (p.type === 'FB' ? 1 : 1 + .4 * st.pitcher.stuff), power: rnd() < .4 };
 
 function suite(BB, label) {
   const C = BB.Content, R = BB.Rules;

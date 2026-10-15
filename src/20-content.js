@@ -79,7 +79,7 @@ BB.Content = (function () {
       'Drifts in from nowhere, throws something weird, drifts back out.'),
     P('p_cosmo', 'Cosmo Starling', 'Night Owl', 'R', 'Coyotes', 92, { FB: .5, SP: .3, CT: .2 }, .72, .68, 'tall mustache highkick 77',
       'Only pitches after sundown. Claims the moon gives him an extra two miles an hour.'),
-    P('p_mirage', 'Dez Montoya', 'The Mirage', 'L', 'Coyotes', 95, { FB: .35, SL: .25, CB: .2, CH: .1, EE: .1 }, .74, .78, 'lanky beard sidearm 7',
+    P('p_mirage', 'Dez Montoya', 'The Mirage', 'L', 'Coyotes', 96, { FB: .35, SL: .25, CB: .2, CH: .1, EE: .1 }, .74, .84, 'lanky beard sidearm 7',
       'Now you see it. Now you are walking back to the dugout.', true),
     // chapter 6 — Capitol City: the big leagues of the barnstorm
     P('p_organist', 'Augustus Fairchild', 'The Organist', 'R', 'Copperheads', 92, { FB: .4, CB: .3, CH: .3 }, .76, .7, 'tall mustache classic 19',
@@ -133,7 +133,7 @@ BB.Content = (function () {
     var them = o.them != null ? o.them : 4, bases = o.bases || [0, 0, 0];
     var sc = { kind: 'inning', walkoff: false, half: 'TOP', inning: o.inning || 8, you: them - o.down, them: them,
       bases: bases.map(Boolean), startOuts: o.startOuts || 0, count: [0, 0], outs: 3, need: o.need, metric: 'runs', stars: o.stars };
-    sc.goal = 'Top ' + ord(sc.inning) + ', down ' + o.down + (bases.some(Boolean) ? ', ' + onText(bases).toLowerCase() : '') +
+    sc.goal = 'Top ' + ord(sc.inning) + ', down ' + o.down + (bases.some(Boolean) ? ', ' + onText(bases).toLowerCase() : '') + (sc.startOuts ? ', ' + outText(sc.startOuts) : '') +
       '. Score ' + o.need + '+ runs this inning.';
     sc.starText = ['Score ' + o.stars[0], 'Score ' + o.stars[1], 'Score ' + o.stars[2]];
     return sc;
@@ -164,46 +164,46 @@ BB.Content = (function () {
   function G(id, title, pitcher, scenario, blurb) { return { id: id, title: title, pitcher: pitcher, scenario: scenario, blurb: blurb }; }
   var TOUR = [
     { id: 'c1', title: 'County Fair Circuit', park: 'p_haybale', blurb: 'Slow pitches, loud fans, livestock in the bleachers.', games: [
-      G('t1g1', 'Opening Day', 'p_hank', hits(3, 18, [3, 4, 6]), 'Pops lobs them in nice and easy. Find the barrel.'),
-      G('t1g2', 'Sandlot Rules', 'p_dottie', onbase(2, 3, [2, 3, 4]), 'Lay off the curve in the dirt. A walk is as good as a hit.'),
-      G('t1g3', 'Barn Burner', 'p_clem', derby(2, 6, [2, 3, 5]), 'Hold to load a power swing and aim for the hayloft.'),
-      G('t1g4', 'Bottom of the Ninth', 'p_dottie', walkoff({ down: 1, home: 3, bases: [0, 1, 0] }), 'Runner in scoring position. Bring him home and then some.'),
-      G('t1g5', 'The Ox at Dusk', 'p_ox', walkoff({ down: 1, home: 2, bases: [1, 0, 0] }), 'Boss: The Ox has never lost at home. Never.'),
+      G('t1g1', 'Opening Day', 'p_hank', hits(3, 18, [3, 5, 6]), 'Pops lobs them in nice and easy. Find the barrel.'),
+      G('t1g2', 'Sandlot Rules', 'p_dottie', onbase(2, 6, [2, 4, 6]), 'Lay off the curve in the dirt. A walk is as good as a hit.'),
+      G('t1g3', 'Barn Burner', 'p_clem', derby(2, 10, [2, 4, 6]), 'Hold to load a power swing and aim for the hayloft.'),
+      G('t1g4', 'Bottom of the Ninth', 'p_dottie', walkoff({ down: 0, home: 3, bases: [0, 1, 0] }), 'Winning run on second. Bring him home.'),
+      G('t1g5', 'The Ox at Dusk', 'p_ox', walkoff({ down: 1, home: 2, bases: [1, 1, 1], count: [0, 2] }), 'Boss: The Ox has never lost at home. Bases loaded, down one, 0-2. Never say never.'),
     ] },
     { id: 'c2', title: 'Ironbridge Nights', park: 'p_bandbox', blurb: 'A tiny park with a giant wall in left. Pull it high.', games: [
-      G('t2g1', 'Wall Ball', 'p_vinnie', distance(750, 6, [750, 1100, 1500]), 'Clear the 37-foot wall. It\'s only 302 down the line.'),
-      G('t2g2', 'Rush Hour', 'p_marty', hits(3, 15, [3, 4, 6]), 'The sinker dives. Wait on it.'),
-      G('t2g3', 'Down Two, Two On', 'p_rosalind', walkoff({ down: 2, home: 3, bases: [1, 1, 0] }), 'Rooftop fans are already chanting. Don\'t let them down.'),
-      G('t2g4', 'Rooftop Seats', 'p_vinnie', derby(3, 7, [3, 4, 6]), 'Free pickle for every homer off the deli sign.'),
-      G('t2g5', 'Rent Is Due', 'p_landlord', rally({ need: 2, down: 1, inning: 8, stars: [2, 3, 5] }), 'Boss: The Landlord owns the inside corner. Take it back.'),
+      G('t2g1', 'Wall Ball', 'p_vinnie', distance(700, 12, [700, 1100, 1500]), 'Clear the 37-foot wall. It\'s only 302 down the line.'),
+      G('t2g2', 'Rush Hour', 'p_marty', hits(3, 16, [3, 4, 5]), 'The sinker dives. Wait on it.'),
+      G('t2g3', 'Bases Juiced', 'p_rosalind', walkoff({ down: 1, home: 3, bases: [1, 1, 1] }), 'Rooftop fans are already chanting. Don\'t let them down.'),
+      G('t2g4', 'Rooftop Seats', 'p_vinnie', derby(1, 8, [1, 2, 3]), 'Free pickle for every homer off the deli sign.'),
+      G('t2g5', 'Rent Is Due', 'p_landlord', rally({ need: 2, down: 1, inning: 8, bases: [1, 1, 1], startOuts: 1, stars: [2, 3, 5] }), 'Boss: The Landlord owns the inside corner. Bases loaded: take it back.'),
     ] },
     { id: 'c3', title: 'Up at the Lake', park: 'p_loonlake', blurb: 'Deep alleys and a knuckleballer. Gap power pays here.', games: [
-      G('t3g1', 'Campfire Swings', 'p_ellis', onbase(3, 4, [3, 4, 6]), 'The curve drops off a table. Take it and wait for heat.'),
-      G('t3g2', 'Knuckleball Lake', 'p_june', hits(3, 15, [3, 4, 6]), 'Nobody knows where the knuckler is going. Including June.'),
-      G('t3g3', 'Two-Strike Hole', 'p_otis', walkoff({ down: 1, home: 4, bases: [1, 0, 1], startOuts: 1, count: [0, 2] }), 'You start in an 0-2 hole. Protect the plate.'),
-      G('t3g4', 'Splash Hits', 'p_ellis', distance(900, 6, [900, 1300, 1800]), 'Center field is 412 and then the lake.'),
-      G('t3g5', 'Sasquatch Sighting', 'p_sasquatch', walkoff({ down: 3, home: 1, bases: [1, 1, 1] }), 'Boss: Bases loaded, nobody out, and a seven-foot legend on the mound.'),
+      G('t3g1', 'Campfire Swings', 'p_ellis', onbase(3, 7, [3, 4, 6]), 'The curve drops off a table. Take it and wait for heat.'),
+      G('t3g2', 'Knuckleball Lake', 'p_june', hits(3, 17, [3, 4, 5]), 'Nobody knows where the knuckler is going. Including June.'),
+      G('t3g3', 'Two-Strike Hole', 'p_otis', walkoff({ down: 0, home: 4, bases: [1, 0, 1], startOuts: 1, count: [0, 2] }), 'You start in an 0-2 hole. Protect the plate.'),
+      G('t3g4', 'Splash Hits', 'p_ellis', distance(400, 9, [400, 800, 1200]), 'Center field is 412 and then the lake.'),
+      G('t3g5', 'Sasquatch Sighting', 'p_sasquatch', walkoff({ down: 2, home: 1, bases: [1, 1, 1] }), 'Boss: Bases loaded, nobody out, and a seven-foot legend on the mound.'),
     ] },
     { id: 'c4', title: 'Harbor Lights', park: 'p_harbor', blurb: 'Fog, gulls and a short porch over the water.', games: [
-      G('t4g1', 'Fog Rolls In', 'p_pearl', hits(4, 18, [4, 5, 7]), 'Can\'t see the sinker? Listen for the foghorn.'),
-      G('t4g2', 'Splash Landing', 'p_nils', derby(3, 6, [3, 4, 6]), 'Go opposite field: it\'s 309 to the bay.'),
-      G('t4g3', 'Extra Innings', 'p_sully', walkoff({ down: 0, home: 3, inning: 10, bases: [0, 1, 0] }), 'Tied in the 10th with the ghost runner on second.'),
-      G('t4g4', 'Long Ball Tide', 'p_pearl', distance(1100, 6, [1100, 1500, 2000]), 'High tide, high fly balls.'),
-      G('t4g5', 'Admiral\'s Inspection', 'p_admiral', walkoff({ down: 2, home: 2, bases: [1, 0, 0] }), 'Boss: The Admiral has a 94 mph flagship. Man on, nobody out.'),
+      G('t4g1', 'Fog Rolls In', 'p_pearl', hits(4, 20, [4, 5, 6]), 'Can\'t see the sinker? Listen for the foghorn.'),
+      G('t4g2', 'Splash Landing', 'p_nils', derby(2, 11, [2, 3, 4]), 'Go opposite field: it\'s 309 to the bay.'),
+      G('t4g3', 'Extra Innings', 'p_sully', walkoff({ down: 0, home: 3, inning: 10, bases: [0, 1, 0], startOuts: 1 }), 'Tied in the 10th, ghost runner on second, one away.'),
+      G('t4g4', 'Long Ball Tide', 'p_pearl', distance(400, 7, [400, 800, 1200]), 'High tide, high fly balls.'),
+      G('t4g5', 'Admiral\'s Inspection', 'p_admiral', walkoff({ down: 1, home: 2, bases: [1, 1, 0], count: [0, 2] }), 'Boss: The Admiral has a 92 mph flagship. Two on, down one, and she\'s already ahead 0-2.'),
     ] },
     { id: 'c5', title: 'Desert Night Tour', park: 'p_desert', blurb: 'Under the lights in Dry Wash, the ball carries and the junk floats.', games: [
-      G('t5g1', 'Night Game', 'p_cosmo', onbase(4, 5, [4, 5, 7]), 'The splitter vanishes in the dark. Don\'t chase.'),
-      G('t5g2', 'Dust Devil Derby', 'p_rio', derby(3, 8, [3, 4, 6]), 'Thin air. Lift it.'),
-      G('t5g3', 'Eephus Under the Stars', 'p_tess', hits(4, 16, [4, 5, 7]), 'Screwballs, curves and a 50 mph moonball. Patience.'),
-      G('t5g4', 'Rally Caps', 'p_rio', rally({ need: 2, down: 1, inning: 7, stars: [2, 3, 5] }), 'Turn your cap inside out and string some hits together.'),
-      G('t5g5', 'The Mirage', 'p_mirage', walkoff({ down: 3, home: 3, bases: [1, 1, 1], startOuts: 1, count: [0, 2] }), 'Boss: Bases loaded, one out, 0-2. Now you see it...'),
+      G('t5g1', 'Night Game', 'p_cosmo', onbase(3, 6, [3, 4, 6]), 'The splitter vanishes in the dark. Don\'t chase.'),
+      G('t5g2', 'Dust Devil Derby', 'p_rio', derby(2, 12, [2, 3, 4]), 'Thin air. Lift it.'),
+      G('t5g3', 'Eephus Under the Stars', 'p_tess', hits(4, 19, [4, 5, 6]), 'Screwballs, curves and a 50 mph moonball. Patience.'),
+      G('t5g4', 'Rally Caps', 'p_rio', rally({ need: 2, down: 1, inning: 7, bases: [1, 0, 1], stars: [2, 3, 4] }), 'Corners, nobody out. Turn your cap inside out.'),
+      G('t5g5', 'The Mirage', 'p_mirage', walkoff({ down: 2, home: 3, bases: [1, 1, 1], count: [0, 2] }), 'Boss: Bases loaded, 0-2, down two. Now you see it...'),
     ] },
     { id: 'c6', title: 'The Cathedral', park: 'p_cathedral', blurb: 'The grandest old yard in the land. 425 to center. Bring everything.', games: [
-      G('t6g1', 'Hymns & Homers', 'p_organist', distance(1200, 6, [1200, 1600, 2100]), 'The organist changes keys. Change your timing.'),
-      G('t6g2', 'Gargoyle\'s Gauntlet', 'p_belle', hits(4, 16, [4, 5, 7]), 'The cutter bites late. Stay back.'),
-      G('t6g3', 'Thunder Roll', 'p_thunder', derby(3, 7, [3, 4, 6]), 'Ninety-seven and straight. Mostly.'),
-      G('t6g4', 'Pennant Race', 'p_belle', rally({ need: 2, down: 1, inning: 9, stars: [2, 3, 5] }), 'Top of the 9th, one run down, the pennant on the line.'),
-      G('t6g5', 'The Last Ace', 'p_halo', walkoff({ down: 2, home: 1 }), 'Final boss: Halo at 99. Down two, bases empty. Legends start here.'),
+      G('t6g1', 'Choir Practice', 'p_organist', onbase(3, 6, [3, 4, 5]), 'The organist changes keys mid-at-bat. Change your timing; take your walks.'),
+      G('t6g2', 'Gargoyle\'s Gauntlet', 'p_belle', hits(4, 19, [4, 5, 6]), 'The cutter bites late. Stay back.'),
+      G('t6g3', 'Thunder Roll', 'p_thunder', derby(1, 10, [1, 2, 3]), 'Ninety-five and straight, in the deepest park on the tour. Mostly straight.'),
+      G('t6g4', 'Pennant Race', 'p_belle', rally({ need: 2, down: 1, inning: 9, bases: [1, 1, 0], stars: [2, 3, 4] }), 'Top of the 9th, one run down, two on, the pennant on the line.'),
+      G('t6g5', 'The Last Ace', 'p_halo', walkoff({ down: 1, home: 1, bases: [0, 1, 0] }), 'Final boss: Halo at 98. Down one, tying run on second. Legends start here.'),
     ] },
   ];
   TOUR.forEach(function (c, ci) {
