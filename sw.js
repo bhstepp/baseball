@@ -1,6 +1,6 @@
 /* Halftone Hardball service worker. VERSION is filled in by tools/build.js with a hash of the built page,
    so every release gets a fresh cache. Own files: cache-first. Google Fonts: stale-while-revalidate. */
-var VERSION = '002226c08e';
+var VERSION = '092fb51c0b';
 var APP = 'halftone-app-' + VERSION;
 var FONTS = 'halftone-fonts-v1';
 var PRECACHE = ['./', 'index.html', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
