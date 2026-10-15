@@ -50,10 +50,12 @@ check(seq(7) !== seq(8), 'different seed -> different sequence');
   const rows = [];
   for (const t of ['FB', 'SL', 'CB', 'CH', 'SP']) {
     const p = BB.Pitch.make(Object.assign({}, PITCHER, { arsenal: { [t]: 1 }, stuff: .8 }), {}, r);
-    const dev = s => { const q = BB.Pitch.pos(p, p.T * s), lx = U.lerp(p.release.x, p.plate.x, s), lz = U.lerp(p.release.z, p.plate.z, s); return Math.hypot(q.x - lx, q.z - lz).toFixed(2); };
+    // deviation from the line the ball STARTED on (what the hitter reads out of the hand) — grows ~ s^p
+    const h = 1e-3, a = BB.Pitch.pos(p, 0), b = BB.Pitch.pos(p, h * p.T);
+    const dev = s => { const q = BB.Pitch.pos(p, p.T * s), lx = a.x + (b.x - a.x) / h * s, lz = a.z + (b.z - a.z) / h * s; return Math.hypot(q.x - lx, q.z - lz).toFixed(2); };
     rows.push(`${t} ${p.mph}mph T=${p.T.toFixed(2)} dev@25%=${dev(.25)} @50%=${dev(.5)} @75%=${dev(.75)} @90%=${dev(.9)}ft`);
   }
-  console.log('path deviation from straight line (ft):\n  ' + rows.join('\n  '));
+  console.log('break vs. the release line (ft):\n  ' + rows.join('\n  '));
 }
 
 { // zone rates by count

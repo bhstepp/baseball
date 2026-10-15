@@ -6,7 +6,7 @@
   var K = BB.K, U = BB.U, D2R = Math.PI / 180;
   var TS = 1.25;                       // physics seconds per animation second
   var DRAG = 0.00175, LIFT = 0.0005, G = 32.17;
-  var RUN = [0, 4.25, 7.7, 11.3];       // batter-runner arrival times (physics s) at 1B, 2B, 3B
+  var RUN = [0, 4.25, 8.2, 11.3];       // batter-runner arrival times (physics s) at 1B, 2B, 3B
   var THROW = 120;                     // ft/s
 
   // ---------------------------------------------------------------- fielders
@@ -19,6 +19,16 @@
   var SHORT = ['the mound', 'the catcher', 'first', 'second', 'short', 'third', 'left', 'center', 'right'];
   function fSpeed(i) { return i >= 6 ? 27 : i >= 2 ? 24 : i === 0 ? 21 : 18; }
   function fReact(i) { return i >= 6 ? 0.3 : 0.22; }
+  var ACC = 30;                        // ft/s^2: fielders accelerate to top speed instead of teleporting to it
+  function covered(i, tau, mul) {      // feet a fielder covers in tau seconds of running
+    if (tau <= 0) return 0;
+    var v = fSpeed(i) * (mul || 1), ta = v / ACC;
+    return tau < ta ? 0.5 * ACC * tau * tau : 0.5 * v * ta + v * (tau - ta);
+  }
+  function timeFor(i, d, mul) {        // inverse of covered()
+    var v = fSpeed(i) * (mul || 1), ta = v / ACC, da = 0.5 * v * ta;
+    return d < da ? Math.sqrt(2 * d / ACC) : ta + (d - da) / v;
+  }
 
   // ---------------------------------------------------------------- park
   function fenceAt(park, spray) {
@@ -62,14 +72,14 @@
     var q = a <= 0.018 ? 1 - 0.05 * a / 0.018 : a <= 0.035 ? 0.95 - 0.12 * (a - 0.018) / 0.017
       : a <= 0.06 ? 0.83 - 0.2 * (a - 0.035) / 0.025 : 0.63 - 0.35 * (a - 0.06) / 0.04;
     var dz = (pz - 2.55) / 1.0, dx = px / 0.9;
-    q *= 1 - 0.1 * U.clamp(dx * dx + dz * dz, 0, 1.5);           // edges are a bit harder to barrel
+    q *= 1 - (power ? 0.15 : 0.1) * U.clamp(dx * dx + dz * dz, 0, 1.5); // edges are harder to barrel (much harder when selling out)
     if (chase) q = Math.min(q * 0.75, 0.5);
     q = U.clamp(q + g3 * 0.025, 0.05, 1);
     res.quality = Math.round(q * 1000) / 1000;
     res.sweet = res.label === 'PERFECT' && q > 0.9 && !chase;
 
-    var top = 105 * (bat.power || 1) * (power ? 1.08 : 1);
-    res.ev = Math.round(U.clamp(48 + (top - 48) * Math.pow(q, 1.6) + g1 * 2.5, 45, 118));
+    var top = 108 * (bat.power || 1) * (power ? 1.08 : 1);
+    res.ev = Math.round(U.clamp(48 + (top - 48) * Math.pow(q, power ? 2.2 : 1.6) + g1 * 2.5, 45, 118));
     var la = 4 + 12 * q + 10 * Math.pow(q, 8) + (pz - 2.5) * 12 + (power ? 5 : 0) + (bat.lift || 0);
     res.la = Math.round(U.clamp(la + g2 * (5 + 20 * (1 - q)), -30, 80));
     res.spray = Math.round(U.clamp(e / bt * 480 + px * 10 + U.gauss(rng) * 6, -80, 80));
@@ -105,7 +115,7 @@
         var f = fenceAt(park, ang);
         if (r >= f.dist && rPrev < f.dist) {
           if (z > f.height) {
-            if (out.land < 0) { phase = 2; out.hr = true; out.crossT = t; }
+            if (out.land < 0) { phase = 2; out.hr = true; out.crossT = t; out.clear = z - f.height; }
             else { out.grd = true; out.crossT = t; phase = 3; }
           } else {                              // off the wall: carom back
             if (out.wallT < 0) out.wallT = t;
@@ -168,7 +178,7 @@
   function runTo(i, from, to, tStart, tLatest, stopShort) {
     var dx = to.x - from.x, dy = to.y - from.y, d = Math.hypot(dx, dy), go = Math.max(0, d - (stopShort || 0));
     var ex = from.x + (d ? dx / d * go : 0), ey = from.y + (d ? dy / d * go : 0);
-    var tArr = tStart + go / fSpeed(i);
+    var tArr = tStart + timeFor(i, go);
     if (tLatest != null) tArr = Math.min(tArr, Math.max(tStart + 0.05, tLatest));
     return [[0, from.x, from.y], [tStart, from.x, from.y], [tArr, ex, ey]];
   }
@@ -189,19 +199,27 @@
     '1Bground': ['Grounder through the hole into {dir}!', 'Seeing-eye single into {dir}.', 'Chopped past the infield, base hit.'],
     '1Bbloop': ['Bloop... and it drops in {dir}!', 'Dunker falls in {dir}. Single.', 'Flare to shallow {dir}, nobody gets there.'],
     '1Binf': ['Slow roller to {pos}... beats the throw!', 'Infield single, legged it out!', 'Chopper to {pos}, no play!'],
+    '1Bwall': ['Off the wall in {dir}! Played well, held to a single.', 'Banged off the fence... quick retrieve, single.'],
     '1Bfly': ['Drops in front of the {name}. Single.', 'Lands in {dir}, single.'],
-    '2B': ['Into the gap in {dir}! Stand-up double.', 'Split the outfielders in {dir}. Two-bagger!', 'Ripped down the line in {dir}, double!'],
+    '2B': ['Into the gap in {dir}! Stand-up double.', 'Split the outfielders in {dir}. Two-bagger!', 'Rips one into {dir}, he\'s in with a double!'],
+    '2Bline': ['Ripped down the line in {dir}! Double!', 'Past the bag and into the corner. Two bases!'],
     '2Bwall': ['Off the wall in {dir}! Double!', 'Clangs off the fence in {dir}, in with two.', 'Wall ball in {dir}! Double.'],
     '2Bgrd': ['One hop over the wall. Ground-rule double!', 'Bounces into the seats in {dir}: ground-rule double.'],
-    '3B': ['Rolling to the corner in {dir}... he\'s in with a TRIPLE!', 'Into the gap and to the wall! Triple!', 'He\'s digging for third... SAFE! Triple!'],
+    '3B': ['Into the gap and to the wall! Triple!', 'He\'s digging for third... SAFE! Triple!', 'It rattles around out there... stand-up TRIPLE!'],
+    '3Bline': ['Rolling into the corner in {dir}... he\'s in with a TRIPLE!', 'Down the line, kicking around the corner. Triple!'],
     OUTfly: ['Fly ball to {dir}, the {name} camps under it.', 'Lazy fly to {dir}. Out.', 'Routine fly, {name} squeezes it.'],
     OUTdeep: ['Deep to {dir}... caught at the track!', 'Hit a ton, but the {name} hauls it in.', 'Back, back... and caught on the warning track.'],
     OUTline: ['Lined right at the {name}.', 'Scorched... but snared by the {name}!', 'Hard liner, right at {pos}. Out.'],
     OUTdive: ['DIVING CATCH by the {name}! Robbed!', 'What a grab by the {name}!', 'He lays out and makes the catch!'],
     OUTground: ['Grounder to {pos}, throw to first. Out.', 'Routine two-hopper to {pos}.', 'Rolled over it, {pos} to first.'],
+    OUTground0: ['Comebacker to the mound, tossed to first.', 'Tapped back to the pitcher. Easy out.'],
+    OUTground1: ['Dribbler in front of the plate, catcher pounces. Out.'],
+    OUTground2: ['Grounder to first, he takes it himself.', 'Bouncer to first, unassisted.'],
     OUTpop: ['Pop-up, the {name} has it.', 'Sky-high pop... caught.', 'Got under that one. Infield fly, out.'],
     OUTfoul: ['Foul pop... the {name} squeezes it.', 'Drifting into foul ground... caught by the {name}.'],
-    FOUL: ['Fouled back.', 'Foul ball, {side} side.', 'Hooked foul down the line.', 'Spun off foul.', 'Got a piece. Foul.'],
+    FOUL: ['Foul ball, {side} side.', 'Hooked foul down the line.', 'Spun off foul.', 'Just foul! Down the {side} line.'],
+    FOULback: ['Fouled back.', 'Got a piece. Foul.', 'Tipped foul.', 'Fouled straight back into the screen.'],
+    FOULstands: ['Fouled into the stands.', 'Souvenir! Foul into the seats.', 'Sliced into the {side} side seats.'],
   };
 
   // ---------------------------------------------------------------- play
@@ -226,21 +244,21 @@
       for (i = 0; i < 9; i++) {
         var d = Math.hypot(P[1] - F[i].x, P[2] - F[i].y);
         var reach = isAir ? (i >= 6 ? 3.5 : 3) : (i >= 6 ? 4 : 4.5 * U.clamp(1.6 - hardness / 120, 0.4, 1));
-        var spd = fSpeed(i) * (!isAir && i < 6 ? 0.85 : 1);    // lateral first step on a grounder is slower
-        if (t >= react[i] + Math.max(0, d - reach) / spd) {
+        if (covered(i, t - react[i], !isAir && i < 6 ? 0.9 : 1) + reach >= d) {
           by = i; tf = t; bx = P[1]; byy = P[2]; air = isAir;
-          dive = isAir && d > 25 && t < react[i] + d / fSpeed(i) - 0.05;
+          dive = isAir && d > 25 && t < react[i] + timeFor(i, d) - 0.05;
           break;
         }
       }
     }
 
-    var type, outKind = null, desc, call = 'OUT', throwTo = null, bases = 0, retrieve = by;
+    var rattle = 0, type, outKind = null, desc, call = 'OUT', throwTo = null, bases = 0, retrieve = by;
     var o = { dir: dirName(landAng), dist: 0, name: '', pos: '', side: sw.spray < 0 ? 'third-base' : 'first-base' };
     var carry = Math.hypot(landX, landY);
     if (fl.hr) {
       type = 'HR'; by = -1;
-      carry = Math.hypot(pts[n - 1][1], pts[n - 1][2]);
+      var proj = fly(sw.ev, sw.la, sw.spray, { fence: [[-45, 999, 0], [45, 999, 0]] }); // projected distance, Statcast-style
+      carry = Math.hypot(proj.landX, proj.landY);
     } else if (by >= 0 && air) {
       type = 'OUT';
       var deepFly = carry > 250;
@@ -248,12 +266,12 @@
       throwTo = by >= 6 ? 2 : -1;
       call = foulLand ? 'OUTfoul' : dive ? 'OUTdive' : outKind === 'pop' ? 'OUTpop' : outKind === 'line' ? 'OUTline' : deepFly ? 'OUTdeep' : 'OUTfly';
     } else if (foulLand) {
-      type = 'FOUL'; by = -1; call = 'FOUL';
+      type = 'FOUL'; by = -1; call = carry < 45 || Math.abs(landAng) > 100 ? 'FOULback' : Math.abs(landAng) > 62 || (carry > 160 && Math.abs(landAng) > 52) ? 'FOULstands' : 'FOUL';
     } else {
       if (by < 0) { // ball stopped somewhere nobody reached in the scan: nearest fielder runs it down
         var best = 1e9, end = pts[n - 1];
         for (i = 0; i < 9; i++) {
-          var tt = fReact(i) + Math.hypot(end[1] - F[i].x, end[2] - F[i].y) / fSpeed(i);
+          var tt = fReact(i) + timeFor(i, Math.hypot(end[1] - F[i].x, end[2] - F[i].y));
           if (tt < best) { best = tt; by = i; }
         }
         tf = Math.max(best, end[0]); bx = end[1]; byy = end[2];
@@ -264,32 +282,34 @@
       else if (by < 6 && r0 < 175) { // infield play: throw to first
         var arrive = tf + 0.55 + Math.hypot(bx - b1.x, byy - b1.y) / THROW;
         throwTo = 1;
-        if (arrive < RUN[1]) { type = 'OUT'; outKind = 'ground'; call = 'OUTground'; }
+        if (arrive < RUN[1]) { type = 'OUT'; outKind = 'ground'; call = by < 3 ? 'OUTground' + by : 'OUTground'; }
         else { type = '1B'; call = '1Binf'; }
       } else { // outfield: take extra bases if the throw can't beat the runner
         bases = 1;
+        // balls that reach the wall can rattle around the corner / get bobbled: a seeded delay picking it up
+        var wallBall = fl.wallT >= 0 && fl.wallT < tf;
+        if (wallBall && rng() < (Math.abs(landAng) > 30 ? 0.35 : 0.18)) rattle = 1.2 + rng() * 2.2;
         for (var b = 2; b <= 3; b++) {
           var B = K.BASES[b], dd = Math.hypot(bx - B.x, byy - B.y);
-          var thr = tf + 0.9 + dd / 110 + (dd > 220 ? 0.6 : 0);
+          var thr = tf + rattle + 0.9 + dd / 110 + (dd > 220 ? 0.6 : 0);
           if (RUN[b] + 0.3 < thr) bases = b; else break;
         }
         type = bases + 'B';
         throwTo = bases === 3 ? 3 : 2;
-        if (bases === 1) call = sw.la < 6 ? '1Bground' : sw.la < 20 ? '1Bline' : carry < 230 ? '1Bbloop' : '1Bfly';
-        else if (bases === 2) call = fl.wallT >= 0 ? '2Bwall' : '2B';
-        else call = '3B';
+        if (bases === 1) call = wallBall ? '1Bwall' : sw.la < 6 ? '1Bground' : sw.la < 20 ? '1Bline' : carry < 230 ? '1Bbloop' : '1Bfly';
+        else if (bases === 2) call = wallBall && rng() < 0.6 ? '2Bwall' : Math.abs(landAng) > 32 ? '2Bline' : '2B';
+        else call = Math.abs(landAng) > 30 ? '3Bline' : '3B';
       }
     }
     if (by >= 0) { o.name = NAMES[by]; o.pos = SHORT[by]; }
     o.dist = Math.round(carry);
     if (type === 'HR') {
-      var fz = fenceAt(park, U.clamp(sw.spray, -45, 45));
-      call = carry < fz.dist + 25 ? 'HRjust' : carry > 445 ? 'HRbomb' : 'HR';
+      call = fl.clear < 7 ? 'HRjust' : carry > 450 ? 'HRbomb' : 'HR';
     }
     desc = fill(rng, CALLS[call], o);
 
     // ---- ball path after the play is made: glove, then a throw
-    var HOLD = 0.35, thr0 = -1, thr1 = -1, tgt = null, glove = null;
+    var HOLD = 0.35 + rattle, thr0 = -1, thr1 = -1, tgt = null, glove = null;
     if (by >= 0) {
       glove = { x: bx, y: byy };
       if (throwTo === -1) tgt = { x: FIELDERS.P.x, y: FIELDERS.P.y };
