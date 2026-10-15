@@ -305,7 +305,7 @@
     for (var k in after) if (!before[k]) {
       var p = k.split(':'), kind = p[0], id = p[1], name = id;
       if (kind === 'bat') name = BAT_BY[id].name;
-      else if (kind === 'inkset') name = (inksetById(id) || {}).name + ' inks';
+      else if (kind === 'inkset') name = (inksetById(id) || {}).name;
       else if (kind === 'chapter') { var ch = TOUR()[+id]; name = 'Issue ' + (+id + 1) + (ch && ch.title ? ': ' + ch.title : ''); }
       out.push({ kind: kind, id: kind === 'chapter' ? +id : id, name: name });
     }

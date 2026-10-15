@@ -26,8 +26,8 @@
   --rough: 255px 12px 225px 14px / 14px 225px 12px 255px;
   --rough2: 12px 225px 14px 255px / 255px 14px 225px 12px;
   --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .32  0 0 0 0 .27  0 0 0 0 .2  1.6 0 0 0 -.62'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
-  --fibers: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='f'><feTurbulence type='fractalNoise' baseFrequency='.012 .2' numOctaves='2' seed='4'/><feColorMatrix values='0 0 0 0 .45  0 0 0 0 .38  0 0 0 0 .3  2.2 0 0 0 -1.25'/></filter><rect width='100%' height='100%' filter='url(%23f)'/></svg>");
-  --worn: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='w'><feTurbulence type='fractalNoise' baseFrequency='.55' numOctaves='3' seed='7' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -4.2 0 0 0 3.05'/></filter><rect width='100%' height='100%' filter='url(%23w)'/></svg>");
+  --fibers: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='f'><feTurbulence type='fractalNoise' baseFrequency='.012 .2' numOctaves='2' seed='4'/><feColorMatrix values='0 0 0 0 .45  0 0 0 0 .38  0 0 0 0 .3  1.5 0 0 0 -.98'/></filter><rect width='100%' height='100%' filter='url(%23f)'/></svg>");
+  --worn: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='w'><feTurbulence type='fractalNoise' baseFrequency='.55' numOctaves='3' seed='7' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -4.6 0 0 0 3.75'/></filter><rect width='100%' height='100%' filter='url(%23w)'/></svg>");
 }
 @supports not (color: color-mix(in srgb, red 50%, blue)) {
   :root { --ink-a-t: rgba(0,0,0,.12); --ink-b-t: rgba(0,0,0,.08); --ink-c-t: rgba(255,232,0,.5); }
@@ -55,7 +55,7 @@ canvas.art { display: block; }
 }
 .scr::before { /* paper grain + fibres, printed with the paper */
   content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
-  background-image: var(--grain), var(--fibers); background-size: 180px 180px, 300px 300px; opacity: .55; mix-blend-mode: multiply;
+  background-image: var(--grain), var(--fibers); background-size: 180px 180px, 300px 300px; opacity: .42; mix-blend-mode: multiply;
 }
 .scr.clear { background-color: transparent; }
 .scr.clear::before { display: none; }
@@ -81,7 +81,7 @@ canvas.art { display: block; }
   transform: translate(.07em, .045em); mix-blend-mode: multiply; pointer-events: none; white-space: inherit;
 }
 .mis.flip { color: var(--ink-b); }
-.mis.flip::after { color: var(--ink-a); opacity: .9; }
+.mis.flip::after { color: transparent; -webkit-text-stroke: .045em var(--ink-a); transform: translate(.06em, .05em); }
 .mis.c::after { color: var(--ink-c); }
 .ts { text-shadow: .06em .04em 0 var(--ink-b-t); }
 .stamp { font-family: var(--stamp); text-transform: uppercase; line-height: 1; }
@@ -278,9 +278,10 @@ canvas.art { display: block; }
 .countdown b { font-family: var(--stamp); font-weight: 400; font-size: 1.1rem; }
 
 /* ---------- stamps (achievements) */
-.astamp { position: relative; width: 58px; height: 58px; flex: none; border-radius: 50%; border: 3px solid var(--ink-b); display: grid; place-items: center; color: var(--ink-b); font-family: var(--stamp); font-size: .82rem; line-height: 1; text-align: center; transform: rotate(-12deg); box-sizing: border-box; }
+.astamp { position: relative; width: 58px; height: 58px; flex: none; border-radius: 50%; border: 3px solid var(--ink-b); display: grid; place-items: center; color: var(--ink-b); font-family: var(--stamp); font-size: .95rem; line-height: 1; text-align: center; transform: rotate(-12deg); box-sizing: border-box; }
 .astamp::before { content: ""; position: absolute; inset: 3px; border-radius: 50%; border: 1.5px solid currentColor; }
-.astamp.sm { width: 44px; height: 44px; font-size: .64rem; }
+.astamp.sm { width: 44px; height: 44px; font-size: .72rem; }
+.hdr .ttl.long { font-size: 1.12rem; }
 .astamp.off { color: var(--ink-a); border-color: var(--ink-a); border-style: dashed; opacity: .3; transform: rotate(0); }
 .astamp.off::before { display: none; }
 .stampgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px 6px; }
@@ -293,9 +294,8 @@ canvas.art { display: block; }
 .pack {
   position: relative; width: 190px; height: 268px; transform: rotate(-4deg); background: var(--ink-a); color: var(--paper);
   box-shadow: 7px 7px 0 var(--ink-b); text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  -webkit-mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / 12px 100%, conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) 50% / 12px 51% no-repeat;
 }
-.pack { -webkit-mask: none; mask: none; clip-path: polygon(0 3%, 4% 0, 8% 3%, 12% 0, 16% 3%, 20% 0, 24% 3%, 28% 0, 32% 3%, 36% 0, 40% 3%, 44% 0, 48% 3%, 52% 0, 56% 3%, 60% 0, 64% 3%, 68% 0, 72% 3%, 76% 0, 80% 3%, 84% 0, 88% 3%, 92% 0, 96% 3%, 100% 0, 100% 97%, 96% 100%, 92% 97%, 88% 100%, 84% 97%, 80% 100%, 76% 97%, 72% 100%, 68% 97%, 64% 100%, 60% 97%, 56% 100%, 52% 97%, 48% 100%, 44% 97%, 40% 100%, 36% 97%, 32% 100%, 28% 97%, 24% 100%, 20% 97%, 16% 100%, 12% 97%, 8% 100%, 4% 97%, 0 100%); box-shadow: none; }
+.pack { clip-path: polygon(0 3%, 4% 0, 8% 3%, 12% 0, 16% 3%, 20% 0, 24% 3%, 28% 0, 32% 3%, 36% 0, 40% 3%, 44% 0, 48% 3%, 52% 0, 56% 3%, 60% 0, 64% 3%, 68% 0, 72% 3%, 76% 0, 80% 3%, 84% 0, 88% 3%, 92% 0, 96% 3%, 100% 0, 100% 97%, 96% 100%, 92% 97%, 88% 100%, 84% 97%, 80% 100%, 76% 97%, 72% 100%, 68% 97%, 64% 100%, 60% 97%, 56% 100%, 52% 97%, 48% 100%, 44% 97%, 40% 100%, 36% 97%, 32% 100%, 28% 97%, 24% 100%, 20% 97%, 16% 100%, 12% 97%, 8% 100%, 4% 97%, 0 100%); box-shadow: none; }
 .packwrap { position: relative; filter: drop-shadow(7px 7px 0 var(--ink-b)); }
 .pack::before { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(-35deg, transparent 0 16px, color-mix(in srgb, var(--ink-b) 70%, transparent) 16px 30px); mix-blend-mode: multiply; }
 .pack::after { content: ""; position: absolute; inset: 0; background-image: radial-gradient(circle, var(--ink-c) 0 32%, transparent 36%); background-size: 7px 7px; mix-blend-mode: multiply; opacity: .45; }
@@ -306,7 +306,7 @@ canvas.art { display: block; }
 .pack .burst { position: absolute; z-index: 2; right: -18px; top: 26px; width: 74px; height: 74px; background: var(--ink-c); color: var(--ink-a); display: grid; place-items: center; text-align: center; font-family: var(--stamp); font-size: .64rem; line-height: 1; transform: rotate(16deg);
   clip-path: polygon(50% 0, 61% 14%, 79% 9%, 79% 27%, 96% 34%, 86% 50%, 96% 66%, 79% 73%, 79% 91%, 61% 86%, 50% 100%, 39% 86%, 21% 91%, 21% 73%, 4% 66%, 14% 50%, 4% 34%, 21% 27%, 21% 9%, 39% 14%); }
 .odds { font-size: .72rem; font-weight: 700; text-align: center; line-height: 1.5; }
-.opening { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: color-mix(in srgb, var(--paper) 94%, transparent); padding: calc(var(--sat) + 10px) 14px calc(var(--sab) + 12px); box-sizing: border-box; }
+.opening { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background-color: var(--paper); background-image: var(--grain); background-size: 180px; padding: calc(var(--sat) + 10px) 14px calc(var(--sab) + 12px); box-sizing: border-box; }
 .opening .rip { animation: ripTop .55s ease-in both; }
 @keyframes ripTop { 0% { transform: none; } 30% { transform: translateY(-4px) rotate(-3deg); } 100% { transform: translate(60px, -260px) rotate(28deg); opacity: 0; } }
 .opening .packlow { animation: packDrop .5s ease-in both .45s; }
@@ -710,7 +710,7 @@ BB.U = (function () {
   var K = BB.K, U = BB.U, D2R = Math.PI / 180;
   var TS = 1.25;                       // physics seconds per animation second
   var DRAG = 0.00175, LIFT = 0.0005, G = 32.17;
-  var RUN = [0, 4.25, 7.7, 11.3];       // batter-runner arrival times (physics s) at 1B, 2B, 3B
+  var RUN = [0, 4.25, 8.2, 11.3];       // batter-runner arrival times (physics s) at 1B, 2B, 3B
   var THROW = 120;                     // ft/s
 
   // ---------------------------------------------------------------- fielders
@@ -723,6 +723,16 @@ BB.U = (function () {
   var SHORT = ['the mound', 'the catcher', 'first', 'second', 'short', 'third', 'left', 'center', 'right'];
   function fSpeed(i) { return i >= 6 ? 27 : i >= 2 ? 24 : i === 0 ? 21 : 18; }
   function fReact(i) { return i >= 6 ? 0.3 : 0.22; }
+  var ACC = 30;                        // ft/s^2: fielders accelerate to top speed instead of teleporting to it
+  function covered(i, tau, mul) {      // feet a fielder covers in tau seconds of running
+    if (tau <= 0) return 0;
+    var v = fSpeed(i) * (mul || 1), ta = v / ACC;
+    return tau < ta ? 0.5 * ACC * tau * tau : 0.5 * v * ta + v * (tau - ta);
+  }
+  function timeFor(i, d, mul) {        // inverse of covered()
+    var v = fSpeed(i) * (mul || 1), ta = v / ACC, da = 0.5 * v * ta;
+    return d < da ? Math.sqrt(2 * d / ACC) : ta + (d - da) / v;
+  }
 
   // ---------------------------------------------------------------- park
   function fenceAt(park, spray) {
@@ -766,14 +776,14 @@ BB.U = (function () {
     var q = a <= 0.018 ? 1 - 0.05 * a / 0.018 : a <= 0.035 ? 0.95 - 0.12 * (a - 0.018) / 0.017
       : a <= 0.06 ? 0.83 - 0.2 * (a - 0.035) / 0.025 : 0.63 - 0.35 * (a - 0.06) / 0.04;
     var dz = (pz - 2.55) / 1.0, dx = px / 0.9;
-    q *= 1 - 0.1 * U.clamp(dx * dx + dz * dz, 0, 1.5);           // edges are a bit harder to barrel
+    q *= 1 - (power ? 0.15 : 0.1) * U.clamp(dx * dx + dz * dz, 0, 1.5); // edges are harder to barrel (much harder when selling out)
     if (chase) q = Math.min(q * 0.75, 0.5);
     q = U.clamp(q + g3 * 0.025, 0.05, 1);
     res.quality = Math.round(q * 1000) / 1000;
     res.sweet = res.label === 'PERFECT' && q > 0.9 && !chase;
 
-    var top = 105 * (bat.power || 1) * (power ? 1.08 : 1);
-    res.ev = Math.round(U.clamp(48 + (top - 48) * Math.pow(q, 1.6) + g1 * 2.5, 45, 118));
+    var top = 108 * (bat.power || 1) * (power ? 1.08 : 1);
+    res.ev = Math.round(U.clamp(48 + (top - 48) * Math.pow(q, power ? 2.2 : 1.6) + g1 * 2.5, 45, 118));
     var la = 4 + 12 * q + 10 * Math.pow(q, 8) + (pz - 2.5) * 12 + (power ? 5 : 0) + (bat.lift || 0);
     res.la = Math.round(U.clamp(la + g2 * (5 + 20 * (1 - q)), -30, 80));
     res.spray = Math.round(U.clamp(e / bt * 480 + px * 10 + U.gauss(rng) * 6, -80, 80));
@@ -809,7 +819,7 @@ BB.U = (function () {
         var f = fenceAt(park, ang);
         if (r >= f.dist && rPrev < f.dist) {
           if (z > f.height) {
-            if (out.land < 0) { phase = 2; out.hr = true; out.crossT = t; }
+            if (out.land < 0) { phase = 2; out.hr = true; out.crossT = t; out.clear = z - f.height; }
             else { out.grd = true; out.crossT = t; phase = 3; }
           } else {                              // off the wall: carom back
             if (out.wallT < 0) out.wallT = t;
@@ -872,7 +882,7 @@ BB.U = (function () {
   function runTo(i, from, to, tStart, tLatest, stopShort) {
     var dx = to.x - from.x, dy = to.y - from.y, d = Math.hypot(dx, dy), go = Math.max(0, d - (stopShort || 0));
     var ex = from.x + (d ? dx / d * go : 0), ey = from.y + (d ? dy / d * go : 0);
-    var tArr = tStart + go / fSpeed(i);
+    var tArr = tStart + timeFor(i, go);
     if (tLatest != null) tArr = Math.min(tArr, Math.max(tStart + 0.05, tLatest));
     return [[0, from.x, from.y], [tStart, from.x, from.y], [tArr, ex, ey]];
   }
@@ -893,19 +903,27 @@ BB.U = (function () {
     '1Bground': ['Grounder through the hole into {dir}!', 'Seeing-eye single into {dir}.', 'Chopped past the infield, base hit.'],
     '1Bbloop': ['Bloop... and it drops in {dir}!', 'Dunker falls in {dir}. Single.', 'Flare to shallow {dir}, nobody gets there.'],
     '1Binf': ['Slow roller to {pos}... beats the throw!', 'Infield single, legged it out!', 'Chopper to {pos}, no play!'],
+    '1Bwall': ['Off the wall in {dir}! Played well, held to a single.', 'Banged off the fence... quick retrieve, single.'],
     '1Bfly': ['Drops in front of the {name}. Single.', 'Lands in {dir}, single.'],
-    '2B': ['Into the gap in {dir}! Stand-up double.', 'Split the outfielders in {dir}. Two-bagger!', 'Ripped down the line in {dir}, double!'],
+    '2B': ['Into the gap in {dir}! Stand-up double.', 'Split the outfielders in {dir}. Two-bagger!', 'Rips one into {dir}, he\'s in with a double!'],
+    '2Bline': ['Ripped down the line in {dir}! Double!', 'Past the bag and into the corner. Two bases!'],
     '2Bwall': ['Off the wall in {dir}! Double!', 'Clangs off the fence in {dir}, in with two.', 'Wall ball in {dir}! Double.'],
     '2Bgrd': ['One hop over the wall. Ground-rule double!', 'Bounces into the seats in {dir}: ground-rule double.'],
-    '3B': ['Rolling to the corner in {dir}... he\'s in with a TRIPLE!', 'Into the gap and to the wall! Triple!', 'He\'s digging for third... SAFE! Triple!'],
+    '3B': ['Into the gap and to the wall! Triple!', 'He\'s digging for third... SAFE! Triple!', 'It rattles around out there... stand-up TRIPLE!'],
+    '3Bline': ['Rolling into the corner in {dir}... he\'s in with a TRIPLE!', 'Down the line, kicking around the corner. Triple!'],
     OUTfly: ['Fly ball to {dir}, the {name} camps under it.', 'Lazy fly to {dir}. Out.', 'Routine fly, {name} squeezes it.'],
     OUTdeep: ['Deep to {dir}... caught at the track!', 'Hit a ton, but the {name} hauls it in.', 'Back, back... and caught on the warning track.'],
     OUTline: ['Lined right at the {name}.', 'Scorched... but snared by the {name}!', 'Hard liner, right at {pos}. Out.'],
     OUTdive: ['DIVING CATCH by the {name}! Robbed!', 'What a grab by the {name}!', 'He lays out and makes the catch!'],
     OUTground: ['Grounder to {pos}, throw to first. Out.', 'Routine two-hopper to {pos}.', 'Rolled over it, {pos} to first.'],
+    OUTground0: ['Comebacker to the mound, tossed to first.', 'Tapped back to the pitcher. Easy out.'],
+    OUTground1: ['Dribbler in front of the plate, catcher pounces. Out.'],
+    OUTground2: ['Grounder to first, he takes it himself.', 'Bouncer to first, unassisted.'],
     OUTpop: ['Pop-up, the {name} has it.', 'Sky-high pop... caught.', 'Got under that one. Infield fly, out.'],
     OUTfoul: ['Foul pop... the {name} squeezes it.', 'Drifting into foul ground... caught by the {name}.'],
-    FOUL: ['Fouled back.', 'Foul ball, {side} side.', 'Hooked foul down the line.', 'Spun off foul.', 'Got a piece. Foul.'],
+    FOUL: ['Foul ball, {side} side.', 'Hooked foul down the line.', 'Spun off foul.', 'Just foul! Down the {side} line.'],
+    FOULback: ['Fouled back.', 'Got a piece. Foul.', 'Tipped foul.', 'Fouled straight back into the screen.'],
+    FOULstands: ['Fouled into the stands.', 'Souvenir! Foul into the seats.', 'Sliced into the {side} side seats.'],
   };
 
   // ---------------------------------------------------------------- play
@@ -930,21 +948,21 @@ BB.U = (function () {
       for (i = 0; i < 9; i++) {
         var d = Math.hypot(P[1] - F[i].x, P[2] - F[i].y);
         var reach = isAir ? (i >= 6 ? 3.5 : 3) : (i >= 6 ? 4 : 4.5 * U.clamp(1.6 - hardness / 120, 0.4, 1));
-        var spd = fSpeed(i) * (!isAir && i < 6 ? 0.85 : 1);    // lateral first step on a grounder is slower
-        if (t >= react[i] + Math.max(0, d - reach) / spd) {
+        if (covered(i, t - react[i], !isAir && i < 6 ? 0.9 : 1) + reach >= d) {
           by = i; tf = t; bx = P[1]; byy = P[2]; air = isAir;
-          dive = isAir && d > 25 && t < react[i] + d / fSpeed(i) - 0.05;
+          dive = isAir && d > 25 && t < react[i] + timeFor(i, d) - 0.05;
           break;
         }
       }
     }
 
-    var type, outKind = null, desc, call = 'OUT', throwTo = null, bases = 0, retrieve = by;
+    var rattle = 0, type, outKind = null, desc, call = 'OUT', throwTo = null, bases = 0, retrieve = by;
     var o = { dir: dirName(landAng), dist: 0, name: '', pos: '', side: sw.spray < 0 ? 'third-base' : 'first-base' };
     var carry = Math.hypot(landX, landY);
     if (fl.hr) {
       type = 'HR'; by = -1;
-      carry = Math.hypot(pts[n - 1][1], pts[n - 1][2]);
+      var proj = fly(sw.ev, sw.la, sw.spray, { fence: [[-45, 999, 0], [45, 999, 0]] }); // projected distance, Statcast-style
+      carry = Math.hypot(proj.landX, proj.landY);
     } else if (by >= 0 && air) {
       type = 'OUT';
       var deepFly = carry > 250;
@@ -952,12 +970,12 @@ BB.U = (function () {
       throwTo = by >= 6 ? 2 : -1;
       call = foulLand ? 'OUTfoul' : dive ? 'OUTdive' : outKind === 'pop' ? 'OUTpop' : outKind === 'line' ? 'OUTline' : deepFly ? 'OUTdeep' : 'OUTfly';
     } else if (foulLand) {
-      type = 'FOUL'; by = -1; call = 'FOUL';
+      type = 'FOUL'; by = -1; call = carry < 45 || Math.abs(landAng) > 100 ? 'FOULback' : Math.abs(landAng) > 62 || (carry > 160 && Math.abs(landAng) > 52) ? 'FOULstands' : 'FOUL';
     } else {
       if (by < 0) { // ball stopped somewhere nobody reached in the scan: nearest fielder runs it down
         var best = 1e9, end = pts[n - 1];
         for (i = 0; i < 9; i++) {
-          var tt = fReact(i) + Math.hypot(end[1] - F[i].x, end[2] - F[i].y) / fSpeed(i);
+          var tt = fReact(i) + timeFor(i, Math.hypot(end[1] - F[i].x, end[2] - F[i].y));
           if (tt < best) { best = tt; by = i; }
         }
         tf = Math.max(best, end[0]); bx = end[1]; byy = end[2];
@@ -968,32 +986,34 @@ BB.U = (function () {
       else if (by < 6 && r0 < 175) { // infield play: throw to first
         var arrive = tf + 0.55 + Math.hypot(bx - b1.x, byy - b1.y) / THROW;
         throwTo = 1;
-        if (arrive < RUN[1]) { type = 'OUT'; outKind = 'ground'; call = 'OUTground'; }
+        if (arrive < RUN[1]) { type = 'OUT'; outKind = 'ground'; call = by < 3 ? 'OUTground' + by : 'OUTground'; }
         else { type = '1B'; call = '1Binf'; }
       } else { // outfield: take extra bases if the throw can't beat the runner
         bases = 1;
+        // balls that reach the wall can rattle around the corner / get bobbled: a seeded delay picking it up
+        var wallBall = fl.wallT >= 0 && fl.wallT < tf;
+        if (wallBall && rng() < (Math.abs(landAng) > 30 ? 0.35 : 0.18)) rattle = 1.2 + rng() * 2.2;
         for (var b = 2; b <= 3; b++) {
           var B = K.BASES[b], dd = Math.hypot(bx - B.x, byy - B.y);
-          var thr = tf + 0.9 + dd / 110 + (dd > 220 ? 0.6 : 0);
+          var thr = tf + rattle + 0.9 + dd / 110 + (dd > 220 ? 0.6 : 0);
           if (RUN[b] + 0.3 < thr) bases = b; else break;
         }
         type = bases + 'B';
         throwTo = bases === 3 ? 3 : 2;
-        if (bases === 1) call = sw.la < 6 ? '1Bground' : sw.la < 20 ? '1Bline' : carry < 230 ? '1Bbloop' : '1Bfly';
-        else if (bases === 2) call = fl.wallT >= 0 ? '2Bwall' : '2B';
-        else call = '3B';
+        if (bases === 1) call = wallBall ? '1Bwall' : sw.la < 6 ? '1Bground' : sw.la < 20 ? '1Bline' : carry < 230 ? '1Bbloop' : '1Bfly';
+        else if (bases === 2) call = wallBall && rng() < 0.6 ? '2Bwall' : Math.abs(landAng) > 32 ? '2Bline' : '2B';
+        else call = Math.abs(landAng) > 30 ? '3Bline' : '3B';
       }
     }
     if (by >= 0) { o.name = NAMES[by]; o.pos = SHORT[by]; }
     o.dist = Math.round(carry);
     if (type === 'HR') {
-      var fz = fenceAt(park, U.clamp(sw.spray, -45, 45));
-      call = carry < fz.dist + 25 ? 'HRjust' : carry > 445 ? 'HRbomb' : 'HR';
+      call = fl.clear < 7 ? 'HRjust' : carry > 450 ? 'HRbomb' : 'HR';
     }
     desc = fill(rng, CALLS[call], o);
 
     // ---- ball path after the play is made: glove, then a throw
-    var HOLD = 0.35, thr0 = -1, thr1 = -1, tgt = null, glove = null;
+    var HOLD = 0.35 + rattle, thr0 = -1, thr1 = -1, tgt = null, glove = null;
     if (by >= 0) {
       glove = { x: bx, y: byy };
       if (throwTo === -1) tgt = { x: FIELDERS.P.x, y: FIELDERS.P.y };
@@ -2233,6 +2253,1885 @@ BB.Rules = (function () {
   };
 })();
 
+// ===================== MODULE: 35-scene.js =====================
+// 35-scene.js — BB.Render: the bat scene, the field scene, the title backdrop, HUD and stamps, printed through
+// BB.Riso. Owned by the render agent.
+//
+// Every frame: load the cached static background separations for the scene (built once per park / ink set / size),
+// draw the moving pieces into the same three ink layers (each a proper separation that knocks out what is behind it),
+// then print the layers onto paper with multiply + misregistration + grain.
+(function () {
+  var K = BB.K, U = BB.U, R = BB.Riso;
+  var PI = Math.PI, TAU = PI * 2;
+  var M = 24;                         // layer margin (css px) so misregistration / shake never shows a bare edge
+  var clamp = U.clamp, lerp = U.lerp, smooth = U.smooth;
+
+  var S = {
+    canvas: null, ctx: null, W: 390, H: 844, dpr: 1, P: null,
+    inkPick: null, inks: null, inkKey: '',
+    cache: {}, cam: null, fcam: null, fieldKey: '', fbake: null,
+    freezeT: 0, lastTime: 0, perf: [], lastScene: '', built: 0,
+  };
+  var P = null;                        // the press currently being drawn into
+
+  var DEFAULT_PARK = {
+    id: 'p_default', name: 'Halftone Field', town: 'Halftone', inkset: 'classic',
+    fence: [[-45, 330, 10], [-22, 372, 10], [0, 404, 10], [22, 372, 10], [45, 330, 10]],
+    features: { scoreboard: true, lights: true, billboard: 'HALFTONE HARDBALL', water: 'none', hill: false, skyline: 'city' },
+  };
+  var DEFAULT_PITCHER = { id: 'p_default', name: 'Pitcher', hand: 'R', look: { build: 'tall', hair: 'none', windup: 'classic', number: 21 } };
+
+  // ink recipes (slot coverage). Grass = A x C, dirt = B x C, skin = light B + C.
+  var SKIN = { b: 0.26, c: 0.5 };
+  var GLOVE = { a: 0.45, b: 0.6, c: 0.9 };
+  var DIRT = { a: 0.05, b: 0.36, c: 0.78 };
+  var DIRT2 = { a: 0.12, b: 0.46, c: 0.9 };
+  var PAPER = {};
+  var A1 = { a: 1 }, B1 = { b: 1 }, C1 = { c: 1 };
+
+  // ------------------------------------------------------------------ helpers
+  function fill(p, inks, o) { P.fill(p, inks, o); }
+  function stroke(p, inks, w, o) { P.stroke(p, inks, w, o); }
+  function circ(x, y, r) { return R.circle(x, y, r); }
+  function ell(x, y, rx, ry, rot) { return R.ellipse(x, y, rx, ry, rot); }
+  function rect(x, y, w, h) { return R.rect(x, y, w, h); }
+  function seg(x0, y0, x1, y1) { var p = new Path2D(); p.moveTo(x0, y0); p.lineTo(x1, y1); return p; }
+  function curve(pts) {           // smooth path through [[x,y],...]
+    var p = new Path2D(); p.moveTo(pts[0][0], pts[0][1]);
+    if (pts.length === 2) { p.lineTo(pts[1][0], pts[1][1]); return p; }
+    for (var i = 1; i < pts.length - 1; i++) {
+      var last = i === pts.length - 2;
+      var mx = last ? pts[i + 1][0] : (pts[i][0] + pts[i + 1][0]) / 2, my = last ? pts[i + 1][1] : (pts[i][1] + pts[i + 1][1]) / 2;
+      p.quadraticCurveTo(pts[i][0], pts[i][1], mx, my);
+    }
+    return p;
+  }
+  // limb with an A keyline
+  function limb(pts, w, inks, kl) {
+    var p = curve(pts);
+    if (kl) stroke(p, A1, w + kl * 2);
+    stroke(p, inks, w);
+  }
+  function hash(s) { return U.hashStr(String(s || '')); }
+  function fitFont(str, maxW, px, fontFn) {
+    fontFn = fontFn || R.display;
+    var f = fontFn(px), w = P.measure(str, f);
+    if (w > maxW) { px = px * maxW / w; f = fontFn(px); }
+    return { font: f, px: px };
+  }
+  function ik(ax, az, bx, bz, l1, l2, side) {
+    var dx = bx - ax, dz = bz - az, d = Math.sqrt(dx * dx + dz * dz) || 1e-3;
+    if (d >= l1 + l2 - 1e-3) return [ax + dx * 0.5, az + dz * 0.5];
+    var a = (l1 * l1 - l2 * l2 + d * d) / (2 * d), h = Math.sqrt(Math.max(0, l1 * l1 - a * a));
+    var mx = ax + dx * a / d, mz = az + dz * a / d;
+    return [mx - side * dz * h / d, mz + side * dx * h / d];
+  }
+  function fenceAt(park, spray) {
+    if (BB.Bat && BB.Bat.fenceAt) { try { var r = BB.Bat.fenceAt(park, spray); if (r && r.dist) return r; } catch (e) {} }
+    var f = park.fence || DEFAULT_PARK.fence;
+    if (spray <= f[0][0]) return { dist: f[0][1], height: f[0][2] };
+    for (var i = 1; i < f.length; i++) {
+      if (spray <= f[i][0]) {
+        var t = (spray - f[i - 1][0]) / (f[i][0] - f[i - 1][0]);
+        return { dist: lerp(f[i - 1][1], f[i][1], t), height: lerp(f[i - 1][2], f[i][2], t) };
+      }
+    }
+    var l = f[f.length - 1];
+    return { dist: l[1], height: l[2] };
+  }
+  function feat(park) { return (park && park.features) || DEFAULT_PARK.features; }
+  function parkOf(v) { return (v && v.park && v.park.fence) ? v.park : (BB.Content && BB.Content.PARKS && BB.Content.PARKS[0]) || DEFAULT_PARK; }
+  function pitchPos(pitch, t) {
+    if (BB.Pitch && BB.Pitch.pos && pitch._b) { try { return BB.Pitch.pos(pitch, t); } catch (e) {} }
+    if (typeof pitch.pos === 'function') return pitch.pos(t);
+    // fallback: straight-ish ballistic interpolation release -> plate, then to the mitt
+    var r = pitch.release || { x: -1.7, y: K.RELEASE_Y, z: 6 }, pl = pitch.plate || { x: 0, z: 2.5 }, T = pitch.T || 0.75;
+    var s = t / T;
+    if (s <= 1) return { x: lerp(r.x, pl.x, s), y: r.y * (1 - s), z: lerp(r.z, pl.z, s) + 1.2 * 4 * s * (1 - s) * 0.4 };
+    var k = Math.min(1, (s - 1) * 4);
+    return { x: pl.x, y: -3 * k, z: pl.z - 0.2 * k };
+  }
+
+  // ------------------------------------------------------------------ bat camera
+  // Long-lens camera behind the plate (telephoto keeps the pitcher a readable size on a phone):
+  // eye at (-0.35, -16, 5.4) looking straight out along +y; principal point lifted so the zone sits low-middle.
+  function layoutBat() {
+    var W = S.W, H = S.H;
+    S.cam = { x: -0.35, y: -16, z: 5.4, f: Math.min(W * 3.0, H * 1.39), cx: W / 2, cy: H * 0.37 };
+  }
+  function proj(x, y, z) {
+    var c = S.cam, d = Math.max(0.6, y - c.y), s = c.f / d;
+    return { x: c.cx + (x - c.x) * s, y: c.cy - (z - c.z) * s, s: s };
+  }
+  function plateToScreen(x, z) { var p = proj(x, 0, z); return { x: p.x, y: p.y }; }
+  function screenToPlate(sx, sy) {
+    var c = S.cam, s = c.f / (0 - c.y);
+    return { x: c.x + (sx - c.cx) / s, z: c.z - (sy - c.cy) / s };
+  }
+
+  // ------------------------------------------------------------------ shared scenery pieces
+  // stepped sky bands (no gradients): tones top -> bottom
+  function skyBands(y0, y1, tones, warm) {
+    var n = tones.length, h = (y1 - y0) / n;
+    for (var i = 0; i < n; i++) {
+      var inks = { a: tones[i] };
+      if (warm && i >= n - warm.length) { var w = warm[i - (n - warm.length)]; inks.b = w[0]; inks.c = w[1]; }
+      fill(rect(-M, y0 + i * h - 0.5, S.W + 2 * M, h + 1), inks);
+    }
+  }
+  function cloud(x, y, w, rng) {
+    var p = new Path2D(), n = 3 + Math.floor(rng() * 3), h = w * 0.22;
+    for (var i = 0; i < n; i++) {
+      var cx = x - w / 2 + w * (i + 0.5) / n, r = h * (0.7 + rng() * 0.7);
+      p.moveTo(cx + r, y); p.arc(cx, y, r, 0, TAU);
+    }
+    p.rect(x - w / 2, y - h * 0.1, w, h * 0.65);
+    fill(p, PAPER);
+    fill(rect(x - w / 2 + 3, y + h * 0.55 - 2, w - 6, 2.2), { c: 0.6 }, { over: true });
+  }
+  // skyline silhouettes along a baseline (css px). sc = scale (1 at phone size).
+  function skyline(kind, x0, x1, base, sc, rng) {
+    var i, x, w, h, p;
+    var far = { a: 0.55, b: 0.18 }, near = { a: 0.78, b: 0.25 };
+    if (kind === 'city' || kind === 'none') {
+      x = x0;
+      while (x < x1) {
+        w = (12 + rng() * 22) * sc; h = (kind === 'none' ? 10 + rng() * 18 : 22 + rng() * 52) * sc;
+        p = rect(x, base - h, w, h + 2);
+        if (rng() < 0.25) { p.rect(x + w * 0.4, base - h - 8 * sc, w * 0.12, 8 * sc); }
+        if (rng() < 0.2) { p.moveTo(x + w * 0.2, base - h); p.lineTo(x + w * 0.5, base - h - 12 * sc); p.lineTo(x + w * 0.8, base - h); }
+        fill(p, rng() < 0.5 ? far : near);
+        // windows: tiny knocked-out squares, some lit in C
+        var win = new Path2D(), lit = new Path2D();
+        for (var wy = base - h + 4 * sc; wy < base - 4 * sc; wy += 5 * sc) {
+          for (var wx = x + 3 * sc; wx < x + w - 3 * sc; wx += 4.5 * sc) {
+            var rr = rng();
+            if (rr < 0.35) win.rect(wx, wy, 1.6 * sc, 2 * sc); else if (rr < 0.45) lit.rect(wx, wy, 1.6 * sc, 2 * sc);
+          }
+        }
+        fill(win, PAPER); fill(lit, C1);
+        x += w + rng() * 4 * sc;
+      }
+      if (kind === 'none') { // a blimp
+        var bx = x0 + (x1 - x0) * 0.72, by = base - 52 * sc;
+        fill(ell(bx, by, 22 * sc, 7.5 * sc), { a: 0.35, b: 0.15 });
+        fill(rect(bx - 4 * sc, by + 6 * sc, 8 * sc, 3 * sc), A1);
+        P.text('INK', bx, by + 2.6 * sc, R.display(7 * sc), PAPER, { align: 'center' });
+      } else { // water tower
+        var tx = x0 + (x1 - x0) * (0.2 + rng() * 0.6);
+        fill(R.rrect(tx - 7 * sc, base - 70 * sc, 14 * sc, 11 * sc, 3 * sc), near);
+        stroke(seg(tx - 5 * sc, base - 59 * sc, tx - 7 * sc, base - 40 * sc), near, 1.2 * sc);
+        stroke(seg(tx + 5 * sc, base - 59 * sc, tx + 7 * sc, base - 40 * sc), near, 1.2 * sc);
+      }
+    } else if (kind === 'barns') {
+      // rolling hills + barns + silo + windmill
+      p = new Path2D(); p.moveTo(x0 - 10, base + 2);
+      for (x = x0 - 10; x <= x1 + 10; x += 8) p.lineTo(x, base - 10 * sc - Math.sin(x * 0.018 + 1) * 8 * sc);
+      p.lineTo(x1 + 10, base + 2); p.closePath();
+      fill(p, { a: 0.4, c: 0.7 });
+      x = x0 + 10 * sc;
+      while (x < x1) {
+        w = (20 + rng() * 14) * sc; h = w * 0.62;
+        var bb = base - 6 * sc - Math.sin(x * 0.018 + 1) * 8 * sc;
+        p = new Path2D(); p.moveTo(x, bb); p.lineTo(x, bb - h); p.lineTo(x + w * 0.5, bb - h - w * 0.35); p.lineTo(x + w, bb - h); p.lineTo(x + w, bb); p.closePath();
+        fill(p, { b: 0.9, a: 0.15 });
+        stroke(seg(x + w * 0.3, bb, x + w * 0.7, bb - h * 0.62), PAPER, 1.2 * sc);
+        stroke(seg(x + w * 0.7, bb, x + w * 0.3, bb - h * 0.62), PAPER, 1.2 * sc);
+        if (rng() < 0.6) {
+          fill(R.rrect(x + w + 3 * sc, bb - h * 1.5, 7 * sc, h * 1.5, 3.5 * sc), { a: 0.5 });
+        }
+        x += w + (30 + rng() * 50) * sc;
+      }
+      var mx = x0 + (x1 - x0) * 0.82, my = base - 46 * sc;
+      stroke(seg(mx, my, mx - 3 * sc, base - 8 * sc), near, 1.6 * sc); stroke(seg(mx, my, mx + 3 * sc, base - 8 * sc), near, 1.6 * sc);
+      fill(R.rays(mx, my, 12 * sc, 8, 0.3, 0.45), near);
+    } else if (kind === 'pines') {
+      for (var layer = 0; layer < 2; layer++) {
+        x = x0 - 6;
+        while (x < x1 + 6) {
+          h = (layer ? 26 : 36) * sc * (0.6 + rng() * 0.6); w = h * 0.5;
+          var bb2 = base + (layer ? 2 : -4) * sc;
+          p = new Path2D(); p.moveTo(x, bb2 - h);
+          for (var k = 1; k <= 3; k++) { p.lineTo(x + w * 0.5 * k / 3 + w * 0.12, bb2 - h + h * k / 3); p.lineTo(x + w * 0.18 * k / 3, bb2 - h + h * k / 3); }
+          for (k = 3; k >= 1; k--) { p.lineTo(x - w * 0.18 * k / 3, bb2 - h + h * k / 3); p.lineTo(x - w * 0.5 * k / 3 - w * 0.12, bb2 - h + h * k / 3); }
+          p.closePath();
+          fill(p, layer ? { a: 0.85, c: 0.5 } : { a: 0.5, c: 0.35 });
+          x += w * (0.5 + rng() * 0.5);
+        }
+      }
+    } else if (kind === 'harbor') {
+      // water line, cranes, a lighthouse with a C beam, a freighter
+      fill(rect(x0 - 10, base - 8 * sc, x1 - x0 + 20, 10 * sc), { a: 0.45 });
+      var wl = new Path2D();
+      for (x = x0; x < x1; x += 9 * sc) { wl.moveTo(x, base - 4 * sc); wl.quadraticCurveTo(x + 2.2 * sc, base - 5.8 * sc, x + 4.5 * sc, base - 4 * sc); }
+      stroke(wl, PAPER, 0.9 * sc);
+      for (i = 0; i < 2; i++) {
+        var cx = x0 + (x1 - x0) * (0.18 + i * 0.22), ch = (46 + i * 8) * sc;
+        p = new Path2D();
+        p.moveTo(cx, base - 8 * sc); p.lineTo(cx, base - ch); p.lineTo(cx + 34 * sc, base - ch); p.moveTo(cx - 10 * sc, base - ch); p.lineTo(cx, base - ch);
+        p.moveTo(cx, base - ch * 0.6); p.lineTo(cx + 24 * sc, base - ch);
+        stroke(p, near, 2 * sc, { cap: 'butt' });
+        stroke(seg(cx + 26 * sc, base - ch, cx + 26 * sc, base - ch * 0.55), near, 0.8 * sc);
+      }
+      var sx = x0 + (x1 - x0) * 0.55;
+      p = R.poly([sx, base - 9 * sc, sx + 70 * sc, base - 9 * sc, sx + 64 * sc, base - 1 * sc, sx + 4 * sc, base - 1 * sc]);
+      fill(p, { b: 0.85, a: 0.2 });
+      fill(rect(sx + 10 * sc, base - 17 * sc, 40 * sc, 8 * sc), { a: 0.6 });
+      var lx = x0 + (x1 - x0) * 0.86;
+      fill(R.poly([lx - 5 * sc, base - 6 * sc, lx - 3 * sc, base - 48 * sc, lx + 3 * sc, base - 48 * sc, lx + 5 * sc, base - 6 * sc]), PAPER);
+      stroke(R.poly([lx - 5 * sc, base - 6 * sc, lx - 3 * sc, base - 48 * sc, lx + 3 * sc, base - 48 * sc, lx + 5 * sc, base - 6 * sc]), A1, 1);
+      fill(rect(lx - 4.4 * sc, base - 30 * sc, 8.8 * sc, 6 * sc), B1);
+      fill(rect(lx - 4 * sc, base - 55 * sc, 8 * sc, 7 * sc), C1);
+      fill(R.poly([lx, base - 52 * sc, lx - 70 * sc, base - 66 * sc, lx - 70 * sc, base - 40 * sc]), { c: 0.35 }, { over: true });
+    } else if (kind === 'desert') {
+      x = x0 - 10;
+      while (x < x1) {
+        w = (40 + rng() * 60) * sc; h = (14 + rng() * 26) * sc;
+        p = R.poly([x, base, x + w * 0.18, base - h, x + w * 0.82, base - h, x + w, base]);
+        fill(p, rng() < 0.5 ? { b: 0.55, c: 0.8 } : { b: 0.75, c: 0.9, a: 0.12 });
+        fill(rect(x + w * 0.18, base - h, w * 0.64, 2.2 * sc), { b: 0.9, c: 1, a: 0.3 }, { over: true });
+        x += w * (0.7 + rng() * 0.6);
+      }
+      for (i = 0; i < 4; i++) {
+        var kx = x0 + (x1 - x0) * rng(), kh = (10 + rng() * 10) * sc;
+        p = new Path2D();
+        p.moveTo(kx, base); p.lineTo(kx, base - kh);
+        p.moveTo(kx, base - kh * 0.5); p.lineTo(kx - 4 * sc, base - kh * 0.55); p.lineTo(kx - 4 * sc, base - kh * 0.8);
+        p.moveTo(kx, base - kh * 0.4); p.lineTo(kx + 4 * sc, base - kh * 0.45); p.lineTo(kx + 4 * sc, base - kh * 0.75);
+        stroke(p, { a: 0.85, c: 0.6 }, 2.4 * sc);
+      }
+    }
+  }
+
+  // crowd: rows of heads + shoulders, batched per ink class per row so front rows hide back rows.
+  var CROWD = [{ a: 1 }, { b: 1 }, { c: 1, a: 0.3 }, { b: 0.5, c: 1 }, {}, { a: 0.55, b: 0.35 }, { b: 1, a: 0.35 }];
+  function crowd(x0, x1, y0, y1, row, seed, variant, excl, base) {
+    var rng = U.rng(seed), vr = U.rng(seed * 31 + variant * 977 + 5), n = CROWD.length;
+    if (base) fill(rect(x0, y0 - row * 0.6, x1 - x0, y1 - y0 + row * 0.6), base);
+    for (var y = y0; y < y1; y += row) {
+      var paths = [], i;
+      for (i = 0; i < n; i++) paths.push(null);
+      var hr = row * 0.33;
+      for (var x = x0 + rng() * row * 0.6; x < x1; x += row * (0.72 + rng() * 0.32)) {
+        var ci = Math.floor(rng() * n), jit = rng(), rv = vr();
+        if (excl && excl(x, y)) continue;
+        if (variant && rv < 0.28) ci = (ci + 1 + Math.floor(rv * 20)) % n;
+        var bob = variant && rv > 0.8 ? -row * 0.28 : 0;
+        if (jit < 0.06) continue;                       // an empty seat
+        var p = paths[ci] || (paths[ci] = new Path2D()), yy = y + bob;
+        p.moveTo(x + hr, yy); p.arc(x, yy, hr, 0, TAU);
+        p.moveTo(x - hr * 1.65, yy + row * 0.66); p.ellipse(x, yy + row * 0.66, hr * 1.65, hr * 1.1, 0, PI, TAU);
+        p.lineTo(x - hr * 1.65, yy + row * 0.66);
+        if (variant === 2 && rv > 0.93) { // arms up!
+          p.moveTo(x - hr * 1.5, yy + row * 0.3); p.lineTo(x - hr * 2.1, yy - row * 0.5); p.lineTo(x - hr * 1.3, yy - row * 0.5); p.lineTo(x - hr * 0.9, yy + row * 0.3);
+        }
+      }
+      for (i = 0; i < n; i++) if (paths[i]) fill(paths[i], CROWD[i]);
+    }
+  }
+  function lightBank(x, y, w, h, beams) {
+    fill(R.rrect(x - w / 2 - 2, y - h / 2 - 2, w + 4, h + 4, 2), A1);
+    var p = new Path2D(), cols = Math.max(3, Math.round(w / 6)), rows = Math.max(2, Math.round(h / 6));
+    for (var i = 0; i < cols; i++) for (var j = 0; j < rows; j++) {
+      var cx = x - w / 2 + (i + 0.5) * w / cols, cy = y - h / 2 + (j + 0.5) * h / rows, r = Math.min(w / cols, h / rows) * 0.36;
+      p.moveTo(cx + r, cy); p.arc(cx, cy, r, 0, TAU);
+    }
+    fill(p, C1);
+    if (beams) fill(R.poly([x - w / 2, y + h / 2, x + w / 2, y + h / 2, x + w * 2.6, y + h * 7, x - w * 2.6, y + h * 7]), { c: 0.16 }, { over: true });
+  }
+
+  // ------------------------------------------------------------------ BAT background
+  function batGeom(park) {
+    var W = S.W, H = S.H, c = S.cam, hz = c.cy;
+    var f0 = fenceAt(park, 0);
+    var g = {
+      hz: hz,
+      standsTop: hz - H * 0.155,
+      eyeX: proj(0, f0.dist, 0).x,
+      eyeW: 44 * c.f / (f0.dist - c.y),
+      wallTop: proj(0, f0.dist, f0.height).y,
+    };
+    g.deckY = g.standsTop + (hz - g.standsTop) * 0.44;
+    g.bandY0 = g.standsTop - 2; g.bandY1 = hz + 2;
+    return g;
+  }
+
+  function drawBatBackground(park, variant) {
+    var W = S.W, H = S.H, c = S.cam, ft = feat(park), seed = hash(park.id);
+    var rng = U.rng(seed), g = batGeom(park), hz = g.hz, i, p, x, y;
+
+    // sky
+    skyBands(-M, g.standsTop + 4, [0.42, 0.33, 0.25, 0.18, 0.12], [[0.1, 0.0], [0.16, 0.22]]);
+    // sun (or moon) sitting right behind centre field
+    var moon = (seed % 3) === 1;
+    var sunR = Math.min(W * 0.12, 54), sunX = g.eyeX + (moon ? W * 0.22 : 0), sunY = g.standsTop - (moon ? 46 : 4);
+    if (moon) { fill(circ(sunX, sunY, sunR * 0.7), PAPER); fill(circ(sunX - 5, sunY + 3, sunR * 0.18), { a: 0.18 }, { over: true }); fill(circ(sunX + 8, sunY - 7, sunR * 0.1), { a: 0.18 }, { over: true }); }
+    else {
+      fill(circ(sunX, sunY, sunR * 1.35), { c: 0.3 }, { over: true });
+      fill(circ(sunX, sunY, sunR), { c: 1, b: 0.22 });
+      for (i = 0; i < 4; i++) fill(rect(sunX - sunR, sunY - sunR * 0.1 + i * sunR * 0.22, sunR * 2, sunR * 0.07 + i * 0.6), { a: 0.25, b: 0.25 }, { over: true });
+    }
+    // clouds
+    var crng = U.rng(seed + 3);
+    for (i = 0; i < 3; i++) cloud(W * (0.12 + 0.36 * i + crng() * 0.14), g.standsTop - 50 - crng() * (g.standsTop - 150) * 0.6, 48 + crng() * 50, crng);
+
+    // skyline behind the stands
+    skyline(ft.skyline || 'none', -M, W + M, g.standsTop + 2, Math.min(1.2, W / 390), U.rng(seed + 11));
+
+    // light towers (behind the stands roof)
+    if (ft.lights) {
+      [0.07, 0.93].forEach(function (fx, k) {
+        var lx = W * fx, top = g.standsTop - 62;
+        stroke(seg(lx, top, lx, g.standsTop + 4), A1, 3);
+        var lat = new Path2D();
+        for (var yy = top + 6; yy < g.standsTop; yy += 7) { lat.moveTo(lx - 2.5, yy); lat.lineTo(lx + 2.5, yy + 5); }
+        stroke(lat, A1, 0.8);
+        lightBank(lx, top - 5, 34, 14, false);
+      });
+    }
+    // scoreboard (left) and billboard (right) on top of the stands
+    var hasBoard = !!ft.scoreboard;
+    if (hasBoard) drawBatScoreboard(park, W * 0.06, g.standsTop - 48, W * 0.36, 52);
+    if (ft.billboard) drawBillboard(String(ft.billboard), hasBoard ? W * 0.56 : W * 0.08, g.standsTop - 40, hasBoard ? W * 0.38 : W * 0.5, 30);
+
+    // stands: roof band, upper deck, facade, lower deck. Water replaces a side if the park has it.
+    var water = ft.water || 'none';
+    var wx0 = water === 'left' ? -M : water === 'right' ? W * 0.62 : water === 'center' ? g.eyeX - g.eyeW * 1.6 : 0;
+    var wx1 = water === 'left' ? W * 0.38 : water === 'right' ? W + M : water === 'center' ? g.eyeX + g.eyeW * 1.6 : 0;
+    var excl = function (xx, yy) {
+      if (water !== 'none' && xx > wx0 && xx < wx1) return true;
+      return xx > g.eyeX - g.eyeW / 2 - 2 && xx < g.eyeX + g.eyeW / 2 + 2 && yy > g.deckY - 2;
+    };
+    fill(rect(-M, g.standsTop, W + 2 * M, hz - g.standsTop + 4), { a: 0.85, b: 0.2 });
+    crowd(-M, W + M, g.standsTop + 8, g.deckY - 6, 5.2, seed + 21, variant, excl);
+    // facade with the park name, knocked out
+    fill(rect(-M, g.deckY - 6, W + 2 * M, 10), A1);
+    var label = ((park.name || 'BALLPARK') + ' · ').toUpperCase();
+    var lf = R.mono(7.2, true), lw = P.measure(label, lf);
+    for (x = -M + 4; x < W + M; x += lw) P.text(label, x, g.deckY + 1.6, lf, PAPER);
+    // bunting under the roof
+    p = new Path2D();
+    for (x = -M; x < W + M; x += 18) { p.moveTo(x, g.standsTop); p.arc(x + 9, g.standsTop, 9, 0, PI); }
+    fill(rect(-M, g.standsTop - 4, W + 2 * M, 5), A1);
+    fill(p, B1);
+    var p2 = new Path2D();
+    for (x = -M; x < W + M; x += 18) { p2.moveTo(x + 3, g.standsTop + 1); p2.arc(x + 9, g.standsTop + 1, 6, 0, PI); }
+    fill(p2, PAPER);
+    p2 = new Path2D();
+    for (x = -M; x < W + M; x += 18) { p2.moveTo(x + 6, g.standsTop + 1); p2.arc(x + 9, g.standsTop + 1, 3, 0, PI); }
+    fill(p2, C1);
+    crowd(-M, W + M, g.deckY + 9, hz + 4, 6.6, seed + 22, variant, excl);
+    // water
+    if (water !== 'none') {
+      var wy0 = water === 'center' ? g.deckY + 4 : g.standsTop + 4;
+      fill(rect(wx0, wy0, wx1 - wx0, hz - wy0 + 6), { a: 0.5, c: 0.12 });
+      var wl = new Path2D(), wr = U.rng(seed + 5);
+      for (y = wy0 + 5; y < hz; y += 6) for (x = wx0 + wr() * 8; x < wx1 - 6; x += 12 + wr() * 10) {
+        wl.moveTo(x, y); wl.quadraticCurveTo(x + 3, y - 2.2, x + 6, y);
+      }
+      stroke(wl, PAPER, 1);
+      // a little boat
+      var bx = (wx0 + wx1) / 2 + 10, by = hz - 12;
+      fill(R.poly([bx - 14, by, bx + 14, by, bx + 10, by + 6, bx - 10, by + 6]), { b: 0.9 });
+      fill(R.poly([bx - 2, by - 2, bx - 2, by - 22, bx + 12, by - 2]), PAPER);
+      stroke(R.poly([bx - 2, by - 2, bx - 2, by - 22, bx + 12, by - 2]), A1, 1);
+    }
+    // batter's eye: dark slab in centre field (the pitcher reads against it)
+    fill(rect(g.eyeX - g.eyeW / 2, g.deckY - 2, g.eyeW, hz - g.deckY + 6), { a: 1, b: 0.25 });
+    fill(rect(g.eyeX - g.eyeW / 2, g.deckY - 2, g.eyeW, 2), C1);
+
+    // the outfield wall, projected from the park's fence
+    var top = [], bot = [];
+    for (var sp = -24; sp <= 24; sp += 1) {
+      var fa = fenceAt(park, sp), r = U.rad(sp);
+      var X = fa.dist * Math.sin(r), Y = fa.dist * Math.cos(r);
+      top.push(proj(X, Y, fa.height)); bot.push(proj(X, Y, -0.5));
+    }
+    p = new Path2D(); p.moveTo(top[0].x, top[0].y);
+    for (i = 1; i < top.length; i++) p.lineTo(top[i].x, top[i].y);
+    for (i = bot.length - 1; i >= 0; i--) p.lineTo(bot[i].x, bot[i].y);
+    p.closePath();
+    // ground (everything below the wall) first: outfield grass all the way down
+    fill(rect(-M, hz - 40, W + 2 * M, H - hz + 40 + M), { a: 0.42, c: 1 });
+    fill(p, { a: 1, c: 0.18 });
+    var tl = new Path2D(); tl.moveTo(top[0].x, top[0].y); for (i = 1; i < top.length; i++) tl.lineTo(top[i].x, top[i].y);
+    stroke(tl, C1, 1.6);
+    // padding seams + distance marker
+    var seams = new Path2D();
+    for (i = 0; i < top.length; i += 2) { seams.moveTo(top[i].x, top[i].y + 2); seams.lineTo(bot[i].x, bot[i].y - 1); }
+    stroke(seams, { a: 0.6, b: 0.25 }, 0.6, { over: true });
+    var f0 = fenceAt(park, 0), mk = proj(0, f0.dist, f0.height * 0.5), mkS = Math.max(6, (f0.height * 0.42) * mk.s);
+    P.text(String(Math.round(f0.dist)), mk.x, mk.y + mkS * 0.36, R.display(Math.min(13, mkS)), PAPER, { align: 'center' });
+    var fl = fenceAt(park, -18), ml = proj(fl.dist * Math.sin(U.rad(-18)), fl.dist * Math.cos(U.rad(-18)), fl.height * 0.5);
+    if (ml.x > 10) P.text(String(Math.round(fl.dist)), ml.x, ml.y + 4, R.display(Math.min(10, mkS * 0.8)), PAPER, { align: 'center' });
+
+    // grass: checkerboard mowing, projected
+    var gy0 = 24, gy1 = f0.dist - 12;
+    var dark = new Path2D();
+    for (var yy = gy0, row = 0; yy < gy1; yy += 22, row++) {
+      for (var xx = -150, col = 0; xx < 150; xx += 15, col++) {
+        if ((row + col) % 2) continue;
+        var q0 = proj(xx, yy, 0), q1 = proj(xx + 15, yy, 0), q2 = proj(xx + 15, yy + 22, 0), q3 = proj(xx, yy + 22, 0);
+        dark.moveTo(q0.x, q0.y); dark.lineTo(q1.x, q1.y); dark.lineTo(q2.x, q2.y); dark.lineTo(q3.x, q3.y); dark.closePath();
+      }
+    }
+    fill(dark, { a: 0.6, c: 1 });
+    // warning track hugging the wall
+    var wt = new Path2D(), wtb = [];
+    for (sp = -24; sp <= 24; sp += 1) {
+      var fb = fenceAt(park, sp), rb = U.rad(sp);
+      wtb.push(proj((fb.dist - 14) * Math.sin(rb), (fb.dist - 14) * Math.cos(rb), 0));
+    }
+    wt.moveTo(bot[0].x, bot[0].y); for (i = 1; i < bot.length; i++) wt.lineTo(bot[i].x, bot[i].y);
+    for (i = wtb.length - 1; i >= 0; i--) wt.lineTo(wtb[i].x, wtb[i].y);
+    wt.closePath();
+    fill(wt, DIRT2);
+    if (ft.hill) { // a grassy hill in deep centre
+      var hp = new Path2D(), hs = [];
+      for (sp = -9; sp <= 9; sp += 1.5) {
+        var fh = fenceAt(park, sp), rh = U.rad(sp), k = Math.cos(sp / 9 * PI / 2);
+        hs.push(proj((fh.dist - 14) * Math.sin(rh), (fh.dist - 14) * Math.cos(rh), 0));
+        hs[hs.length - 1].y -= k * 7;
+      }
+      hp.moveTo(hs[0].x, hs[0].y + 7); for (i = 0; i < hs.length; i++) hp.lineTo(hs[i].x, hs[i].y);
+      hp.lineTo(hs[hs.length - 1].x, hs[hs.length - 1].y + 7); hp.closePath();
+      fill(hp, { a: 0.75, c: 1 });
+      stroke(curve(hs.map(function (q) { return [q.x, q.y]; })), C1, 1.2);
+    }
+    // infield dirt ring (radius 95 around the rubber), infield grass diamond, mound, home circle, 2B
+    var ring = new Path2D();
+    for (i = 0; i <= 64; i++) {
+      var a = -1.4 + 2.8 * i / 64; // the far side of the arc (beyond the bases)
+      var q = proj(95 * Math.sin(a), 60.5 + 95 * Math.cos(a), 0);
+      if (i) ring.lineTo(q.x, q.y); else ring.moveTo(q.x, q.y);
+    }
+    var qa = proj(-200, 20, 0), qb = proj(200, 20, 0);
+    ring.lineTo(qb.x, qb.y); ring.lineTo(qa.x, qa.y); ring.closePath();
+    fill(ring, DIRT);
+    var dia = R.poly([proj(0, 5, 0), proj(58, 63.6, 0), proj(0, 122, 0), proj(-58, 63.6, 0)]);
+    fill(dia, { a: 0.48, c: 1 });
+    // mowing stripes on the infield grass
+    var ist = new Path2D();
+    for (yy = 10; yy < 122; yy += 14) {
+      var w0 = Math.min(yy, 122 - yy) * 0.92;
+      var s0 = proj(-w0, yy, 0), s1 = proj(w0, yy, 0), s2 = proj(w0, yy + 7, 0), s3 = proj(-w0, yy + 7, 0);
+      ist.moveTo(s0.x, s0.y); ist.lineTo(s1.x, s1.y); ist.lineTo(s2.x, s2.y); ist.lineTo(s3.x, s3.y); ist.closePath();
+    }
+    fill(ist, { a: 0.62, c: 1 }, { over: true });
+    // base cut at 2B and the bag
+    var b2 = projCircle(0, 127.3, 9);
+    fill(b2, DIRT);
+    var bag = R.poly([proj(-1.2, 127.3, 0.3), proj(0, 126.1, 0.3), proj(1.2, 127.3, 0.3), proj(0, 128.5, 0.3)]);
+    fill(bag, PAPER);
+    // mound
+    fill(projCircle(0, 59, 9), DIRT2);
+    var mt = proj(0, 59, 0), ms = mt.s;
+    fill(ell(mt.x, mt.y - 0.4 * ms, 9 * ms, 0.9 * ms), DIRT2);
+    fill(rect(mt.x - 1 * ms, proj(0, 60.5, 0.83).y - 0.4, 2 * ms, Math.max(1.2, 0.5 * ms)), PAPER);
+    // home plate dirt circle (fills the bottom of the screen)
+    var hc = new Path2D();
+    for (i = 0; i <= 48; i++) {
+      var ah = PI * i / 48, X2 = 13 * Math.cos(ah), Y2 = 13 * Math.sin(ah);
+      var qh = proj(X2, Y2, 0);
+      if (i) hc.lineTo(qh.x, qh.y); else hc.moveTo(qh.x, qh.y);
+    }
+    hc.lineTo(-M, H + M); hc.lineTo(W + M, H + M); hc.lineTo(W + M, proj(13, 0, 0).y); hc.closePath();
+    fill(hc, DIRT);
+    // dirt texture: a few raked lines + pebbles
+    var rk = new Path2D(), pr = U.rng(seed + 9);
+    for (i = 0; i < 40; i++) {
+      var rx = pr() * W, ry = proj(0, 12 * pr(), 0).y + pr() * (H - proj(0, 12, 0).y);
+      rk.moveTo(rx, ry); rk.lineTo(rx + 6 + pr() * 14, ry + (pr() - 0.5) * 2);
+    }
+    stroke(rk, { b: 0.55, c: 0.4 }, 0.8, { over: true });
+    // batter's boxes + plate
+    var bxp = new Path2D(), l0;
+    [[-4.71, -0.71], [0.71, 4.71]].forEach(function (bx) {
+      l0 = [proj(bx[0], -2.3, 0), proj(bx[1], -2.3, 0), proj(bx[1], 3.7, 0), proj(bx[0], 3.7, 0)];
+      bxp.moveTo(l0[0].x, l0[0].y); for (var j = 1; j < 4; j++) bxp.lineTo(l0[j].x, l0[j].y); bxp.closePath();
+    });
+    stroke(bxp, PAPER, 2.2, { ko: ['a', 'b', 'c'] });
+    var hp2 = R.poly([proj(-0.71, 0.7, 0), proj(0.71, 0.7, 0), proj(0.71, 0, 0), proj(0, -0.71, 0), proj(-0.71, 0, 0)]);
+    fill(hp2, PAPER);
+    stroke(hp2, { a: 0.5 }, 1, { over: true });
+  }
+  function projCircle(cx, cy, r) {
+    var p = new Path2D();
+    for (var i = 0; i <= 40; i++) {
+      var a = TAU * i / 40, q = proj(cx + r * Math.cos(a), cy + r * Math.sin(a), 0);
+      if (i) p.lineTo(q.x, q.y); else p.moveTo(q.x, q.y);
+    }
+    p.closePath();
+    return p;
+  }
+  function drawBatScoreboard(park, x, y, w, h) {
+    // posts
+    stroke(seg(x + w * 0.2, y + h, x + w * 0.2, y + h + 30), A1, 3);
+    stroke(seg(x + w * 0.8, y + h, x + w * 0.8, y + h + 30), A1, 3);
+    fill(R.rrect(x, y, w, h, 2), { a: 1, c: 0.15 });
+    var name = (park.town || park.name || 'HOME').toUpperCase();
+    var ff = fitFont(name, w - 12, 9);
+    P.text(name, x + w / 2, y + 11, ff.font, PAPER, { align: 'center' });
+    // line score: 9 little boxes x 2 rows
+    var bw = (w - 12) / 10, rr = U.rng(hash(park.id) + 77), cells = new Path2D(), nums = [];
+    for (var r = 0; r < 2; r++) for (var i = 0; i < 9; i++) {
+      var cx = x + 6 + i * bw, cy = y + 16 + r * 11;
+      cells.rect(cx, cy, bw - 2, 9);
+      nums.push([cx + (bw - 2) / 2, cy + 7.5, i < 6 ? String(rr() < 0.7 ? 0 : 1 + Math.floor(rr() * 3)) : '']);
+    }
+    fill(cells, PAPER);
+    var nf = R.mono(7, true);
+    nums.forEach(function (n) { if (n[2]) P.text(n[2], n[0], n[1], nf, A1, { align: 'center', over: true }); });
+    // bulbs
+    var bulbs = new Path2D();
+    for (var j = 0; j < 12; j++) { var bx = x + 6 + j * (w - 12) / 11; bulbs.moveTo(bx + 1.6, y + h - 5); bulbs.arc(bx, y + h - 5, 1.6, 0, TAU); }
+    fill(bulbs, C1);
+    // pennant
+    stroke(seg(x + w - 4, y, x + w - 4, y - 16), A1, 1.2);
+    fill(R.poly([x + w - 4, y - 16, x + w + 12, y - 12, x + w - 4, y - 8]), B1);
+  }
+  function drawBillboard(text, x, y, w, h) {
+    stroke(seg(x + w * 0.25, y + h, x + w * 0.25, y + h + 36), A1, 2.4);
+    stroke(seg(x + w * 0.75, y + h, x + w * 0.75, y + h + 36), A1, 2.4);
+    fill(rect(x - 2, y - 2, w + 4, h + 4), A1);
+    fill(rect(x, y, w, h), { b: 1 });
+    var parts = text.split(/\s*·\s*/);
+    if (parts.length > 1) {
+      var f1 = fitFont(parts[0], w - 10, 12), f2 = fitFont(parts.slice(1).join(' · '), w - 10, 7.5, function (px) { return R.mono(px, true); });
+      P.text(parts[0], x + w / 2, y + h * 0.5, f1.font, PAPER, { align: 'center' });
+      P.text(parts.slice(1).join(' · '), x + w / 2, y + h * 0.5 + f2.px + 2, f2.font, { c: 1 }, { align: 'center' });
+    } else {
+      var f = fitFont(text, w - 10, 14);
+      P.text(text, x + w / 2, y + h / 2 + f.px * 0.36, f.font, PAPER, { align: 'center' });
+    }
+    // lamp hoods
+    for (var i = 0; i < 3; i++) fill(R.rrect(x + w * (0.2 + i * 0.3) - 4, y - 6, 8, 4, 1.5), A1);
+  }
+
+  // ------------------------------------------------------------------ the pitcher: a flat rubber-hose figure
+  var BUILD = {
+    tall:  { leg: 3.0, torso: 2.1, sh: 0.74, hip: 0.5, limb: 0.44, belly: 0.05, head: 0.54, arm: 1.2 },
+    stout: { leg: 2.55, torso: 2.0, sh: 0.9, hip: 0.68, limb: 0.56, belly: 0.42, head: 0.58, arm: 1.12 },
+    lanky: { leg: 3.25, torso: 2.25, sh: 0.66, hip: 0.44, limb: 0.35, belly: 0, head: 0.5, arm: 1.32 },
+  };
+  var PE = 1.12, PY = 57.5, MOUND_Z = 0.83;
+
+  function lerpPose(a, b, u) {
+    var o = {};
+    for (var k in a) {
+      var va = a[k], vb = b[k];
+      o[k] = typeof va === 'number' ? lerp(va, vb, u) : [lerp(va[0], vb[0], u), lerp(va[1], vb[1], u)];
+    }
+    return o;
+  }
+  function samplePose(keys, ph) {
+    if (ph <= keys[0][0]) return keys[0][1];
+    for (var i = 1; i < keys.length; i++) {
+      if (ph <= keys[i][0]) return lerpPose(keys[i - 1][1], keys[i][1], smooth((ph - keys[i - 1][0]) / (keys[i][0] - keys[i - 1][0])));
+    }
+    return keys[keys.length - 1][1];
+  }
+  function pitcherPose(look, ph, rel) {
+    var b = BUILD[look.build] || BUILD.tall, L = b.leg, T = b.torso, w = look.windup || 'classic';
+    var hi = w === 'classic' || w === 'highkick';
+    var K0 = { hx: 0, hz: L, lean: 0, turn: 0.15, bend: 0, fa: [-0.5, 0], fb: [0.5, 0], th: [-0.2, L + T * 0.55], gl: [0.15, L + T * 0.55] };
+    var K1 = { hx: 0.05, hz: L, lean: 0, turn: 0.3, bend: 0, fa: [-0.5, 0], fb: [0.45, 0],
+      th: hi ? [-0.2, L + T + 0.95] : [-0.2, L + T * 0.62], gl: hi ? [0.15, L + T + 0.95] : [0.15, L + T * 0.62] };
+    var K2 = { hx: -0.1, hz: L * 0.99, lean: -0.05, turn: 0.9, bend: 0, fa: [-0.35, 0],
+      fb: w === 'highkick' ? [0.75, L * 1.3] : [0.35, L * 0.6], th: [-0.1, L + T * 0.66], gl: [0.15, L + T * 0.66] };
+    var K3 = { hx: 0.35, hz: L * 0.86, lean: -0.08, turn: 0.6, bend: 0.1, fa: [-0.55, 0], fb: [1.3, -0.12], th: [-1.75, L + T + 0.55], gl: [1.5, L + T * 0.82] };
+    var K4 = { hx: 0.45, hz: L * 0.82, lean: 0.22, turn: 0.1, bend: 0.3, fa: [-0.35, 0.15], fb: [1.3, -0.12], th: rel, gl: [0.7, L + T * 0.45] };
+    var K5 = { hx: 0.5, hz: L * 0.76, lean: 0.12, turn: 0.05, bend: 0.7, fa: [-0.7, 0.7], fb: [1.3, -0.12], th: [0.95, L * 0.72], gl: [0.45, L + T * 0.35] };
+    var K6 = { hx: 0.35, hz: L * 0.9, lean: 0, turn: 0, bend: 0.25, fa: [-0.35, 0], fb: [1.05, -0.06], th: [-0.65, L + 0.45], gl: [0.8, L + 0.55] };
+    if (w === 'sidearm') {
+      K3.th = [-2.15, L + T * 0.45]; K3.lean = -0.18;
+      K4.lean = -0.28; K4.bend = 0.25;
+      K5.th = [1.2, L + T * 0.15]; K5.lean = -0.05;
+    } else if (w === 'submarine') {
+      K3.hz = L * 0.72; K3.th = [-1.75, L * 0.7]; K3.lean = -0.35; K3.bend = 0.45; K3.fb = [1.5, -0.12];
+      K4.hz = L * 0.6; K4.lean = -0.6; K4.bend = 0.7; K4.fb = [1.55, -0.12]; K4.hx = 0.5;
+      K5.hz = L * 0.7; K5.th = [1.3, L + T * 0.75]; K5.lean = -0.2; K5.fb = [1.55, -0.12];
+    }
+    return samplePose([[0, K0], [0.2, K1], [0.5, K2], [0.8, K3], [1.0, K4], [1.3, K5], [2.0, K6]], ph);
+  }
+
+  function drawPitcher(pitcher, ph, time, pitch) {
+    var look = pitcher.look || {}, b = BUILD[look.build] || BUILD.tall, L = b.leg;
+    var mir = pitcher.hand === 'L' ? -1 : 1;
+    var base = proj(0, PY, MOUND_Z), s = base.s * PE;
+    var rel = pitch && pitch.release ? pitch.release
+      : (BB.Pitch && BB.Pitch.releasePoint ? BB.Pitch.releasePoint(pitcher) : { x: -1.75 * mir, z: 6 });
+    var pose = pitcherPose(look, ph, [mir * rel.x / PE, (rel.z - MOUND_Z) / PE]);
+    if (ph === 0) { var br = Math.sin(time * 2.1) * 0.035; pose.hz += br; pose.th = [pose.th[0], pose.th[1] + br]; pose.gl = [pose.gl[0], pose.gl[1] + br]; }
+    var c = Math.cos(pose.lean), sn = Math.sin(pose.lean);
+    function rot(x, z) { return [x * c + z * sn, -x * sn + z * c]; }
+    function add(p, q) { return [p[0] + q[0], p[1] + q[1]]; }
+    function X(p) { return base.x + mir * p[0] * s; }
+    function Y(p) { return base.y - p[1] * s; }
+    function pt(p) { return [X(p), Y(p)]; }
+    var hip = [pose.hx, pose.hz];
+    var chest = add(hip, rot(0, b.torso * (1 - 0.28 * pose.bend)));
+    var shw = b.sh * (1 - 0.5 * pose.turn), so = rot(shw, 0);
+    var shT = [chest[0] - so[0], chest[1] - so[1]], shG = [chest[0] + so[0], chest[1] + so[1]];
+    var head = add(chest, rot(0, 0.22 + b.head));
+    head[1] -= pose.bend * 0.3;
+    var hw = b.hip * (1 - 0.35 * pose.turn), ho = rot(hw, 0);
+    var hipT = [hip[0] - ho[0], hip[1] - ho[1]], hipG = [hip[0] + ho[0], hip[1] + ho[1]];
+    var lw = b.limb * s, kl = Math.max(0.8, s * 0.06);
+    var boss = !!pitcher.boss;
+
+    fill(ell(base.x + mir * (pose.hx * 0.6) * s, base.y + 1, 1.7 * s, 0.32 * s), { a: 0.45 }, { over: true });
+
+    function leg(hp, foot, side) {
+      var th = L * 0.53, knee = ik(hp[0], hp[1], foot[0], foot[1], th, th, side);
+      var mid = [lerp(knee[0], foot[0], 0.5), lerp(knee[1], foot[1], 0.5)];
+      limb([pt(hp), pt(knee), pt(mid)], lw * 1.12, PAPER, kl);
+      limb([pt(mid), pt(foot)], lw * 0.82, boss ? B1 : A1, kl);
+      fill(ell(X(foot) + mir * side * 0.14 * s, Y(foot) + 0.04 * s, 0.34 * s, 0.15 * s), A1);
+    }
+    function arm(sh, hand, side, glove) {
+      var el = ik(sh[0], sh[1], hand[0], hand[1], b.arm, b.arm, side);
+      limb([pt(sh), pt(el), pt(hand)], lw * 0.78, SKIN, kl);
+      limb([pt(sh), [lerp(X(sh), X(el), 0.45), lerp(Y(sh), Y(el), 0.45)]], lw * 1.02, boss ? B1 : A1, 0);
+      if (glove) {
+        var gp = R.blob(X(hand), Y(hand), 0.36 * s, 7, U.rng(5), 0.15);
+        fill(gp, GLOVE); stroke(gp, A1, kl, { over: true });
+        stroke(seg(X(hand) - 0.15 * s, Y(hand) - 0.2 * s, X(hand) - 0.15 * s, Y(hand) + 0.15 * s), PAPER, 0.7, { over: false, ko: ['a'] });
+      } else {
+        fill(circ(X(hand), Y(hand), 0.19 * s), SKIN); stroke(circ(X(hand), Y(hand), 0.19 * s), A1, kl * 0.8, { over: true });
+        if (ph < 1) fill(circ(X(hand) - mir * 0.08 * s, Y(hand) - 0.12 * s, 0.13 * s), PAPER);
+      }
+    }
+    var behind = ph > 0.62 && ph < 0.97;
+    leg(hipT, pose.fa, -1);
+    leg(hipG, pose.fb, 1);
+    if (behind) arm(shT, pose.th, 1, false);
+    // torso
+    var bl = b.belly * s, tp = new Path2D();
+    tp.moveTo(X(shT), Y(shT)); tp.lineTo(X(shG), Y(shG));
+    tp.quadraticCurveTo(X(shG) + mir * bl, (Y(shG) + Y(hipG)) / 2 + bl * 0.4, X(hipG), Y(hipG));
+    tp.lineTo(X(hipT), Y(hipT));
+    tp.quadraticCurveTo(X(shT) - mir * bl, (Y(shT) + Y(hipT)) / 2 + bl * 0.4, X(shT), Y(shT));
+    tp.closePath();
+    fill(tp, PAPER);
+    var half = R.poly([pt(chest), pt(shG), pt(hipG), pt(hip)].map(function (q) { return { x: q[0], y: q[1] }; }));
+    P.save(); P.clip(tp); fill(half, { b: 0.22 }, { over: true }); P.restore();
+    stroke(tp, A1, kl * 1.1, { over: true });
+    stroke(seg(X(chest), Y(chest) + 0.15 * s, X(hip), Y(hip) + 0.1 * s), { a: 0.7 }, kl * 0.7, { over: true });
+    stroke(seg(X(hipT), Y(hipT), X(hipG), Y(hipG)), boss ? B1 : A1, 0.22 * s, { cap: 'butt' });
+    var num = String(look.number != null ? look.number : 1);
+    P.save();
+    var nc = [lerp(chest[0], hip[0], 0.35) + 0.32 * (1 - pose.turn), lerp(chest[1], hip[1], 0.35)];
+    P.translate(X(nc), Y(nc)); P.rotate(mir * pose.lean);
+    P.text(num, 0, 0.22 * s, R.display(0.62 * s), boss ? A1 : B1, { align: 'center' });
+    P.restore();
+    // neck + head
+    var nk = add(chest, rot(0, 0.15));
+    stroke(seg(X(nk), Y(nk), X(head), Y(head)), SKIN, 0.36 * s, { cap: 'butt' });
+    var hr = b.head * s, hx = X(head), hy = Y(head);
+    fill(circ(hx - hr * 0.86, hy + hr * 0.05, hr * 0.2), SKIN); fill(circ(hx + hr * 0.86, hy + hr * 0.05, hr * 0.2), SKIN);
+    var face = ell(hx, hy, hr * 0.84, hr);
+    fill(face, SKIN); stroke(face, A1, kl * 0.9, { over: true });
+    var hair = look.hair || 'none', inkH = { a: 0.9 };
+    if (hair === 'beard') {
+      var bd = new Path2D(); bd.ellipse(hx, hy + hr * 0.15, hr * 0.86, hr * 0.92, 0, 0.05, PI - 0.05); bd.closePath();
+      fill(bd, inkH);
+      fill(ell(hx, hy + hr * 0.45, hr * 0.22, hr * 0.12), { b: 0.5, c: 0.3 });
+    } else if (hair === 'sideburns') {
+      fill(rect(hx - hr * 0.84, hy - hr * 0.3, hr * 0.26, hr * 0.75), inkH);
+      fill(rect(hx + hr * 0.58, hy - hr * 0.3, hr * 0.26, hr * 0.75), inkH);
+    }
+    // eyes, nose, mouth
+    var eff = ph > 0.75 && ph < 1.35;
+    fill(circ(hx - hr * 0.3, hy - hr * 0.08, Math.max(0.9, hr * 0.1)), A1);
+    fill(circ(hx + hr * 0.3, hy - hr * 0.08, Math.max(0.9, hr * 0.1)), A1);
+    fill(circ(hx, hy + hr * 0.14, hr * 0.13), { b: 0.55, c: 0.6 }, { over: true });
+    if (eff) { fill(rect(hx - hr * 0.26, hy + hr * 0.38, hr * 0.52, hr * 0.16), PAPER); stroke(rect(hx - hr * 0.26, hy + hr * 0.38, hr * 0.52, hr * 0.16), A1, 0.7, { over: true }); }
+    else if (hair !== 'beard') stroke(seg(hx - hr * 0.2, hy + hr * 0.45, hx + hr * 0.2, hy + hr * 0.45), A1, Math.max(0.8, hr * 0.08));
+    if (hair === 'mustache') {
+      var ms = new Path2D();
+      ms.moveTo(hx - hr * 0.6, hy + hr * 0.25);
+      ms.quadraticCurveTo(hx - hr * 0.3, hy + hr * 0.45, hx, hy + hr * 0.28);
+      ms.quadraticCurveTo(hx + hr * 0.3, hy + hr * 0.45, hx + hr * 0.6, hy + hr * 0.25);
+      stroke(ms, inkH, hr * 0.2);
+    }
+    // cap: dome + bill (seen from the front)
+    var cap = new Path2D(); cap.ellipse(hx, hy - hr * 0.3, hr * 0.92, hr * 0.85, 0, PI, TAU); cap.closePath();
+    fill(cap, boss ? B1 : A1);
+    fill(ell(hx, hy - hr * 0.3, hr * 1.05, hr * 0.24), boss ? { b: 1, a: 0.4 } : { a: 0.7, b: 0.2 });
+    fill(circ(hx, hy - hr * 0.72, hr * 0.17), boss ? C1 : { c: 1 });
+    // arms (throwing arm in front unless it is cocked behind the body)
+    arm(shG, pose.gl, -1, true);
+    if (!behind) arm(shT, pose.th, 1, false);
+    return { hand: pt(pose.th) };
+  }
+
+  // ------------------------------------------------------------------ the batter: big flat figure, seen from behind
+  function batterBase() {
+    var zl = proj(-K.ZONE.xMax, 0, 0).x, bs = S.cam.f / 16.6;
+    return { fx: zl - 1.45 * bs, fy: proj(0, 0.4, 0).y, s: bs };
+  }
+  var BK = {
+    stance: { hip: [0.05, 2.65], nsh: [-0.42, 4.42], fsh: [0.5, 4.64], head: [0.12, 5.12], hands: [0.5, 4.78], th: -122, k: 0.86, ff: [0.4, 0.42], bf: [-0.22, 0], turn: 0.1, tilt: 0 },
+    load:   { hip: [-0.06, 2.7], nsh: [-0.52, 4.44], fsh: [0.4, 4.68], head: [0.08, 5.1], hands: [0.2, 4.98], th: -142, k: 0.8, ff: [0.28, 0.85], bf: [-0.22, 0], turn: 0.0, tilt: 0 },
+    launch: { hip: [0.16, 2.6], nsh: [-0.25, 4.32], fsh: [0.5, 4.6], head: [0.15, 5.08], hands: [0.62, 4.25], th: -198, k: 0.45, ff: [0.58, 0.42], bf: [-0.18, 0.02], turn: 0.35, tilt: 0 },
+    contact:{ hip: [0.26, 2.55], nsh: [0.05, 4.25], fsh: [0.45, 4.62], head: [0.2, 5.05], hands: [0.6, 4], th: -356, k: 1.0, ff: [0.62, 0.42], bf: [-0.1, 0.1], turn: 0.75, tilt: 0 },
+    extend: { hip: [0.3, 2.56], nsh: [0.3, 4.3], fsh: [0.22, 4.7], head: [0.2, 5.06], hands: [1.1, 4.3], th: -392, k: 0.62, ff: [0.62, 0.42], bf: [-0.06, 0.22], turn: 0.92, tilt: 0 },
+    finish: { hip: [0.26, 2.6], nsh: [0.46, 4.45], fsh: [-0.15, 4.66], head: [0.16, 5.1], hands: [0.55, 5.12], th: -532, k: 0.8, ff: [0.62, 0.42], bf: [-0.02, 0.38], turn: 1.0, tilt: 0 },
+    whiff:  { hip: [0.12, 2.48], nsh: [0.52, 4.3], fsh: [-0.38, 4.48], head: [0.02, 4.96], hands: [0.3, 4.55], th: -648, k: 0.95, ff: [0.8, 0.32], bf: [-0.3, 0.3], turn: 1.0, tilt: 0.3 },
+  };
+  function batterPose(view, bb) {
+    var sw = view.swing, ld = view.loading, st = BK.stance;
+    var cp = contactScreen(view.pitch);
+    var start = ld != null ? lerpPose(st, BK.load, smooth(ld)) : st;
+    if (!sw) {
+      var p = start;
+      var bob = Math.sin((view.time || 0) * 2.3) * 0.04;
+      p = lerpPose(p, p, 0); p.hands = [p.hands[0], p.hands[1] + bob]; p.th += Math.sin((view.time || 0) * 1.7) * 2;
+      return p;
+    }
+    if (sw.power && ld == null) start = BK.load;
+    // contact hands: put the barrel's sweet spot on the pitch's plate crossing
+    var Lb = 2.85 * bb.s, sweet = 0.68 * Lb;
+    var thc = clamp(3 + (cp.y - proj(0, 0, 2.5).y) * 0.05, -25, 25);
+    var hx = cp.x - Math.cos(U.rad(thc)) * sweet, hy = cp.y - Math.sin(U.rad(thc)) * sweet;
+    var hu = clamp((hx - bb.fx) / bb.s, 0.2, 1.7), hv = clamp((bb.fy - hy) / bb.s, 2.2, 5.0);
+    var ax = bb.fx + hu * bb.s, ay = bb.fy - hv * bb.s;
+    thc = U.deg(Math.atan2(cp.y - ay, cp.x - ax));
+    var C = lerpPose(BK.contact, BK.contact, 0); C.hands = [hu, hv]; C.th = thc - 360;
+    var E = lerpPose(BK.extend, BK.extend, 0); E.hands = [hu + 0.5, hv + 0.25];
+    var whiff = sw.result && !sw.result.contact;
+    var lag = K.SWING_LAG || 0.07;
+    var keys = [[0, start], [lag * 0.5, BK.launch], [lag, C], [lag + 0.05, E], [lag + 0.17, BK.finish]];
+    if (whiff) keys.push([lag + 0.3, BK.whiff]);
+    var pz = samplePose(keys, sw.t);
+    if (whiff && sw.t > lag + 0.3) { pz = lerpPose(pz, pz, 0); pz.tilt += Math.sin((sw.t - lag - 0.3) * 9) * 0.06 * Math.max(0, 1 - (sw.t - lag - 0.3)); }
+    return pz;
+  }
+  function contactScreen(pitch) {
+    var pl = pitch && pitch.plate ? pitch.plate : { x: 0, z: 2.5 };
+    var q = proj(pl.x, 0, pl.z);
+    return { x: q.x, y: q.y };
+  }
+  function batInks(bat) {
+    var lk = (bat && bat.look) || {}, wood = lk.wood || 'mid';
+    var w = wood === 'light' ? { c: 0.8, b: 0.15 } : wood === 'dark' ? { c: 1, b: 0.62, a: 0.35 } : wood === 'ink' ? { a: 1, b: 0.2 }
+      : wood === 'gold' ? { c: 1, b: 0.28 } : { c: 1, b: 0.36 };
+    var tape = {}; tape[lk.tape || 'a'] = 1;
+    if (lk.tape === 'c') tape.a = 0.25;
+    return { wood: w, tape: tape, mark: lk.mark || 'none' };
+  }
+  function drawBat(hx, hy, th, len, wid, bat, kl) {
+    var bi = batInks(bat), d = U.rad(th), dx = Math.cos(d), dy = Math.sin(d), nx = -dy, ny = dx;
+    var k0 = -0.1 * len, k1 = len;
+    var w0 = wid * 0.42, w1 = wid;
+    var p = new Path2D();
+    p.moveTo(hx + dx * k0 + nx * w0, hy + dy * k0 + ny * w0);
+    p.lineTo(hx + dx * len * 0.35 + nx * w0 * 1.1, hy + dy * len * 0.35 + ny * w0 * 1.1);
+    p.quadraticCurveTo(hx + dx * len * 0.62 + nx * w1, hy + dy * len * 0.62 + ny * w1, hx + dx * k1 * 0.97 + nx * w1, hy + dy * k1 * 0.97 + ny * w1);
+    p.arc(hx + dx * k1 * 0.97, hy + dy * k1 * 0.97, w1, d - PI / 2, d + PI / 2);
+    p.lineTo(hx + dx * len * 0.62 - nx * w1 * 0.98, hy + dy * len * 0.62 - ny * w1 * 0.98);
+    p.quadraticCurveTo(hx + dx * len * 0.45 - nx * w0 * 1.3, hy + dy * len * 0.45 - ny * w0 * 1.3, hx + dx * len * 0.35 - nx * w0 * 1.1, hy + dy * len * 0.35 - ny * w0 * 1.1);
+    p.lineTo(hx + dx * k0 - nx * w0, hy + dy * k0 - ny * w0);
+    p.closePath();
+    stroke(p, A1, kl * 2);
+    fill(p, bi.wood);
+    // grain highlight
+    stroke(seg(hx + dx * len * 0.45 + nx * w1 * 0.35, hy + dy * len * 0.45 + ny * w1 * 0.35, hx + dx * len * 0.92 + nx * w1 * 0.45, hy + dy * len * 0.92 + ny * w1 * 0.45), PAPER, Math.max(1, w1 * 0.22), { ko: ['a', 'b', 'c'] });
+    if (bi.mark === 'stripes' || bi.mark === 'dots' || bi.mark === 'star') {
+      for (var i = 0; i < 3; i++) {
+        var u = len * (0.55 + i * 0.12);
+        if (bi.mark === 'dots' || bi.mark === 'star') fill(circ(hx + dx * u, hy + dy * u, w1 * 0.35), bi.mark === 'star' ? C1 : { b: 1 }, { over: true });
+        else stroke(seg(hx + dx * u + nx * w1, hy + dy * u + ny * w1, hx + dx * (u + 6) - nx * w1, hy + dy * (u + 6) - ny * w1), B1, w1 * 0.35, { over: true });
+      }
+    }
+    // tape + knob
+    stroke(seg(hx + dx * k0 * 0.2, hy + dy * k0 * 0.2, hx + dx * len * 0.22, hy + dy * len * 0.22), bi.tape, w0 * 2.05, { cap: 'butt' });
+    fill(ell(hx + dx * k0, hy + dy * k0, w0 * 1.5, w0 * 1.25, d), A1);
+  }
+  function drawBatter(view) {
+    var bb = batterBase(), s = bb.s, pz = batterPose(view, bb), kl = Math.max(1, s * 0.03);
+    function X(p) { return bb.fx + p[0] * s; }
+    function Y(p) { return bb.fy - p[1] * s; }
+    function pt(p) { return [X(p), Y(p)]; }
+    var lw = 0.5 * s;
+    fill(ell(bb.fx + 0.2 * s, bb.fy + 0.1 * s, 1.15 * s, 0.26 * s), { a: 0.38 }, { over: true });
+    function leg(hp, foot, scale) {
+      var th = 1.38, knee = ik(hp[0], hp[1], foot[0], foot[1], th, th, 1);
+      var mid = [lerp(knee[0], foot[0], 0.5), lerp(knee[1], foot[1], 0.5)];
+      limb([pt(hp), pt(knee), pt(mid)], lw * 1.15 * scale, PAPER, kl);
+      stroke(curve([pt(hp), pt(knee), pt(mid)]), { a: 0.35 }, lw * 0.25 * scale, { over: true });
+      limb([pt(mid), pt(foot)], lw * 0.85 * scale, B1, kl);
+      fill(ell(X(foot) + 0.12 * s, Y(foot), 0.36 * s * scale, 0.15 * s * scale), A1);
+    }
+    var hipF = [pz.hip[0] + 0.3, pz.hip[1] + 0.05], hipN = [pz.hip[0] - 0.28, pz.hip[1] - 0.04];
+    leg(hipF, pz.ff, 0.92);
+    // far arm (mostly hidden behind the torso)
+    var hands = pz.hands;
+    var elF = ik(pz.fsh[0], pz.fsh[1], hands[0], hands[1], 1.05, 1.05, -1);
+    limb([pt(pz.fsh), pt(elF), pt(hands)], lw * 0.62, SKIN, kl);
+    leg(hipN, pz.bf, 1.0);
+    // torso (jersey, hero ink = B)
+    var tp = new Path2D(), hr = [pz.hip[0] + 0.45, pz.hip[1] + 0.02], hl = [pz.hip[0] - 0.42, pz.hip[1] - 0.05];
+    tp.moveTo(X(pz.nsh), Y(pz.nsh));
+    tp.quadraticCurveTo((X(pz.nsh) + X(pz.fsh)) / 2, Math.min(Y(pz.nsh), Y(pz.fsh)) - 0.12 * s, X(pz.fsh), Y(pz.fsh));
+    tp.quadraticCurveTo(X(pz.fsh) + 0.12 * s, (Y(pz.fsh) + Y(hr)) / 2, X(hr), Y(hr));
+    tp.lineTo(X(hl), Y(hl));
+    tp.quadraticCurveTo(X(pz.nsh) - 0.2 * s, (Y(pz.nsh) + Y(hl)) / 2, X(pz.nsh), Y(pz.nsh));
+    tp.closePath();
+    stroke(tp, A1, kl * 2);
+    fill(tp, B1);
+    var back = clamp(1 - pz.turn * 1.15, 0, 1);
+    if (back > 0.12) {
+      P.save();
+      var cxn = lerp(X(pz.nsh), X(pz.fsh), 0.5) - (1 - back) * 0.2 * s, cyn = lerp(Y(pz.nsh), Y(hl), 0.42);
+      P.translate(cxn, cyn); P.scale(back, 1);
+      P.text('7', 0, 0.42 * s, R.display(1.15 * s), PAPER, { align: 'center' });
+      P.text('7', 0, 0.42 * s, R.display(1.15 * s), { c: 0.35 }, { align: 'center', over: true });
+      P.restore();
+    } else {
+      stroke(seg(lerp(X(pz.nsh), X(pz.fsh), 0.6), Y(pz.fsh) + 0.2 * s, lerp(X(hl), X(hr), 0.6), Y(hr) - 0.1 * s), PAPER, kl * 1.5);
+    }
+    stroke(seg(X(hl), Y(hl), X(hr), Y(hr)), A1, 0.2 * s, { cap: 'butt' });
+    // head: neck, ear, helmet from behind
+    var hd = pz.head, hx = X(hd), hy = Y(hd), r = 0.5 * s;
+    stroke(seg(hx - 0.05 * s, hy + 0.2 * s, hx - 0.02 * s, hy + 0.62 * s), SKIN, 0.42 * s, { cap: 'butt' });
+    P.save(); P.translate(hx, hy); P.rotate(pz.tilt || 0);
+    fill(circ(-0.32 * s, 0.12 * s, 0.16 * s), SKIN);
+    var hm = new Path2D(); hm.arc(0, 0, r, PI * 0.92, PI * 2.12); hm.quadraticCurveTo(r * 0.6, r * 0.62, 0, r * 0.55); hm.quadraticCurveTo(-r * 0.7, r * 0.6, -r * 0.98, r * 0.22); hm.closePath();
+    stroke(hm, A1, kl * 2);
+    fill(hm, A1);
+    fill(R.poly([r * 0.55, -r * 0.05, r * 1.35, r * 0.18, r * 1.25, r * 0.36, r * 0.5, r * 0.32]), { a: 1, b: 0.3 });
+    var ear = ell(-r * 0.55, r * 0.35, r * 0.42, r * 0.36);
+    fill(ear, A1);
+    fill(ell(-r * 0.55, r * 0.35, r * 0.18, r * 0.15), { a: 0.6 }, {});
+    var sh = new Path2D(); sh.arc(0, 0, r * 0.78, PI * 1.12, PI * 1.55); sh.arc(0, 0, r * 0.6, PI * 1.55, PI * 1.12, true); sh.closePath();
+    fill(sh, { b: 0.55 }, { over: true });
+    fill(circ(r * 0.05, -r * 0.62, r * 0.12), PAPER);
+    P.restore();
+    // near arm (right arm)
+    var elN = ik(pz.nsh[0], pz.nsh[1], hands[0], hands[1], 1.05, 1.05, -1);
+    limb([pt(pz.nsh), pt(elN), pt(hands)], lw * 0.66, SKIN, kl);
+    limb([pt(pz.nsh), [lerp(X(pz.nsh), X(elN), 0.5), lerp(Y(pz.nsh), Y(elN), 0.5)]], lw * 0.9, B1, kl);
+    // bat + gloves
+    var Lb = 2.85 * s * pz.k;
+    drawBat(X(hands), Y(hands), pz.th, Lb, 0.11 * s, view.bat, kl);
+    var g1 = circ(X(hands) - 0.06 * s, Y(hands), 0.17 * s), g2 = circ(X(hands) + 0.1 * s, Y(hands) + 0.02 * s, 0.16 * s);
+    fill(g1, C1); stroke(g1, A1, kl, { over: true }); fill(g2, C1); stroke(g2, A1, kl, { over: true });
+    return { hands: pt(hands), th: pz.th };
+  }
+
+  // ------------------------------------------------------------------ catcher (foreground, low) + mitt
+  function catcherBase() {
+    var zb = proj(0, 0, K.ZONE.zMin).y, cs = S.cam.f / 14;
+    var top = Math.max(zb + 44, S.H * 0.75);
+    return { x: proj(0, 0, 0).x - 6, y: top + 2.9 * cs, s: cs };
+  }
+  function mittTarget(view) {
+    var cb = catcherBase(), rest = [cb.x - 0.95 * cb.s, cb.y - 1.25 * cb.s];
+    var pitch = view.pitch, t = view.pitchT;
+    if (!pitch || t == null || view.windup != null) return { x: rest[0], y: rest[1], k: 0 };
+    var T = pitch.T || 0.75, k = smooth((t - (T - 0.32)) / 0.26);
+    var q = proj(pitch.plate.x, -2.4, pitch.plate.z - 0.1);
+    return { x: lerp(rest[0], q.x, k), y: lerp(rest[1], q.y, k), k: k };
+  }
+  function drawCatcherBody(view) {
+    var cb = catcherBase(), s = cb.s, x = cb.x, y = cb.y, kl = 1.2;
+    function X(u) { return x + u * s; }
+    function Y(v) { return y - v * s; }
+    // back + shoulders (opposing team: paper uniform, A shading, B gear straps)
+    var bk = new Path2D();
+    bk.moveTo(X(-1.25), Y(-0.4)); bk.lineTo(X(-1.2), Y(1.55));
+    bk.quadraticCurveTo(X(-1.1), Y(2.08), X(-0.4), Y(2.12)); bk.lineTo(X(0.4), Y(2.12));
+    bk.quadraticCurveTo(X(1.1), Y(2.08), X(1.2), Y(1.55)); bk.lineTo(X(1.25), Y(-0.4)); bk.closePath();
+    stroke(bk, A1, kl * 2); fill(bk, PAPER);
+    fill(rect(X(0.15), Y(2.1), 1.1 * s, 2.6 * s), { a: 0.22 }, { over: true });
+    var st = new Path2D();
+    st.moveTo(X(-0.95), Y(1.9)); st.lineTo(X(0.7), Y(0.2)); st.moveTo(X(0.95), Y(1.9)); st.lineTo(X(-0.7), Y(0.2));
+    stroke(st, { b: 1 }, 0.2 * s);
+    P.text(String(((hash(view.pitcher && view.pitcher.id) % 60) + 2)), X(0), Y(0.75), R.display(0.62 * s), A1, { align: 'center' });
+    // helmet (worn backwards) + mask straps
+    var hx = X(0.05), hy = Y(2.48), r = 0.44 * s;
+    fill(circ(hx, hy, r + kl), A1);
+    fill(circ(hx, hy, r), A1);
+    fill(rect(hx - r * 0.95, hy - r * 0.05, r * 1.9, r * 0.16), { b: 0.8 });
+    fill(circ(hx - r * 0.3, hy - r * 0.45, r * 0.16), { a: 0.6 }, {});
+    fill(R.poly([hx - r * 0.5, hy - r * 0.86, hx + r * 0.5, hy - r * 0.86, hx + r * 0.36, hy - r * 1.18, hx - r * 0.36, hy - r * 1.18]), { a: 0.85, b: 0.3 });
+    // right arm tucked behind the back
+    limb([[X(1.15), Y(1.7)], [X(1.3), Y(1.0)], [X(0.85), Y(0.7)]], 0.36 * s, PAPER, kl);
+  }
+  function drawMitt(view, front) {
+    var cb = catcherBase(), s = cb.s, m = mittTarget(view);
+    var sh = [cb.x - 0.95 * s, cb.y - 1.85 * s];
+    if (!front) {
+      limb([sh, [lerp(sh[0], m.x, 0.5) - 0.3 * s, lerp(sh[1], m.y, 0.5) + 0.25 * s], [m.x, m.y]], 0.34 * s, PAPER, 1.2);
+      return;
+    }
+    var w = 0.5 * s;
+    var mp = new Path2D();
+    mp.moveTo(m.x - w * 0.95, m.y + w * 0.65);
+    mp.quadraticCurveTo(m.x - w * 1.15, m.y - w * 0.5, m.x - w * 0.45, m.y - w * 0.95);
+    mp.quadraticCurveTo(m.x + w * 0.2, m.y - w * 1.25, m.x + w * 0.85, m.y - w * 0.7);
+    mp.quadraticCurveTo(m.x + w * 1.15, m.y + w * 0.1, m.x + w * 0.7, m.y + w * 0.7);
+    mp.closePath();
+    stroke(mp, A1, 2.4); fill(mp, GLOVE);
+    var lc = new Path2D();
+    lc.moveTo(m.x - w * 0.6, m.y - w * 0.55); lc.quadraticCurveTo(m.x, m.y - w * 0.8, m.x + w * 0.55, m.y - w * 0.45);
+    lc.moveTo(m.x - w * 0.5, m.y + w * 0.35); lc.lineTo(m.x + w * 0.45, m.y + w * 0.35);
+    stroke(lc, PAPER, 1.3, { ko: ['a', 'b', 'c'] });
+    fill(circ(m.x - w * 0.1, m.y + w * 0.05, w * 0.18), A1);
+  }
+
+  // ------------------------------------------------------------------ ball, zone, assist ring, contact
+  function ballR(s) { return Math.max(1.7, K.BALL_R * s * 1.18); }
+  function drawBallSprite(x, y, r, spin, inks) {
+    fill(circ(x, y, r + Math.max(0.7, r * 0.1)), A1);
+    fill(circ(x, y, r), PAPER);
+    if (r > 2.2) {
+      var c = Math.cos(spin), s = Math.sin(spin), p = new Path2D();
+      for (var side = -1; side <= 1; side += 2) {
+        for (var i = 0; i <= 10; i++) {
+          var a = -0.95 + 1.9 * i / 10, px = side * (r * 1.05 - Math.cos(a) * r * 0.55), py = Math.sin(a) * r * 0.75;
+          var rx = x + px * c - py * s, ry = y + px * s + py * c;
+          if (i) p.lineTo(rx, ry); else p.moveTo(rx, ry);
+        }
+      }
+      stroke(p, inks || B1, Math.max(0.8, r * 0.16), { over: true });
+      P.save(); P.clip(circ(x, y, r)); fill(circ(x + r * 0.45, y + r * 0.45, r * 0.85), { a: 0.22 }, { over: true }); P.restore();
+    }
+  }
+  function drawPitchBall(view) {
+    var pitch = view.pitch, t = view.pitchT;
+    var p = pitchPos(pitch, t), q = proj(p.x, p.y, p.z), r = ballR(q.s);
+    // ground shadow helps read height
+    var g = proj(p.x, p.y, 0);
+    if (p.y > 1) fill(ell(g.x, g.y, r * 1.3, r * 0.38), { a: 0.38 }, { over: true });
+    // riso speed trail: C body + B ghost, misregistered by design
+    if (t < (pitch.T || 0.8) + 0.02) {
+      var pts = [], n = 6;
+      for (var i = 0; i <= n; i++) {
+        var tt = Math.max(0, t - i * 0.016), pp = pitchPos(pitch, tt), qq = proj(pp.x, pp.y, pp.z);
+        pts.push([qq.x, qq.y, ballR(qq.s) * (1 - i / (n + 1))]);
+      }
+      var tr = new Path2D();
+      for (i = 0; i <= n; i++) { tr.moveTo(pts[i][0] + pts[i][2], pts[i][1]); tr.arc(pts[i][0], pts[i][1], pts[i][2], 0, TAU); }
+      fill(tr, { c: 0.85 }, { over: true });
+      var tr2 = new Path2D();
+      for (i = 2; i <= n; i += 2) { tr2.moveTo(pts[i][0] + pts[i][2] * 0.6 + 2, pts[i][1] - 1); tr2.arc(pts[i][0] + 2, pts[i][1] - 1, pts[i][2] * 0.6, 0, TAU); }
+      fill(tr2, { b: 0.45 }, { over: true });
+    }
+    drawBallSprite(q.x, q.y, r, t * 38);
+    return { x: q.x, y: q.y, r: r };
+  }
+  function drawZone(view) {
+    var x0 = -K.ZONE.xMax, x1 = K.ZONE.xMax, z0 = K.ZONE.zMin, z1 = K.ZONE.zMax;
+    var a = proj(x0, 0, z1), b = proj(x1, 0, z0);
+    var p = rect(a.x, a.y, b.x - a.x, b.y - a.y);
+    stroke(p, { a: 1 }, 1.4, { over: true, dash: [0.1, 5.2] });
+    var L = 9, br = new Path2D();
+    br.moveTo(a.x, a.y + L); br.lineTo(a.x, a.y); br.lineTo(a.x + L, a.y);
+    br.moveTo(b.x - L, a.y); br.lineTo(b.x, a.y); br.lineTo(b.x, a.y + L);
+    br.moveTo(b.x, b.y - L); br.lineTo(b.x, b.y); br.lineTo(b.x - L, b.y);
+    br.moveTo(a.x + L, b.y); br.lineTo(a.x, b.y); br.lineTo(a.x, b.y - L);
+    stroke(br, { a: 1 }, 2, { over: true, cap: 'square' });
+    // knee / letters tick marks in C
+    stroke(seg(a.x - 6, (a.y + b.y) / 2, a.x - 2, (a.y + b.y) / 2), C1, 2, { over: true });
+    stroke(seg(b.x + 2, (a.y + b.y) / 2, b.x + 6, (a.y + b.y) / 2), C1, 2, { over: true });
+  }
+  function drawAssist(view) {
+    var pitch = view.pitch, t = view.pitchT, T = pitch.T || 0.8, f = t / T;
+    if (f < 0.45 || f > 1.02) return;
+    var u = clamp((f - 0.45) / 0.55, 0, 1);
+    var q = proj(pitch.plate.x, 0, pitch.plate.z), rb = ballR(q.s);
+    var r = rb * (1.25 + 4.2 * (1 - u) * (1 - u));
+    var dash = Math.max(2, r * 0.42);
+    var ring = circ(q.x, q.y, r);
+    stroke(ring, { b: 1 }, 2.4, { over: true, dash: [dash, dash * 0.7], cap: 'butt' });
+    stroke(circ(q.x, q.y, rb * 1.1), { c: 1 }, 1.6, { over: true });
+    if (u > 0.85) fill(circ(q.x, q.y, rb * 0.35), { b: 1 }, { over: true });
+  }
+  function contactInfo(view) {
+    var sw = view.swing, lag = K.SWING_LAG || 0.07;
+    if (!sw || !sw.result || !sw.result.contact || sw.t < lag || !view.pitch) return null;
+    var since = sw.t - lag, pt0 = Math.max(0, (view.pitchT || 0) - since);
+    var o = pitchPos(view.pitch, Math.min(pt0, (view.pitch.T || 0.8) + 0.05));
+    return { since: since, origin: o, res: sw.result };
+  }
+  function drawContact(view, ci) {
+    var res = ci.res, since = ci.since, o = ci.origin;
+    var q0 = proj(o.x, Math.max(0, o.y), o.z);
+    // the ball leaves along its launch direction (slowed down so you see it go)
+    var v = Math.max(40, res.ev || 80) * 1.4667 * 0.5, la = U.rad(res.la || 15), sp = U.rad(res.spray || 0);
+    var bx = o.x + v * Math.cos(la) * Math.sin(sp) * since, by = Math.max(0, o.y) + v * Math.cos(la) * Math.cos(sp) * since;
+    var bz = o.z + v * Math.sin(la) * since - 16 * since * since;
+    var big = res.sweet ? 1.45 : 0.75 + 0.5 * (res.quality || 0.5);
+    // burst
+    var bt = clamp(since / 0.32, 0, 1);
+    if (bt < 1) {
+      var R0 = (22 + 60 * U.easeOut(bt)) * big, tone = 1 - bt * bt;
+      var rr = U.rng(17);
+      fill(R.star(q0.x, q0.y, R0, R0 * 0.45, 11, bt * 0.4, 0.35, rr), { c: tone }, { over: true });
+      fill(R.star(q0.x + 2, q0.y - 2, R0 * 0.62, R0 * 0.3, 9, -bt * 0.5 + 0.2, 0.3, rr), { b: tone * 0.9 }, { over: true });
+      var ln = new Path2D();
+      for (var i = 0; i < 12; i++) {
+        var a = i / 12 * TAU + 0.13, r1 = R0 * (0.9 + bt * 0.6), r2 = r1 + 14 * big;
+        ln.moveTo(q0.x + Math.cos(a) * r1, q0.y + Math.sin(a) * r1); ln.lineTo(q0.x + Math.cos(a) * r2, q0.y + Math.sin(a) * r2);
+      }
+      stroke(ln, A1, 2.2 * (1 - bt) + 0.5, { over: true });
+    }
+    if (by > 0.5) {
+      var qb = proj(bx, by, Math.max(0.2, bz));
+      if (qb.y > -40 && qb.x > -60 && qb.x < S.W + 60) {
+        var r = ballR(qb.s);
+        var tail = new Path2D(); tail.moveTo(q0.x, q0.y); tail.lineTo(qb.x, qb.y);
+        stroke(tail, { c: 0.8 }, Math.max(1.5, r * 1.2), { over: true });
+        stroke(tail, { b: 0.5 }, Math.max(0.8, r * 0.5), { over: true, dash: [3, 4] });
+        drawBallSprite(qb.x, qb.y, r, since * 30);
+      }
+    }
+  }
+
+  // ------------------------------------------------------------------ FIELD scene: a riso stadium map, high behind home
+  function makeCam(px, py, pz, tx, ty, tz) {
+    var fx = tx - px, fy = ty - py, fz = tz - pz, fl = Math.sqrt(fx * fx + fy * fy + fz * fz);
+    fx /= fl; fy /= fl; fz /= fl;
+    var rx = fy, ry = -fx, rl = Math.sqrt(rx * rx + ry * ry); rx /= rl; ry /= rl;
+    var ux = ry * fz, uy = -rx * fz, uz = rx * fy - ry * fx;
+    return { p: [px, py, pz], f: [fx, fy, fz], r: [rx, ry, 0], u: [ux, uy, uz], k: 1, cx: 0, cy: 0 };
+  }
+  function cproj(c, x, y, z) {
+    var dx = x - c.p[0], dy = y - c.p[1], dz = z - c.p[2];
+    var zc = dx * c.f[0] + dy * c.f[1] + dz * c.f[2]; if (zc < 5) zc = 5;
+    var xc = dx * c.r[0] + dy * c.r[1], yc = dx * c.u[0] + dy * c.u[1] + dz * c.u[2];
+    var s = c.k / zc;
+    return { x: c.cx + xc * s, y: c.cy - yc * s, s: s };
+  }
+  function layoutField(park) {
+    var W = S.W, H = S.H, c = makeCam(0, -250, 300, 0, 205, 0);
+    var pts = [[0, 0, 0]], i;
+    for (i = -45; i <= 45; i += 5) {
+      var f = fenceAt(park, i), r = U.rad(i);
+      pts.push([f.dist * Math.sin(r), f.dist * Math.cos(r), f.height]);
+    }
+    var mnx = 1e9, mxx = -1e9, home = cproj(c, 0, 0, 0), mny = 1e9;
+    pts.forEach(function (p) { var q = cproj(c, p[0], p[1], p[2]); mnx = Math.min(mnx, q.x); mxx = Math.max(mxx, q.x); mny = Math.min(mny, q.y); });
+    var k = (W * 0.97) / (mxx - mnx);
+    var kh = (H * 0.79 - H * 0.24) / (home.y - mny);
+    k = Math.min(k, kh);
+    c.k = k; c.cx = W / 2 - k * (mnx + mxx) / 2; c.cy = H * 0.79 - k * home.y;
+    S.fcam = c;
+  }
+  function fp(x, y, z) { return cproj(S.fcam, x, y, z || 0); }
+  function fpoly(pts) { // world [x,y,z] -> Path2D
+    var p = new Path2D();
+    for (var i = 0; i < pts.length; i++) { var q = fp(pts[i][0], pts[i][1], pts[i][2] || 0); if (i) p.lineTo(q.x, q.y); else p.moveTo(q.x, q.y); }
+    p.closePath();
+    return p;
+  }
+  function sprayPt(sp, d, z) { var r = U.rad(sp); return [d * Math.sin(r), d * Math.cos(r), z || 0]; }
+
+  function drawFieldBackground(park) {
+    var W = S.W, H = S.H, ft = feat(park), seed = hash(park.id), rng = U.rng(seed + 40), i, p, sp, q;
+    // surroundings: a little town map around the park
+    var land = ft.skyline === 'desert' ? { b: 0.4, c: 0.75 } : ft.skyline === 'barns' ? { a: 0.22, c: 0.75 } :
+      ft.skyline === 'pines' ? { a: 0.5, c: 0.6 } : { a: 0.16, b: 0.08 };
+    fill(rect(-M, -M, W + 2 * M, H + 2 * M), land);
+    // street grid / field patches (world coords far beyond the fence)
+    var grid = new Path2D(), patches = new Path2D(), trees = new Path2D();
+    for (var gx = -900; gx <= 900; gx += 120) { var a1 = fp(gx, 380, 0), a2 = fp(gx, 1400, 0); grid.moveTo(a1.x, a1.y); grid.lineTo(a2.x, a2.y); }
+    for (var gy = 420; gy <= 1400; gy += 110) { var b1 = fp(-900, gy, 0), b2 = fp(900, gy, 0); grid.moveTo(b1.x, b1.y); grid.lineTo(b2.x, b2.y); }
+    for (i = 0; i < 26; i++) {
+      var px = -800 + rng() * 1600, py = 450 + rng() * 900;
+      if (ft.skyline === 'barns' || ft.skyline === 'desert') patches.addPath(fpoly([[px, py], [px + 90, py], [px + 90, py + 70], [px, py + 70]]));
+      else patches.addPath(fpoly([[px, py], [px + 60, py], [px + 60, py + 40], [px, py + 40]]));
+    }
+    fill(patches, ft.skyline === 'barns' ? { b: 0.3, c: 0.9 } : ft.skyline === 'desert' ? { b: 0.6, c: 0.9 } : { a: 0.4, b: 0.15 });
+    stroke(grid, PAPER, ft.skyline === 'barns' || ft.skyline === 'desert' ? 1.2 : 2.2);
+    for (i = 0; i < 120; i++) {
+      var tx = -900 + rng() * 1800, ty = 380 + rng() * 1000, tq = fp(tx, ty, 0), tr = Math.max(1.4, 9 * tq.s);
+      trees.moveTo(tq.x + tr, tq.y); trees.arc(tq.x, tq.y, tr, 0, TAU);
+    }
+    fill(trees, ft.skyline === 'desert' ? { a: 0.6, c: 0.6 } : { a: 0.75, c: 1 });
+    // water feature beyond the fence
+    var water = ft.water || 'none';
+    if (water !== 'none') {
+      var c0 = water === 'left' ? -75 : water === 'right' ? 25 : -25, c1 = c0 + 50;
+      var wp = [];
+      for (sp = c0; sp <= c1; sp += 2) wp.push(sprayPt(sp, fenceAt(park, sp).dist + 85));
+      for (sp = c1; sp >= c0; sp -= 2) wp.push(sprayPt(sp, fenceAt(park, sp).dist + 420));
+      p = fpoly(wp); fill(p, { a: 0.55, c: 0.12 });
+      var wv = new Path2D();
+      for (i = 0; i < 60; i++) {
+        var s2 = c0 + rng() * (c1 - c0), d2 = fenceAt(park, s2).dist + 100 + rng() * 280, wq = fp.apply(null, sprayPt(s2, d2));
+        wv.moveTo(wq.x - 4, wq.y); wv.quadraticCurveTo(wq.x - 2, wq.y - 2, wq.x, wq.y); wv.quadraticCurveTo(wq.x + 2, wq.y + 2, wq.x + 4, wq.y);
+      }
+      P.save(); P.clip(p); stroke(wv, PAPER, 1); P.restore();
+    }
+    // grandstands: ring behind the outfield wall + wings down the lines + behind home
+    var ring = [], ringCrowd = function (spA, spB, d0, d1, z0, z1, stepA, stepD) {
+      var classes = CROWD, paths = classes.map(function () { return new Path2D(); }), r2 = U.rng(seed + 50);
+      for (var d = d1; d >= d0; d -= stepD) {
+        for (var s3 = spA; s3 <= spB; s3 += stepA * (380 / d)) {
+          var ci = Math.floor(r2() * classes.length), base = fenceAt(park, clamp(s3, -45, 45));
+          var dd = base.dist + d, zz = lerp(z0, z1, (d - d0) / (d1 - d0)) + base.height;
+          var cq = fp.apply(null, sprayPt(s3, dd, zz)), cr = Math.max(0.9, 2.3 * cq.s);
+          if (r2() < 0.08) continue;
+          paths[ci].moveTo(cq.x + cr, cq.y); paths[ci].arc(cq.x, cq.y, cr, 0, TAU);
+        }
+      }
+      paths.forEach(function (pp, k) { fill(pp, classes[k]); });
+    };
+    for (sp = -56; sp <= 56; sp += 2) ring.push(sprayPt(sp, fenceAt(park, clamp(sp, -45, 45)).dist + 4, fenceAt(park, clamp(sp, -45, 45)).height));
+    for (sp = 56; sp >= -56; sp -= 2) ring.push(sprayPt(sp, fenceAt(park, clamp(sp, -45, 45)).dist + 80, 48));
+    var ringP = fpoly(ring);
+    if (water !== 'none') { // no stands over the water
+      var wa = water === 'left' ? -75 : water === 'right' ? 25 : -25, wb = wa + 50;
+      P.save();
+      var cl = new Path2D(); cl.rect(-M, -M, W + 2 * M, H + 2 * M);
+      var wcut = []; for (sp = Math.max(-60, wa); sp <= Math.min(60, wb); sp += 2) wcut.push(sprayPt(sp, 1500)); wcut.push([0, 0, 0]);
+      cl.addPath(fpoly(wcut)); P.clip(cl, 'evenodd');
+      fill(ringP, { a: 0.9, b: 0.25 });
+      ringCrowd(-56, 56, 8, 76, 0, 44, 1.25, 7);
+      P.restore();
+    } else {
+      fill(ringP, { a: 0.9, b: 0.25 });
+      ringCrowd(-56, 56, 8, 76, 0, 44, 1.25, 7);
+    }
+    // roof edge of the ring
+    var roof = new Path2D(), rq;
+    for (sp = -56; sp <= 56; sp += 2) {
+      if (water !== 'none') { var wa2 = water === 'left' ? -75 : water === 'right' ? 25 : -25; if (sp > wa2 && sp < wa2 + 50) continue; }
+      rq = fp.apply(null, sprayPt(sp, fenceAt(park, clamp(sp, -45, 45)).dist + 82, 50)); roof.moveTo(rq.x - 3, rq.y); roof.lineTo(rq.x + 3, rq.y);
+    }
+    stroke(roof, A1, 3);
+    // wings along the lines and the grandstand behind home
+    [-1, 1].forEach(function (sg) {
+      var wpts = [], wd0 = 60, wd1 = fenceAt(park, 45 * sg).dist;
+      var ang = U.rad(45 * sg), nx = Math.cos(ang) * sg, ny = -Math.sin(ang) * sg;
+      wpts.push([Math.sin(ang) * wd0 + nx * 45, Math.cos(ang) * wd0 + ny * 45, 4]);
+      wpts.push([Math.sin(ang) * wd1 + nx * 45, Math.cos(ang) * wd1 + ny * 45, 4]);
+      wpts.push([Math.sin(ang) * wd1 + nx * 120, Math.cos(ang) * wd1 + ny * 120, 40]);
+      wpts.push([Math.sin(ang) * wd0 + nx * 120, Math.cos(ang) * wd0 + ny * 120, 40]);
+      fill(fpoly(wpts), { a: 0.9, b: 0.25 });
+      var cp = CROWD.map(function () { return new Path2D(); }), r3 = U.rng(seed + 60 + sg);
+      for (var dd = wd0 + 6; dd < wd1 - 4; dd += 7) for (var oo = 50; oo < 118; oo += 7) {
+        var zz = lerp(4, 40, (oo - 45) / 75), cq = fp(Math.sin(ang) * dd + nx * oo, Math.cos(ang) * dd + ny * oo, zz), cr = Math.max(0.9, 2.3 * cq.s);
+        var ci = Math.floor(r3() * CROWD.length); if (r3() < 0.08) continue;
+        cp[ci].moveTo(cq.x + cr, cq.y); cp[ci].arc(cq.x, cq.y, cr, 0, TAU);
+      }
+      cp.forEach(function (pp, k) { fill(pp, CROWD[k]); });
+      // dugout
+      var dg = [], dd0 = 40, dd1 = 85;
+      dg.push([Math.sin(ang) * dd0 + nx * 22, Math.cos(ang) * dd0 + ny * 22, 0]); dg.push([Math.sin(ang) * dd1 + nx * 22, Math.cos(ang) * dd1 + ny * 22, 0]);
+      dg.push([Math.sin(ang) * dd1 + nx * 34, Math.cos(ang) * dd1 + ny * 34, 6]); dg.push([Math.sin(ang) * dd0 + nx * 34, Math.cos(ang) * dd0 + ny * 34, 6]);
+      fill(fpoly(dg), A1);
+    });
+    var hs = [];
+    for (sp = 50; sp <= 310; sp += 6) hs.push(sprayPt(sp, 62, 2));
+    for (sp = 310; sp >= 50; sp -= 6) hs.push(sprayPt(sp, 150, 45));
+    fill(fpoly(hs), { a: 0.9, b: 0.25 });
+    // the field: foul grass, fair checker grass clipped to the fence
+    var fieldPts = [[0, -55, 0]];
+    for (sp = -50; sp <= 50; sp += 2) fieldPts.push(sprayPt(sp, fenceAt(park, clamp(sp, -45, 45)).dist + 3));
+    var fieldP = fpoly(fieldPts);
+    fill(fieldP, { a: 0.3, c: 0.8 });
+    var fair = [[0, 0, 0]];
+    for (sp = -45; sp <= 45; sp += 1.5) fair.push(sprayPt(sp, fenceAt(park, sp).dist));
+    var fairP = fpoly(fair);
+    fill(fairP, { a: 0.42, c: 1 });
+    P.save(); P.clip(fairP);
+    var chk = new Path2D();
+    for (var cx = -450; cx < 450; cx += 30) for (var cy = 0; cy < 470; cy += 30) {
+      if (((cx / 30 + cy / 30) & 1) === 0) continue;
+      chk.addPath(fpoly([[cx, cy], [cx + 30, cy], [cx + 30, cy + 30], [cx, cy + 30]]));
+    }
+    fill(chk, { a: 0.58, c: 1 });
+    P.restore();
+    // warning track
+    var wt = [];
+    for (sp = -45; sp <= 45; sp += 1.5) wt.push(sprayPt(sp, fenceAt(park, sp).dist));
+    for (sp = 45; sp >= -45; sp -= 1.5) wt.push(sprayPt(sp, fenceAt(park, sp).dist - 14));
+    fill(fpoly(wt), DIRT2);
+    if (ft.hill) {
+      var hl = []; for (sp = -12; sp <= 12; sp += 2) hl.push(sprayPt(sp, fenceAt(park, sp).dist - 14));
+      for (sp = 12; sp >= -12; sp -= 2) hl.push(sprayPt(sp, fenceAt(park, sp).dist - 50 + Math.abs(sp) * 2.4));
+      fill(fpoly(hl), { a: 0.72, c: 1 });
+    }
+    // infield
+    var dirt = [];
+    for (i = 0; i <= 40; i++) { var a = -0.9 + 1.8 * i / 40; dirt.push([95 * Math.sin(a), 60.5 + 95 * Math.cos(a), 0]); }
+    dirt.push([63.64 + 8, 63.64 - 4, 0]); dirt.push([8, -8, 0]); dirt.push([-8, -8, 0]); dirt.push([-63.64 - 8, 63.64 - 4, 0]);
+    fill(fpoly(dirt), DIRT);
+    fill(fpoly([[0, 6], [57, 63.64], [0, 121], [-57, 63.64]]), { a: 0.5, c: 1 });
+    fill(fpCircle(0, 59, 9), DIRT2);
+    fill(fpoly([[-1, 60.3, 1], [1, 60.3, 1], [1, 60.9, 1], [-1, 60.9, 1]]), PAPER);
+    fill(fpCircle(0, 0, 13), DIRT);
+    // foul lines + bases
+    var lines = new Path2D(), lA = fp(0, 0, 0);
+    [-45, 45].forEach(function (sg) { var e = fp.apply(null, sprayPt(sg, fenceAt(park, sg).dist)); lines.moveTo(lA.x, lA.y); lines.lineTo(e.x, e.y); });
+    stroke(lines, PAPER, 1.6);
+    for (i = 1; i < 4; i++) {
+      var B = K.BASES[i]; fill(fpoly([[B.x - 1.8, B.y], [B.x, B.y - 1.8], [B.x + 1.8, B.y], [B.x, B.y + 1.8]]), PAPER);
+      stroke(fpoly([[B.x - 1.8, B.y], [B.x, B.y - 1.8], [B.x + 1.8, B.y], [B.x, B.y + 1.8]]), A1, 0.6, { over: true });
+    }
+    fill(fpoly([[-1, 0.7], [1, 0.7], [1, 0], [0, -1], [-1, 0]]), PAPER);
+    // the wall
+    var wallTop = [], wallBot = [];
+    for (sp = -45; sp <= 45; sp += 1.5) { var fa = fenceAt(park, sp); wallTop.push(sprayPt(sp, fa.dist, fa.height)); wallBot.push(sprayPt(sp, fa.dist, 0)); }
+    var wallP = fpoly(wallTop.concat(wallBot.slice().reverse()));
+    fill(wallP, { a: 1, c: 0.15 });
+    var wtl = new Path2D(); wallTop.forEach(function (w, j) { var wq = fp(w[0], w[1], w[2]); if (j) wtl.lineTo(wq.x, wq.y); else wtl.moveTo(wq.x, wq.y); });
+    stroke(wtl, C1, 1.6);
+    // foul poles
+    [-45, 45].forEach(function (sg) {
+      var fa = fenceAt(park, sg), b0 = fp.apply(null, sprayPt(sg, fa.dist, 0)), b1 = fp.apply(null, sprayPt(sg, fa.dist, fa.height + 55));
+      stroke(seg(b0.x, b0.y, b1.x, b1.y), C1, 2.4); stroke(seg(b0.x, b0.y, b1.x, b1.y), { a: 0.3 }, 0.6, { over: true });
+    });
+    // distance stencils on the grass, map style
+    [-45, -22, 0, 22, 45].forEach(function (sg) {
+      var fa = fenceAt(park, sg), mq = fp.apply(null, sprayPt(sg, fa.dist - 30));
+      P.text(String(Math.round(fa.dist)), mq.x, mq.y + 3, R.mono(Math.max(7, 8.5 * S.W / 390), true), PAPER, { align: 'center', over: false, ko: [] });
+    });
+    // light towers at the corners of the stands
+    if (ft.lights) {
+      [-52, -18, 18, 52].forEach(function (sg) {
+        var fa = fenceAt(park, clamp(sg, -45, 45)), b0 = fp.apply(null, sprayPt(sg, fa.dist + 84, 48)), b1 = fp.apply(null, sprayPt(sg, fa.dist + 84, 130));
+        stroke(seg(b0.x, b0.y, b1.x, b1.y), A1, 2);
+        lightBank(b1.x, b1.y - 4, 18, 8, false);
+      });
+    }
+    // scoreboard / billboard standing behind the ring
+    if (ft.scoreboard) {
+      var sb0 = fp.apply(null, sprayPt(-8, fenceAt(park, -8).dist + 90, 52)), sb1 = fp.apply(null, sprayPt(8, fenceAt(park, 8).dist + 90, 52));
+      var sbw = sb1.x - sb0.x, sbh = sbw * 0.42, sby = Math.min(sb0.y, sb1.y) - sbh;
+      fill(rect(sb0.x, sby, sbw, sbh), { a: 1, c: 0.15 });
+      var nm = (park.town || park.name || '').toUpperCase(), ff = fitFont(nm, sbw - 8, sbh * 0.34);
+      P.text(nm, sb0.x + sbw / 2, sby + sbh * 0.42, ff.font, PAPER, { align: 'center' });
+      var bl = new Path2D(); for (i = 0; i < 9; i++) { var bx = sb0.x + 5 + i * (sbw - 10) / 8; bl.moveTo(bx + 1.4, sby + sbh * 0.72); bl.arc(bx, sby + sbh * 0.72, 1.4, 0, TAU); }
+      fill(bl, C1);
+    }
+    if (ft.billboard) {
+      var bb0 = fp.apply(null, sprayPt(24, fenceAt(park, 24).dist + 88, 52)), bb1 = fp.apply(null, sprayPt(40, fenceAt(park, 40).dist + 88, 52));
+      var bbw = Math.abs(bb1.x - bb0.x), bbh = Math.max(12, bbw * 0.3), bby = Math.min(bb0.y, bb1.y) - bbh - 2, bbx = Math.min(bb0.x, bb1.x);
+      fill(rect(bbx - 1.5, bby - 1.5, bbw + 3, bbh + 3), A1);
+      fill(rect(bbx, bby, bbw, bbh), B1);
+      var bt = String(ft.billboard).split(/\s*·\s*/)[0], bf = fitFont(bt, bbw - 6, bbh * 0.6);
+      P.text(bt, bbx + bbw / 2, bby + bbh / 2 + bf.px * 0.36, bf.font, PAPER, { align: 'center' });
+    }
+  }
+  function fpCircle(cx, cy, r) {
+    var p = new Path2D();
+    for (var i = 0; i <= 36; i++) { var a = TAU * i / 36, q = fp(cx + r * Math.cos(a), cy + r * Math.sin(a), 0); if (i) p.lineTo(q.x, q.y); else p.moveTo(q.x, q.y); }
+    p.closePath(); return p;
+  }
+
+  // field camera: follows the ball on deep / high hits (pan + mild zoom over the baked map)
+  function fieldView(view) {
+    var play = view.play, t = view.playT || 0, W = S.W, H = S.H;
+    var z = 1, cx = W / 2, cy = H / 2;
+    if (play && play.ballAt) {
+      var n = 6, ax = 0, ay = 0, deep = 0;
+      for (var i = 0; i < n; i++) {
+        var tt = Math.max(0, t - i * 0.08), b = play.ballAt(Math.min(tt, play.dur || tt)), q = fp(b.x, b.y, b.z);
+        ax += q.x; ay += q.y;
+        deep = Math.max(deep, clamp((Math.sqrt(b.x * b.x + b.y * b.y) - 180) / 170, 0, 1) * 0.7 + clamp(b.z / 110, 0, 1) * 0.5);
+      }
+      ax /= n; ay /= n;
+      var k = smooth(clamp(deep, 0, 1));
+      z = 1 + 0.24 * k;
+      cx = lerp(W / 2, ax, 0.75 * k); cy = lerp(H / 2, ay + H * 0.08, 0.75 * k);
+    }
+    var hw = W / 2 / z, hh = H / 2 / z;
+    cx = clamp(cx, hw - M * 0.5, W - hw + M * 0.5); cy = clamp(cy, hh - M * 0.5, H - hh + M * 0.5);
+    return { z: z, cx: cx, cy: cy };
+  }
+  function applyFieldView(fv) { P.translate(S.W / 2, S.H / 2); P.scale(fv.z, fv.z); P.translate(-fv.cx, -fv.cy); }
+  function loadFieldBake(fv) {
+    var bake = S.fbake;
+    for (var i = 0; i < 3; i++) {
+      var s = R.SLOTS[i], x = P.layer(s);
+      x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, P.pw, P.ph); x.restore();
+      x.save();
+      x.translate(S.W / 2, S.H / 2); x.scale(fv.z, fv.z); x.translate(-fv.cx, -fv.cy);
+      x.imageSmoothingEnabled = true;
+      x.drawImage(bake[s], -M, -M, S.W + 2 * M, S.H + 2 * M);
+      x.restore();
+    }
+  }
+
+  function figure(x, y, sc, inks, cap, moving, time, glove) {
+    // a little stamped player: shadow, legs, body, head, cap
+    var h = sc;
+    fill(ell(x, y, h * 0.42, h * 0.13), { a: 0.45 }, { over: true });
+    var st = moving ? Math.sin(time * 18) * h * 0.18 : 0;
+    var lg = new Path2D(); lg.moveTo(x - h * 0.12, y - h * 0.42); lg.lineTo(x - h * 0.14 - st, y); lg.moveTo(x + h * 0.12, y - h * 0.42); lg.lineTo(x + h * 0.14 + st, y);
+    stroke(lg, A1, Math.max(1.2, h * 0.16));
+    var body = R.rrect(x - h * 0.26, y - h * 0.86, h * 0.52, h * 0.5, h * 0.18);
+    stroke(body, A1, Math.max(1, h * 0.08)); fill(body, inks);
+    fill(circ(x, y - h * 1.02, h * 0.19), SKIN);
+    stroke(circ(x, y - h * 1.02, h * 0.19), A1, Math.max(0.6, h * 0.05), { over: true });
+    var cp = new Path2D(); cp.arc(x, y - h * 1.06, h * 0.2, PI, TAU); cp.lineTo(x + h * 0.3, y - h * 1.06); cp.closePath();
+    fill(cp, cap);
+    if (glove) fill(circ(x + h * 0.32, y - h * 0.62, h * 0.12), GLOVE);
+  }
+  var FIELDERS = ['P', 'C', '1B', '2B', 'SS', '3B', 'LF', 'CF', 'RF'];
+  var DEF_POS = { P: [0, 59], C: [0, -4], '1B': [52, 82], '2B': [30, 132], SS: [-30, 132], '3B': [-52, 82], LF: [-125, 270], CF: [0, 310], RF: [125, 270] };
+  function fielderXY(play, i, t) {
+    if (play && play.fielderAt) { try { var r = play.fielderAt(i, t); if (r) return r; } catch (e) {} }
+    var d = (BB.Bat && BB.Bat.FIELDERS && BB.Bat.FIELDERS[FIELDERS[i]]) || null;
+    if (d) return { x: d.x, y: d.y };
+    var q = DEF_POS[FIELDERS[i]]; return { x: q[0], y: q[1] };
+  }
+  function basePath(from, to, u) {
+    // walk the bases from 'from' toward 'to' (4 = home); -1 = thrown out (stops halfway to the next bag)
+    var tgt = to < 0 ? from + 0.5 : to, total = tgt - from;
+    if (total <= 0) { var b = K.BASES[from % 4]; return { x: b.x, y: b.y, alive: to >= 0 || u < 0.85 }; }
+    var d = from + total * clamp(u, 0, 1), i0 = Math.floor(d), f = d - i0;
+    var A = K.BASES[i0 % 4], B = K.BASES[(i0 + 1) % 4];
+    return { x: lerp(A.x, B.x, f), y: lerp(A.y, B.y, f), alive: to >= 0 || u < 0.9 };
+  }
+  function crossingT(play, park, pred) {
+    var dur = play.dur || 3, n = 80;
+    for (var i = 1; i <= n; i++) { var t = dur * i / n, b = play.ballAt(t); if (pred(b, t)) return t; }
+    return -1;
+  }
+  function drawFieldDynamic(view, park, time) {
+    var play = view.play, t = view.playT || 0, i;
+    var sc = function (q) { return Math.max(9, 6.2 * q.s * 2.1); };
+    // runners (hero team, slot B)
+    var runners = view.runners || [];
+    var u = play ? clamp(t / Math.max(0.6, (play.dur || 2) * 0.92), 0, 1) : 1;
+    var drawn = {};
+    runners.forEach(function (rm) {
+      if (rm == null || rm.from == null) return;
+      var p = basePath(rm.from, rm.to, U.easeOut(u) * 0.3 + u * 0.7);
+      if (!p.alive) return;
+      var q = fp(p.x, p.y, 0);
+      figure(q.x, q.y, sc(q), B1, A1, u < 1 && rm.to !== rm.from, time + rm.from, false);
+      drawn[rm.from] = true;
+    });
+    if (!runners.length && view.hud && view.hud.bases) {
+      view.hud.bases.forEach(function (on, k) { if (!on) return; var B = K.BASES[k + 1], q = fp(B.x, B.y, 0); figure(q.x, q.y, sc(q), B1, A1, false, 0, false); });
+    }
+    // fielders (opposing team, slot A caps, paper uniforms)
+    var order = [];
+    for (i = 0; i < 9; i++) {
+      var f0 = fielderXY(play, i, t), f1 = fielderXY(play, i, Math.max(0, t - 0.06));
+      order.push({ i: i, x: f0.x, y: f0.y, mv: Math.abs(f0.x - f1.x) + Math.abs(f0.y - f1.y) > 0.3 });
+    }
+    order.sort(function (a, b) { return b.y - a.y; });
+    order.forEach(function (o) { var q = fp(o.x, o.y, 0); figure(q.x, q.y, sc(q), { a: 0.25 }, A1, o.mv, time + o.i, true); });
+    if (!play || !play.ballAt) return;
+    var dur = play.dur || 3, tt = Math.min(t, dur);
+    // HR / wall moments
+    if (play.type === 'HR') {
+      var tc = crossingT(play, park, function (b) { var sp = U.deg(Math.atan2(b.x, b.y)); return Math.sqrt(b.x * b.x + b.y * b.y) >= fenceAt(park, clamp(sp, -45, 45)).dist; });
+      if (tc >= 0 && tt >= tc) {
+        var bc = play.ballAt(tc), qc = fp(bc.x, bc.y, bc.z), e = clamp((tt - tc) / 0.7, 0, 1);
+        if (e < 1) {
+          fill(R.star(qc.x, qc.y, 16 + 50 * U.easeOut(e), 8 + 22 * U.easeOut(e), 12, e, 0.3, U.rng(3)), { c: 1 - e * e }, { over: true });
+          fill(R.star(qc.x, qc.y, 10 + 30 * U.easeOut(e), 5 + 12 * U.easeOut(e), 8, -e, 0.2, U.rng(4)), { b: 1 - e }, { over: true });
+        }
+        // fireworks over the stands
+        for (i = 0; i < 4; i++) {
+          var ft0 = tc + 0.25 + i * 0.32, fe = (tt - ft0) / 0.9;
+          if (fe < 0 || fe > 1) continue;
+          var rr = U.rng(90 + i), fx = S.W * (0.18 + 0.64 * rr()), fy = S.H * (0.2 + 0.12 * rr()), R0 = 14 + 34 * U.easeOut(fe);
+          var fw = new Path2D();
+          for (var k = 0; k < 14; k++) { var a = k / 14 * TAU, r1 = R0 * 0.55, r2 = R0; fw.moveTo(fx + Math.cos(a) * r1, fy + Math.sin(a) * r1); fw.lineTo(fx + Math.cos(a) * r2, fy + Math.sin(a) * r2); }
+          P.save(); P.translate(S.W / 2, S.H / 2); P.scale(1 / view._fz, 1 / view._fz); P.translate(-S.W / 2, -S.H / 2);
+          stroke(fw, i % 2 ? { b: 1 - fe } : { c: 1 - fe * 0.5, b: 0.3 * (1 - fe) }, 2.2, { over: true });
+          fill(circ(fx, fy, 3 * (1 - fe)), { c: 1 }, { over: true });
+          P.restore();
+        }
+      }
+    }
+    if (play.wall) {
+      var tw = crossingT(play, park, function (b) { var sp = U.deg(Math.atan2(b.x, b.y)); return Math.sqrt(b.x * b.x + b.y * b.y) >= fenceAt(park, clamp(sp, -45, 45)).dist - 3; });
+      if (tw >= 0 && tt >= tw && tt < tw + 1.1) {
+        var bw = play.ballAt(tw), qw = fp(bw.x, bw.y, Math.min(bw.z, 4)), de = (tt - tw) / 1.1, dr = U.rng(8);
+        var dust = new Path2D();
+        for (i = 0; i < 7; i++) {
+          var dx = (dr() - 0.5) * 30 * (0.4 + de), dy = -dr() * 16 * (0.3 + de), drr = (3 + dr() * 5) * (0.6 + de);
+          dust.addPath(R.blob(qw.x + dx, qw.y + dy, drr, 7, dr, 0.25));
+        }
+        fill(dust, { a: 0.3 * (1 - de), b: 0.45 * (1 - de), c: 0.6 * (1 - de) }, { over: true });
+        if (de < 0.3) P.text('CLANG!', qw.x, qw.y - 18, R.display(12), { b: 1 }, { align: 'center', outline: 2 });
+      }
+    }
+    // ball: dotted trail, height line, shadow, ball
+    var b = play.ballAt(tt), qb = fp(b.x, b.y, b.z), qs = fp(b.x, b.y, 0);
+    var trail = new Path2D(), trail2 = new Path2D(), step = 0.055, n = Math.floor(tt / step);
+    for (i = Math.max(0, n - 70); i <= n; i++) {
+      var bt = play.ballAt(i * step), q = fp(bt.x, bt.y, bt.z), r = 1.25;
+      if (i % 4 === 0) { trail2.moveTo(q.x + 1.7, q.y); trail2.arc(q.x, q.y, 1.7, 0, TAU); }
+      else { trail.moveTo(q.x + r, q.y); trail.arc(q.x, q.y, r, 0, TAU); }
+    }
+    fill(trail, C1, { over: true }); fill(trail2, { b: 1 }, { over: true });
+    fill(ell(qs.x, qs.y, 3.6, 1.5), { a: 0.6 }, { over: true });
+    if (b.z > 4) stroke(seg(qs.x, qs.y, qb.x, qb.y), { a: 0.6 }, 0.8, { over: true, dash: [1.5, 3] });
+    var br = clamp(2.6 + b.z * 0.012, 2.6, 4.6);
+    drawBallSprite(qb.x, qb.y, br, tt * 20);
+    // catch pop
+    if (play.catchBy >= 0 && play.catchT > 0 && tt >= play.catchT && tt < play.catchT + 0.5) {
+      var cf = fielderXY(play, play.catchBy, play.catchT), cq = fp(cf.x, cf.y, 5), ce = (tt - play.catchT) / 0.5;
+      fill(R.star(cq.x, cq.y - 6, 9 + 10 * ce, 4 + 4 * ce, 8, 0, 0, null), { c: 1 - ce }, { over: true });
+    }
+  }
+
+  // ------------------------------------------------------------------ TITLE backdrop
+  function drawTitleBackground(park) {
+    var W = S.W, H = S.H, ft = feat(park), seed = hash(park.id), i;
+    var hz = H * 0.4;
+    skyBands(-M, hz, [0.78, 0.66, 0.55, 0.45, 0.36, 0.28], [[0.12, 0], [0.25, 0.15], [0.35, 0.35]]);
+    // stars knocked out of the night sky
+    var stars = new Path2D(), r = U.rng(seed + 1);
+    for (i = 0; i < 60; i++) { var sx = r() * W, sy = r() * hz * 0.6, sr = 0.5 + r() * r() * 1.4; stars.moveTo(sx + sr, sy); stars.arc(sx, sy, sr, 0, TAU); }
+    fill(stars, PAPER);
+    // halo rings around the moon-ball (dynamic ball drawn per frame)
+    var mx = W * 0.66, my = H * 0.19, mr = Math.min(W * 0.25, H * 0.13);
+    fill(circ(mx, my, mr * 1.5), { c: 0.18 }, { over: true });
+    fill(circ(mx, my, mr * 1.25), { c: 0.32 }, { over: true });
+    skyline(ft.skyline || 'city', -M, W + M, hz - H * 0.035, Math.min(1.25, W / 360), U.rng(seed + 11));
+    // light towers with beams
+    [0.1, 0.9].forEach(function (fx) {
+      var lx = W * fx, top = hz - H * 0.2;
+      stroke(seg(lx, top, lx, hz), A1, 3.4);
+      var lat = new Path2D(); for (var yy = top + 6; yy < hz; yy += 8) { lat.moveTo(lx - 3, yy); lat.lineTo(lx + 3, yy + 6); }
+      stroke(lat, A1, 0.9);
+      fill(R.poly([lx - 18, top + 4, lx + 18, top + 4, W * 0.5 + (fx < 0.5 ? -30 : 30), hz + H * 0.08, W * 0.5 + (fx < 0.5 ? -120 : 120), hz + H * 0.08]), { c: 0.14 }, { over: true });
+      lightBank(lx, top - 4, 38, 16, false);
+    });
+    // stands silhouette with a sprinkle of crowd
+    fill(rect(-M, hz - H * 0.03, W + 2 * M, H * 0.06), { a: 0.95, b: 0.25 });
+    crowd(-M, W + M, hz - H * 0.024, hz + H * 0.026, 5.2, seed + 3, 0, null, null);
+    fill(rect(-M, hz + H * 0.028, W + 2 * M, 4), C1);
+    // calm lower field: light grass with broad mowing bands and a faint diamond
+    fill(rect(-M, hz + H * 0.03, W + 2 * M, H), { a: 0.14, c: 0.42 });
+    var bands = new Path2D();
+    for (i = 0; i < 6; i++) { var y0 = hz + H * 0.03 + Math.pow(i / 6, 1.6) * H * 0.6, y1 = hz + H * 0.03 + Math.pow((i + 0.5) / 6, 1.6) * H * 0.6; bands.rect(-M, y0, W + 2 * M, y1 - y0); }
+    fill(bands, { a: 0.2, c: 0.5 }, { over: true });
+    var dm = new Path2D(), bx = W / 2, by = H * 1.02;
+    dm.moveTo(bx, by); dm.lineTo(bx + W * 0.62, by - H * 0.2); dm.lineTo(bx, by - H * 0.36); dm.lineTo(bx - W * 0.62, by - H * 0.2); dm.closePath();
+    stroke(dm, PAPER, 2);
+  }
+  function drawTitleDynamic(view, time) {
+    var W = S.W, H = S.H, mx = W * 0.66, my = H * 0.19, mr = Math.min(W * 0.25, H * 0.13), i;
+    // the moon is a baseball
+    var moon = circ(mx, my, mr);
+    fill(moon, PAPER);
+    P.save(); P.clip(moon);
+    fill(circ(mx + mr * 0.35, my + mr * 0.3, mr * 1.05), { c: 0.45 }, { over: true });
+    fill(circ(mx + mr * 0.55, my + mr * 0.5, mr * 0.95), { c: 0.6, b: 0.12 }, { over: true });
+    var rot = time * 0.12, seams = new Path2D(), stitches = new Path2D();
+    for (var sd = -1; sd <= 1; sd += 2) {
+      var pts = [];
+      for (i = 0; i <= 28; i++) {
+        var a = -1.2 + 2.4 * i / 28, px = sd * (mr * 1.25 - Math.cos(a) * mr * 0.62), py = Math.sin(a) * mr * 0.95;
+        var cx = mx + px * Math.cos(rot) - py * Math.sin(rot), cy = my + px * Math.sin(rot) + py * Math.cos(rot);
+        pts.push([cx, cy]);
+      }
+      pts.forEach(function (p, k) { if (k) seams.lineTo(p[0], p[1]); else seams.moveTo(p[0], p[1]); });
+      for (i = 1; i < pts.length - 1; i += 2) {
+        var dx = pts[i + 1][0] - pts[i - 1][0], dy = pts[i + 1][1] - pts[i - 1][1], dl = Math.sqrt(dx * dx + dy * dy) || 1, nx = -dy / dl, ny = dx / dl, L = mr * 0.07;
+        stitches.moveTo(pts[i][0] - nx * L - dx / dl * L * 0.6, pts[i][1] - ny * L - dy / dl * L * 0.6); stitches.lineTo(pts[i][0], pts[i][1]);
+        stitches.lineTo(pts[i][0] + nx * L - dx / dl * L * 0.6, pts[i][1] + ny * L - dy / dl * L * 0.6);
+      }
+    }
+    stroke(seams, { b: 1 }, 1.6, { over: true });
+    stroke(stitches, { b: 1 }, 1.4, { over: true });
+    P.restore();
+    stroke(moon, A1, 1.5, { over: true });
+    // twinkling light banks
+    [0.1, 0.9].forEach(function (fx, k) {
+      var lx = W * fx, top = H * 0.4 - H * 0.2 - 4;
+      if (Math.sin(time * 3 + k * 2) > 0.6) fill(R.star(lx, top, 26, 8, 6, time, 0, null), { c: 0.5 }, { over: true });
+    });
+    // every few seconds a fly ball arcs across the sky with a dotted trail
+    var cyc = 7, ph = (time % cyc) / 3.2, n = Math.floor(time / cyc);
+    if (ph < 1) {
+      var rr = U.rng(n * 13 + 1), x0 = W * (0.1 + rr() * 0.2), x1 = W * (0.75 + rr() * 0.2), y0 = H * 0.38, peak = H * (0.05 + rr() * 0.08);
+      var tr = new Path2D();
+      for (i = 0; i <= 30; i++) {
+        var u = ph * i / 30, bx = lerp(x0, x1, u), by = y0 - (y0 - peak) * 4 * u * (1 - u);
+        tr.moveTo(bx + 1.2, by); tr.arc(bx, by, 1.2, 0, TAU);
+      }
+      fill(tr, { c: 1 }, { over: true });
+      var ub = ph, bxx = lerp(x0, x1, ub), byy = y0 - (y0 - peak) * 4 * ub * (1 - ub);
+      drawBallSprite(bxx, byy, 3.2, time * 10);
+    }
+  }
+
+  // ------------------------------------------------------------------ HUD
+  function drawHud(view) {
+    var hud = view.hud;
+    if (!hud) return;
+    var W = S.W, x0 = 10, y0 = 52, w = Math.min(W - x0 - 64, 340), h = 58;
+    // double plate: B "shadow" print + paper plate with an A keyline
+    fill(R.rrect(x0 + 3, y0 + 3, w, h, 4), { b: 1 });
+    var plate = R.rrect(x0, y0, w, h, 4);
+    fill(plate, PAPER); stroke(plate, A1, 2);
+    // score block
+    var sw = Math.min(96, w * 0.3);
+    fill(R.rrect(x0 + 4, y0 + 4, sw, h - 8, 2), A1);
+    var score = String(hud.score != null ? hud.score : ''), sf = fitFont(score, sw - 10, 25);
+    P.text(score, x0 + 4 + sw / 2, y0 + 7 + sf.px * 0.95, sf.font, PAPER, { align: 'center' });
+    var inn = String(hud.inning || '').toUpperCase();
+    if (inn) P.text(inn, x0 + 4 + sw / 2, y0 + h - 9, R.mono(9, true), { c: 1 }, { align: 'center' });
+    // count dots
+    var cx = x0 + sw + 14, rows = [['B', 3, hud.balls || 0, { c: 1, a: 0.12 }], ['S', 2, hud.strikes || 0, { b: 1 }], ['O', hud.outsMax && hud.outsMax <= 5 ? hud.outsMax - (hud.outsMax === 3 ? 1 : 0) : 2, hud.outs || 0, A1]];
+    var lf = R.mono(9.5, true);
+    rows.forEach(function (rw, k) {
+      var yy = y0 + 13 + k * 16;
+      P.text(rw[0], cx, yy + 3.5, lf, A1, { align: 'center', over: true });
+      var max = rw[1];
+      if (rw[0] === 'O' && hud.outsMax > 5) {
+        P.text((hud.outs || 0) + '/' + hud.outsMax, cx + 9, yy + 3.5, R.mono(9.5, true), A1, { over: true });
+        return;
+      }
+      for (var i = 0; i < max; i++) {
+        var dc = circ(cx + 12 + i * 11, yy, 4.2);
+        if (i < rw[2]) { fill(dc, rw[3]); stroke(dc, A1, 1.2, { over: true }); }
+        else stroke(dc, { a: 1 }, 1.2, { over: true });
+      }
+    });
+    // mini diamond
+    var dx = cx + 58, dy = y0 + h / 2 + 1, ds = 7.5, bases = hud.bases || [];
+    [[1, ds * 1.35, 0], [2, 0, -ds * 1.35], [3, -ds * 1.35, 0]].forEach(function (bb) {
+      var bp = R.poly([dx + bb[1], dy + bb[2] - ds * 0.62, dx + bb[1] + ds * 0.62, dy + bb[2], dx + bb[1], dy + bb[2] + ds * 0.62, dx + bb[1] - ds * 0.62, dy + bb[2]]);
+      if (bases[bb[0] - 1]) { fill(bp, { b: 1, c: 1 }); stroke(bp, A1, 1.2, { over: true }); }
+      else stroke(bp, A1, 1.2, { over: true });
+    });
+    fill(R.poly([dx, dy + ds * 1.35 - 3, dx + 3, dy + ds * 1.35, dx, dy + ds * 1.35 + 3, dx - 3, dy + ds * 1.35]), A1);
+    // goal + progress
+    var gx = dx + ds * 2.4 + 6, gw = x0 + w - gx - 6;
+    if (gw > 40) {
+      var goal = String(hud.goal || '').toUpperCase(), prog = hud.progress != null ? String(hud.progress) : '';
+      if (prog) {
+        var pf = fitFont(prog, gw, 15);
+        P.text(prog, gx, y0 + 21, pf.font, { b: 1 }, { over: false });
+      }
+      var gf = R.mono(8.2, true), words = goal.split(' '), line = '', ly = y0 + (prog ? 34 : 18), lines = 0;
+      for (var i = 0; i < words.length && lines < 2; i++) {
+        var test = line ? line + ' ' + words[i] : words[i];
+        if (P.measure(test, gf) > gw && line) { P.text(line, gx, ly, gf, A1, { over: true }); ly += 10; lines++; line = words[i]; }
+        else line = test;
+      }
+      if (line && lines < 2) P.text(line, gx, ly, gf, A1, { over: true });
+    }
+    // last pitch readout (tag under the pause button)
+    if (view.last && view.last.mph) {
+      var tx = W - 12, ty = y0 + h + 14, txt = String(Math.round(view.last.mph)), nm = String(view.last.name || '').toUpperCase();
+      var nf = R.display(15), tw = Math.max(P.measure(txt, nf) + 34, P.measure(nm, R.mono(7.5, true)) + 12);
+      var tag = R.poly([tx - tw, ty - 12, tx, ty - 12, tx, ty + 15, tx - tw, ty + 15, tx - tw - 6, ty + 1.5]);
+      fill(tag, { c: 1 }); stroke(tag, A1, 1.4, { over: true });
+      P.text(txt, tx - tw + 4, ty + 3, nf, A1, { over: true });
+      P.text('MPH', tx - 5, ty + 2, R.mono(7.5, true), A1, { align: 'right', over: true });
+      P.text(nm, tx - tw + 4, ty + 12, R.mono(7, true), { b: 1 }, { over: true });
+    }
+    // streak / on fire
+    var streak = hud.streak || 0;
+    if (streak > 0 || view.onFire) {
+      var fx = x0 + 4, fy = y0 + h + 16;
+      for (var k = 0; k < Math.min(streak, 6); k++) flame(fx + 7 + k * 13, fy + 4, 6.5, view.time + k, view.onFire);
+      if (view.onFire) P.text('ON FIRE', fx + Math.min(streak, 6) * 13 + 8, fy + 8, R.display(13), { b: 1, c: 0.6 }, { outline: 1.5 });
+    }
+  }
+  function flame(x, y, s, t, hot) {
+    var w = Math.sin(t * 9) * s * 0.12;
+    var p = new Path2D();
+    p.moveTo(x, y + s * 0.6);
+    p.quadraticCurveTo(x - s * 0.9, y + s * 0.3, x - s * 0.4 + w, y - s * 0.6);
+    p.quadraticCurveTo(x - s * 0.15, y - s * 0.1, x + w * 2, y - s * 1.4);
+    p.quadraticCurveTo(x + s * 0.4, y - s * 0.5, x + s * 0.5 + w, y - s * 0.8);
+    p.quadraticCurveTo(x + s * 0.95, y + s * 0.2, x, y + s * 0.6);
+    p.closePath();
+    fill(p, hot ? { b: 1, c: 1 } : { b: 0.7, c: 0.8 });
+    fill(ell(x, y + s * 0.15, s * 0.28, s * 0.4), C1);
+  }
+
+  // ------------------------------------------------------------------ ON FIRE flood
+  function drawFire(time, yTop, yBot) {
+    var W = S.W, H = S.H;
+    fill(rect(-M, -M, W + 2 * M, H + 2 * M), { b: 0.2 }, { over: true });
+    var p = new Path2D(), n = 9;
+    for (var i = 0; i < n; i++) {
+      var x = -10 + (W + 20) * (i + 0.5) / n, hgt = (36 + 22 * Math.sin(time * 5 + i * 1.7)) * (S.H / 844), w = W / n * 0.75;
+      var tip = Math.sin(time * 7 + i) * 8;
+      p.moveTo(x - w, yBot);
+      p.quadraticCurveTo(x - w * 0.9, yBot - hgt * 0.6, x + tip, yBot - hgt * 1.25);
+      p.quadraticCurveTo(x + w * 0.2, yBot - hgt * 0.55, x + w * 0.45, yBot - hgt * 0.75);
+      p.quadraticCurveTo(x + w * 1.05, yBot - hgt * 0.3, x + w, yBot);
+      p.closePath();
+    }
+    fill(p, { b: 0.85, c: 0.9 }, { over: true });
+    var p2 = new Path2D();
+    for (i = 0; i < n; i++) {
+      var x2 = -10 + (W + 20) * (i + 0.5) / n, h2 = (16 + 10 * Math.sin(time * 6 + i)) * (S.H / 844);
+      p2.moveTo(x2 - 6, yBot); p2.quadraticCurveTo(x2 - 5, yBot - h2 * 0.6, x2, yBot - h2); p2.quadraticCurveTo(x2 + 5, yBot - h2 * 0.6, x2 + 6, yBot); p2.closePath();
+    }
+    fill(p2, { c: 1 }, { over: true });
+    // rising embers
+    var em = new Path2D(), r = U.rng(3);
+    for (i = 0; i < 26; i++) {
+      var ex = r() * W, sp = 20 + r() * 40, ey = yBot - ((time * sp + r() * 400) % Math.max(60, yBot - yTop)), er = 1 + r() * 2;
+      em.moveTo(ex + er, ey); em.arc(ex + Math.sin(time * 3 + i) * 5, ey, er, 0, TAU);
+    }
+    fill(em, { b: 1, c: 1 }, { over: true });
+  }
+
+  // ------------------------------------------------------------------ STAMPS
+  function drawStamp(st, scene) {
+    if (!st || !st.text) return;
+    var t = st.t || 0, W = S.W, H = S.H, kind = st.kind || 'good';
+    var dur = kind === 'neutral' ? 1.1 : kind === 'huge' ? 1.8 : 1.4;
+    if (t > dur) return;
+    var fade = clamp((t - (dur - 0.4)) / 0.4, 0, 1);         // halftone dissolve at the end
+    var thunk = clamp(t / 0.13, 0, 1), sc = kind === 'neutral' ? lerp(1.5, 1, U.easeOut(thunk)) : lerp(2.4, 1, U.easeIn(thunk) * 0.3 + U.easeOut(thunk) * 0.7);
+    var seed = hash(st.text), rot = ((seed % 100) / 100 - 0.5) * 0.12 - 0.05;
+    var cx = W / 2, cy = kind === 'neutral' ? H * 0.3 : scene === 'field' ? H * 0.36 : H * 0.42;
+    var txt = String(st.text).toUpperCase(), sub = st.sub ? String(st.sub) : '';
+    var maxW = kind === 'neutral' ? W * 0.62 : W * 0.9, base = kind === 'huge' ? 120 : kind === 'neutral' ? 34 : 64;
+    var ff = fitFont(txt, maxW, base), px = ff.px;
+    var tone = 1 - fade;
+    var settle = thunk < 1 ? 0 : Math.exp(-(t - 0.13) * 18) * Math.sin((t - 0.13) * 50) * 0.03;
+    P.save(); P.translate(cx, cy); P.rotate(rot + (1 - thunk) * -0.15 + settle); P.scale(sc, sc);
+    if (kind === 'huge') {
+      fill(R.star(0, -px * 0.3, W * 0.62, W * 0.4, 16, t * 0.4, 0.15, U.rng(seed)), { c: tone }, { over: true });
+      fill(R.rays(0, -px * 0.3, W * 0.9, 18, t * 0.25, 0.4), { b: 0.3 * tone }, { over: true });
+    }
+    var main = kind === 'bad' ? { a: tone } : kind === 'neutral' ? { a: tone } : { b: tone };
+    var shadow = kind === 'bad' ? { b: tone } : kind === 'neutral' ? { c: tone } : { a: tone };
+    // double hit: the second impression lands offset and converges as the stamp settles
+    var dh = (1 - thunk) * 14 + 3.2;
+    P.text(txt, dh * 0.7, dh * 0.6, ff.font, shadow, { align: 'center', over: kind === 'neutral', outline: kind === 'neutral' ? 0 : 3 });
+    P.text(txt, 0, 0, ff.font, main, { align: 'center', over: true });
+    if (kind === 'bad') stroke(seg(-P.measure(txt, ff.font) * 0.55, -px * 0.3, P.measure(txt, ff.font) * 0.55, -px * 0.42), { b: tone }, Math.max(3, px * 0.09), { over: true });
+    if (sub) {
+      var sf = R.mono(kind === 'neutral' ? 11 : 13, true), sw = P.measure(sub, sf) + 18;
+      var sy = px * 0.35 + 8;
+      var rib = R.poly([-sw / 2 - 8, sy, sw / 2 + 8, sy, sw / 2, sy + 10, sw / 2 + 8, sy + 20, -sw / 2 - 8, sy + 20, -sw / 2, sy + 10]);
+      if (tone > 0.2) { fill(rib, kind === 'bad' ? { b: tone } : { a: tone }); P.text(sub, 0, sy + 14.5, sf, PAPER, { align: 'center', ko: ['a', 'b', 'c'] }); }
+    }
+    P.restore();
+  }
+
+  // ------------------------------------------------------------------ caches
+  function inksFor(view) {
+    if (S.inkPick) return S.inkPick;
+    var park = parkOf(view);
+    return R.inks(park.inkset || 'classic');
+  }
+  function cacheKey(scene, park, inks) { return scene + '|' + park.id + '|' + inks.id + '|' + S.W + 'x' + S.H + '@' + S.dpr; }
+  function snapBand(y0, y1) {
+    var d = S.dpr, py0 = Math.max(0, Math.floor((y0 + M) * d)), py1 = Math.min(S.P.ph, Math.ceil((y1 + M) * d)), o = { py0: py0, ph: py1 - py0 };
+    R.SLOTS.forEach(function (s) {
+      var c = R.canvas(S.P.pw, o.ph), x = c.getContext('2d');
+      x.drawImage(S.P.c[s], 0, py0, S.P.pw, o.ph, 0, 0, S.P.pw, o.ph);
+      o[s] = c;
+    });
+    return o;
+  }
+  function loadBand(b) {
+    R.SLOTS.forEach(function (s) {
+      var x = S.P.layer(s);
+      x.save(); x.setTransform(1, 0, 0, 1, 0, 0);
+      x.clearRect(0, b.py0, S.P.pw, b.ph);
+      x.drawImage(b[s], 0, b.py0);
+      x.restore();
+    });
+  }
+  function dropCaches(keep) {
+    for (var k in S.cache) if (!keep || keep.indexOf(k) < 0) delete S.cache[k];
+  }
+  function ensureBat(park, inks) {
+    var key = cacheKey('bat', park, inks);
+    if (S.cache[key]) return S.cache[key];
+    var t0 = now();
+    P = S.P; P.setInks(inks);
+    var g = batGeom(park), entry = { key: key, bands: [] };
+    for (var v = 0; v < 3; v++) {
+      P.reset(); P.clear();
+      drawBatBackground(park, v);
+      P.starve(0.55);
+      if (v === 0) entry.snap = P.snapshot();
+      entry.bands.push(snapBand(g.bandY0, g.bandY1));
+    }
+    dropCaches([key, cacheKey('field', park, inks)]);
+    S.cache[key] = entry;
+    S.built = now() - t0;
+    return entry;
+  }
+  function ensureField(park, inks) {
+    var key = cacheKey('field', park, inks);
+    if (S.cache[key]) { S.fcam = S.cache[key].cam; return S.cache[key]; }
+    var t0 = now();
+    layoutField(park);
+    var bake = R.press({ w: S.W, h: S.H, dpr: S.dpr * 1.25, margin: M, inks: inks, cell: 4.2 });
+    var prevP = P; P = bake; P.reset(); P.clear();
+    drawFieldBackground(park);
+    P.starve(0.5);
+    P = prevP;
+    var entry = { key: key, snap: bake.c, cam: S.fcam };
+    for (var k in S.cache) if (k.indexOf('field|') === 0) delete S.cache[k];
+    S.cache[key] = entry;
+    S.built = now() - t0;
+    return entry;
+  }
+  function ensureTitle(park, inks) {
+    var key = cacheKey('title', park, inks);
+    if (S.cache[key]) return S.cache[key];
+    P = S.P; P.setInks(inks); P.reset(); P.clear();
+    drawTitleBackground(park);
+    P.starve(0.5);
+    var entry = { key: key, snap: P.snapshot() };
+    for (var k in S.cache) if (k.indexOf('title|') === 0) delete S.cache[k];
+    S.cache[key] = entry;
+    return entry;
+  }
+  function now() { return (typeof performance !== 'undefined' ? performance.now() : Date.now()); }
+
+  // ------------------------------------------------------------------ frame
+  function frame(view) {
+    if (!S.ctx) return;
+    view = view || { scene: 'title' };
+    var t0 = now();
+    var scene = view.scene || 'title', park = parkOf(view), inks = inksFor(view), time = view.time || 0;
+    P = S.P; P.setInks(inks);
+    if (view.hitstop) time = S.freezeT; else S.freezeT = time;
+    if (scene !== S.lastScene) {
+      if (scene === 'title') { for (var k in S.cache) if (k.indexOf('title|') < 0) delete S.cache[k]; }
+      else { for (var k2 in S.cache) if (k2.indexOf('title|') === 0) delete S.cache[k2]; }
+      S.lastScene = scene;
+    }
+    if (scene === 'bat') frameBat(view, park, inks, time);
+    else if (scene === 'field') frameField(view, park, inks, time);
+    else frameTitle(view, park, inks, time);
+
+    // print
+    var amp = scene === 'title' ? 1.5 : 1.1;
+    var offs = R.offsets(time, amp, clamp(view.shake || 0, 0, 1));
+    if (view.onFire && scene !== 'title') { offs.b.x += Math.sin(time * 13) * 0.8; offs.c.y += Math.cos(time * 11) * 0.8; }
+    P.composite(S.ctx, offs, { grainShift: 0 });
+    var dt = now() - t0;
+    S.perf.push(dt); if (S.perf.length > 120) S.perf.shift();
+  }
+  function frameTitle(view, park, inks, time) {
+    var e = ensureTitle(park, inks);
+    P.reset(); P.load(e.snap);
+    drawTitleDynamic(view, time);
+    P.reset();
+  }
+  function frameBat(view, park, inks, time) {
+    var e = ensureBat(park, inks);
+    P.reset(); P.load(e.snap);
+    var g = batGeom(park);
+    // crowd shimmer: swap pre-printed crowd bands (faster when the crowd is roaring)
+    var rate = view.onFire ? 9 : 3.2, vi = Math.floor(time * rate) % 4;
+    vi = vi === 3 ? 1 : vi;
+    if (vi) loadBand(e.bands[vi]);
+    if (view.onFire) drawFire(time, g.standsTop, g.hz + 6);
+    // flags on the roof
+    flags(time, g);
+    var pitcher = view.pitcher || DEFAULT_PITCHER, pitch = view.pitch;
+    var ph = 0;
+    if (view.windup != null) ph = clamp(view.windup, 0, 1);
+    else if (pitch && view.pitchT != null) ph = 1 + clamp(view.pitchT / 0.5, 0, 1);
+    drawPitcher(pitcher, ph, time, pitch);
+    drawZone(view);
+    var ci = contactInfo(view), T = pitch ? (pitch.T || 0.8) : 0;
+    var flying = pitch && view.pitchT != null && view.windup == null && !ci;
+    var arrived = flying && view.pitchT >= T;
+    if (flying && !arrived && view.assist) drawAssist(view);
+    if (flying && !arrived) drawPitchBall(view);
+    drawCatcherBody(view);
+    drawMitt(view, false);
+    if (arrived) drawPitchBall(view);
+    drawMitt(view, true);
+    if (arrived && view.pitchT - T < 0.25) {
+      var m = mittTarget(view), pe = (view.pitchT - T) / 0.25;
+      fill(R.star(m.x, m.y - 6, 26 + 16 * pe, 12, 10, 0.2, 0.2, U.rng(2)), { c: 1 - pe }, { over: true });
+    }
+    drawBatter(view);
+    if (ci) drawContact(view, ci);
+    drawHud(view);
+    drawStamp(view.stamp, 'bat');
+    if (view.hitstop) fill(rect(-M, -M, S.W + 2 * M, S.H + 2 * M), { c: 0.3 }, { over: true });
+    P.reset();
+  }
+  function flags(time, g) {
+    var W = S.W, p = new Path2D(), pl = new Path2D();
+    [0.24, 0.5, 0.76].forEach(function (fx, i) {
+      var x = W * fx + (i === 1 ? W * 0.18 : 0), y = g.standsTop - 4;
+      pl.moveTo(x, y); pl.lineTo(x, y - 20);
+      var w = Math.sin(time * 4 + i) * 2.5;
+      p.moveTo(x, y - 20); p.quadraticCurveTo(x + 6, y - 22 + w, x + 13, y - 17 + w * 0.5); p.quadraticCurveTo(x + 6, y - 14 + w, x, y - 13); p.closePath();
+    });
+    stroke(pl, A1, 1.1);
+    fill(p, { b: 1 });
+  }
+  function frameField(view, park, inks, time) {
+    var e = ensureField(park, inks);
+    S.fbake = e.snap; S.fcam = e.cam;
+    var fv = fieldView(view);
+    view._fz = fv.z;
+    P.reset();
+    loadFieldBake(fv);
+    if (view.onFire) { P.reset(); fill(rect(-M, -M, S.W + 2 * M, S.H + 2 * M), { b: 0.16 }, { over: true }); }
+    P.reset(); P.save(); applyFieldView(fv);
+    drawFieldDynamic(view, park, time);
+    P.restore();
+    if (view.onFire) drawFire(time, S.H * 0.82, S.H + 4);
+    drawHud(view);
+    drawStamp(view.stamp, 'field');
+    P.reset();
+  }
+
+  // ------------------------------------------------------------------ API
+  function init(canvas) {
+    S.canvas = canvas;
+    S.ctx = canvas.getContext('2d');
+    S.P = R.press({ w: S.W, h: S.H, dpr: S.dpr, margin: M, cell: 4.2 });
+    var w = canvas.clientWidth || window.innerWidth || 390, h = canvas.clientHeight || window.innerHeight || 844;
+    resize(w, h, Math.min(window.devicePixelRatio || 1, K.MAX_DPR));
+  }
+  function resize(w, h, dpr) {
+    w = Math.max(1, Math.round(w)); h = Math.max(1, Math.round(h));
+    dpr = Math.min(dpr || 1, K.MAX_DPR || 2);
+    if (w === S.W && h === S.H && dpr === S.dpr && S.canvas && S.canvas.width === Math.round(w * dpr)) return;
+    S.W = w; S.H = h; S.dpr = dpr;
+    if (S.canvas) { S.canvas.width = Math.round(w * dpr); S.canvas.height = Math.round(h * dpr); }
+    if (S.P) S.P.resize(w, h, dpr);
+    S.cache = {};
+    layoutBat();
+  }
+  function setInks(set) {
+    if (set == null || set === 'park') { S.inkPick = null; return; }
+    var r = R.inks(set);
+    if (S.inkPick && S.inkPick.id === r.id && S.inkPick.a === r.a && S.inkPick.b === r.b) return;
+    S.inkPick = r;
+  }
+  // build the static caches ahead of time (e.g. during the pre-game screen) so the first pitch / first hit never hitches
+  function prepare(park, inkset) {
+    park = park && park.fence ? park : DEFAULT_PARK;
+    var inks = inkset ? R.inks(inkset) : S.inkPick || R.inks(park.inkset);
+    ensureBat(park, inks); ensureField(park, inks);
+  }
+
+  layoutBat();
+  BB.Render = {
+    init: init, resize: resize, setInks: setInks, frame: frame,
+    title: function (v) { v = v || {}; var o = {}; for (var k in v) o[k] = v[k]; o.scene = 'title'; return frame(o); },
+    screenToPlate: screenToPlate, plateToScreen: plateToScreen,
+    prepare: prepare,
+    stats: function () {
+      var a = S.perf.slice().sort(function (x, y) { return x - y; });
+      return { frames: a.length, median: a[a.length >> 1] || 0, p95: a[Math.floor(a.length * 0.95)] || 0, lastBuildMs: S.built, caches: Object.keys(S.cache) };
+    },
+    _S: S,
+  };
+})();
+
 // ===================== MODULE: 40-audio.js =====================
 // 40-audio.js — BB.Audio + BB.Haptics. Owned by the audio agent.
 // Every sound is synthesized with the Web Audio API at call time: no files. Nothing here may throw: every public
@@ -3273,7 +5172,7 @@ BB.Rules = (function () {
     for (var k in after) if (!before[k]) {
       var p = k.split(':'), kind = p[0], id = p[1], name = id;
       if (kind === 'bat') name = BAT_BY[id].name;
-      else if (kind === 'inkset') name = (inksetById(id) || {}).name + ' inks';
+      else if (kind === 'inkset') name = (inksetById(id) || {}).name;
       else if (kind === 'chapter') { var ch = TOUR()[+id]; name = 'Issue ' + (+id + 1) + (ch && ch.title ? ': ' + ch.title : ''); }
       out.push({ kind: kind, id: kind === 'chapter' ? +id : id, name: name });
     }
@@ -3729,6 +5628,1154 @@ BB.Rules = (function () {
       TEAMS = buildTeams(); CARDS = buildCards(TEAMS); CARD_BY = {}; CARDS.forEach(function (c) { CARD_BY[c.id] = c; });
       BB.Meta.TEAMS = TEAMS; BB.Meta.CARDS = CARDS;
     },
+  };
+})();
+
+// ===================== MODULE: 56-ui.js =====================
+// 56-ui.js — every menu: DOM screens over the game canvas, riso-zine styled with CSS (see shell.head.html).
+// Owned by the meta agent. Talks to BB.Meta for data, BB.Game to start/pause/quit, BB.CardArt for drawings
+// (with built-in fallbacks), BB.Audio for clicks and fanfares. Main calls show('results', ...), toast(), inGame(),
+// hideAll(). Everything is guarded so a missing module never breaks a screen.
+(function () {
+  var U = BB.U;
+  var root, screensEl, pauseBtn, toastsEl;
+  var cur = null, curData = null, curEl = null, inGameFlag = false;
+  var redraws = [], timers = [], intervals = [];
+  var audioUnlocked = false, menuMusic = false, lastStart = null, artInk = null;
+
+  function M() { return BB.Meta; }
+  function C() { return BB.Content || null; }
+  function sfx(n, o) { if (BB.Audio && BB.Audio.sfx) { try { BB.Audio.sfx(n, o || {}); } catch (e) {} } }
+  function audio(fn) { if (BB.Audio && BB.Audio[fn]) { try { return BB.Audio[fn].apply(BB.Audio, [].slice.call(arguments, 1)); } catch (e) {} } }
+  function haptic(k) { if (BB.Haptics && BB.Haptics[k] && M().settings().haptics !== false) { try { BB.Haptics[k](); } catch (e) {} } }
+  function later(fn, ms) { var t = setTimeout(fn, ms); timers.push(t); return t; }
+  function every(fn, ms) { var t = setInterval(fn, ms); intervals.push(t); return t; }
+  function clearTimers() { timers.forEach(clearTimeout); intervals.forEach(clearInterval); timers = []; intervals = []; }
+  function fmt(n) { return U.fmtInt(n || 0); }
+  function inkById(id) { for (var i = 0; i < BB.INKSETS.length; i++) if (BB.INKSETS[i].id === id) return BB.INKSETS[i]; return BB.INKSETS[0]; }
+  function getPark(id) { var c = C(); return c && c.getPark ? c.getPark(id) : null; }
+  function getPitcher(id) { var c = C(); return c && c.getPitcher ? c.getPitcher(id) : null; }
+
+  // ------------------------------------------------------------------ DOM helpers
+  function h(spec, a, kids) {
+    var parts = spec.split('.'), e = document.createElement(parts[0] || 'div');
+    if (parts.length > 1) e.className = parts.slice(1).join(' ');
+    if (a) for (var k in a) {
+      var v = a[k];
+      if (v == null || v === false) continue;
+      if (k === 'text') e.textContent = v;
+      else if (k === 'html') e.innerHTML = v;
+      else if (k === 'on') { for (var ev in v) e.addEventListener(ev, v[ev]); }
+      else if (k === 'style') { if (typeof v === 'string') e.style.cssText = v; else for (var s in v) e.style.setProperty(s, v[s]); }
+      else if (k === 'cls') e.className += ' ' + v;
+      else e.setAttribute(k, v === true ? '' : v);
+    }
+    add(e, kids);
+    return e;
+  }
+  function add(e, kids) {
+    if (kids == null) return e;
+    if (!Array.isArray(kids)) kids = [kids];
+    kids.forEach(function (c) { if (c == null || c === false) return; e.appendChild(typeof c === 'object' ? c : document.createTextNode(String(c))); });
+    return e;
+  }
+  function mis(text, cls, tag) { return h((tag || 'span') + '.mis' + (cls ? '.' + cls : ''), { 'data-t': text, text: text }); }
+  function tap(fn, quiet) {
+    return function (e) { if (!quiet) sfx('tap'); haptic('tap'); fn(e); };
+  }
+  function btn(label, cls, fn, sub, attrs) {
+    var b = h('button.btn' + (cls ? '.' + cls.split(' ').join('.') : ''), attrs || {});
+    if (typeof label === 'string') b.appendChild(h('span', { text: label })); else add(b, label);
+    if (sub) b.appendChild(h('span.sub', { text: sub }));
+    b.addEventListener('click', tap(fn));
+    return b;
+  }
+  var STAR_PATH = 'M12 2.2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.4l-6.1 3.4 1.4-6.8L2.2 9.3l6.9-.8z';
+  function star(on, extra) { return '<svg class="star' + (on ? ' on' : '') + (extra || '') + '" viewBox="0 0 24 24"><path d="' + STAR_PATH + '"/></svg>'; }
+  function stars(n, max) { var s = ''; for (var i = 0; i < (max || 3); i++) s += star(i < n); return h('span.stars', { html: s }); }
+  function coin() { return h('i.coin'); }
+  function lockIcon() {
+    return h('span', { html: '<svg class="lock" viewBox="0 0 22 26"><path d="M5 11V7a6 6 0 0 1 12 0v4" fill="none" stroke="currentColor" stroke-width="2.6"/><rect x="1.5" y="11" width="19" height="13.5" rx="2" fill="currentColor"/><circle cx="11" cy="17.5" r="2.2" fill="var(--paper)"/></svg>' });
+  }
+  function header(title, backFn, right) {
+    return h('div.hdr', null, [
+      backFn ? h('button.back', { 'aria-label': 'Back', text: '←', on: { click: tap(backFn) } }) : null,
+      h('div.ttl' + (title.length > 11 ? '.long' : ''), null, mis(title)),
+      right || null,
+    ]);
+  }
+  function coinPill() { return h('div.pill', null, [coin(), h('span', { text: fmt(M().coins()) })]); }
+
+  // ------------------------------------------------------------------ inks
+  function setInks(ink) {
+    ink = ink || BB.INKSETS[0];
+    artInk = ink;
+    var s = document.documentElement.style;
+    s.setProperty('--ink-a', ink.a); s.setProperty('--ink-b', ink.b); s.setProperty('--ink-c', ink.c); s.setProperty('--paper', ink.paper || BB.INKS.paper);
+    var meta = document.querySelector('meta[name=theme-color]'); if (meta) meta.setAttribute('content', ink.paper || BB.INKS.paper);
+  }
+  function scopeInks(elm, ink) {
+    if (!ink) return elm;
+    elm.style.setProperty('--ink-a', ink.a); elm.style.setProperty('--ink-b', ink.b); elm.style.setProperty('--ink-c', ink.c);
+    elm.style.setProperty('--paper', ink.paper || BB.INKS.paper);
+    return elm;
+  }
+  function menuInk() {
+    var g = M().currentTourGame && M().currentTourGame();
+    return M().currentInkset(g ? getPark(g.park) : null);
+  }
+
+  // ------------------------------------------------------------------ canvases & art (with fallbacks)
+  function dpr() { return Math.min(window.devicePixelRatio || 1, 2); }
+  function cnv(w, hgt, cls) {
+    var c = document.createElement('canvas'), d = dpr();
+    c.width = Math.round(w * d); c.height = Math.round(hgt * d);
+    c.style.width = w + 'px'; c.style.height = hgt + 'px';
+    c.className = 'art' + (cls ? ' ' + cls : '');
+    return c;
+  }
+  function art(kind, canvas, obj, opts) {
+    var run = function () {
+      var ok = false;
+      if (BB.CardArt && typeof BB.CardArt[kind] === 'function') {
+        try { canvas.getContext('2d').setTransform(1, 0, 0, 1, 0, 0); BB.CardArt[kind](canvas, obj, opts || {}); ok = true; }
+        catch (e) { console.error('CardArt.' + kind, e); }
+      }
+      if (!ok) { try { FB[kind](canvas, obj, opts || {}); } catch (e) { console.error('fallback ' + kind, e); } }
+    };
+    redraws.push(run);
+    run();
+    return canvas;
+  }
+  function cardCanvas(card, w, rarity) {
+    var c = cnv(w, Math.round(w * 1.4));
+    var obj = card;
+    if (rarity && rarity !== card.rarity) { obj = {}; for (var k in card) obj[k] = card[k]; obj.rarity = rarity; }
+    return art('draw', c, obj);
+  }
+
+  // Fallback drawings: simple, riso-flavoured, used when BB.CardArt is missing or throws.
+  var FB = (function () {
+    function ctx(c) { var x = c.getContext('2d'); x.setTransform(1, 0, 0, 1, 0, 0); return x; }
+    function dots(x, w, hgt, col, step, r) {
+      x.fillStyle = col;
+      for (var yy = step / 2; yy < hgt; yy += step) for (var xx = ((yy / step) % 2 ? step / 2 : 0) + step / 2; xx < w; xx += step) { x.beginPath(); x.arc(xx, yy, r, 0, 7); x.fill(); }
+    }
+    function inks(o) { return o && o.inkset ? (typeof o.inkset === 'string' ? inkById(o.inkset) : o.inkset) : artInk || M().currentInkset(null); }
+    return {
+      draw: function (c, card) {
+        var x = ctx(c), w = c.width, hh = c.height, ink = inks(card), s = w / 100;
+        var mp = card.rarity === 'misprint';
+        x.fillStyle = ink.paper; x.fillRect(0, 0, w, hh);
+        x.globalCompositeOperation = 'multiply';
+        var slot = ink[card.teamColorSlot || 'a'] || ink.a;
+        dots(x, w, hh * 0.72, ink.c, 5 * s, 1.6 * s);
+        var off = mp ? 6 * s : 1.2 * s;
+        // figure
+        [[mp ? ink.a : ink.b, 0], [mp ? ink.b : ink.a, off]].forEach(function (p, i) {
+          x.fillStyle = p[0];
+          x.beginPath(); x.arc(50 * s + p[1], 42 * s + p[1] * .5, 13 * s, 0, 7); if (i) x.fill(); else { x.fillRect(28 * s, 60 * s, 44 * s, 40 * s); }
+          if (i) { x.fillRect(36 * s + p[1], 25 * s, 28 * s, 8 * s); }
+        });
+        x.fillStyle = slot; x.fillRect(0, hh - 30 * s, w, 30 * s);
+        x.strokeStyle = ink.a; x.lineWidth = 3 * s; x.strokeRect(4 * s, 4 * s, w - 8 * s, hh - 8 * s);
+        x.globalCompositeOperation = 'source-over';
+        x.fillStyle = ink.paper; x.font = 'bold ' + Math.round(8.5 * s) + 'px ' + BB.FONTS.display; x.textAlign = 'center';
+        x.fillText((card.name || '').toUpperCase().slice(0, 18), w / 2, hh - 17 * s);
+        x.font = 'bold ' + Math.round(7 * s) + 'px ' + BB.FONTS.body;
+        x.fillText(card.pos + ' · #' + card.number, w / 2, hh - 8 * s);
+        if (card.rarity !== 'common') { x.fillStyle = ink.a; x.font = Math.round(9 * s) + 'px ' + BB.FONTS.display; x.textAlign = 'left'; x.fillText(card.rarity === 'misprint' ? 'ERR' : card.rarity === 'foil' ? 'FOIL' : 'RARE', 9 * s, 17 * s); }
+      },
+      drawBat: function (c, bat) {
+        var x = ctx(c), w = c.width, hh = c.height, ink = inks(null), look = bat.look || {};
+        x.clearRect(0, 0, w, hh);
+        var wood = look.wood === 'dark' ? ink.a : look.wood === 'gold' ? ink.c : look.wood === 'ink' ? ink.b : ink.c;
+        function shape(dx, dy) {
+          x.beginPath(); var m = hh / 2 + dy;
+          x.moveTo(w * .06 + dx, m - hh * .1); x.lineTo(w * .45 + dx, m - hh * .09);
+          x.quadraticCurveTo(w * .7 + dx, m - hh * .3, w * .94 + dx, m - hh * .28);
+          x.arc(w * .94 + dx, m, hh * .28, -Math.PI / 2, Math.PI / 2);
+          x.quadraticCurveTo(w * .7 + dx, m + hh * .3, w * .45 + dx, m + hh * .09);
+          x.lineTo(w * .06 + dx, m + hh * .1); x.closePath();
+        }
+        x.globalCompositeOperation = 'multiply';
+        shape(0, 0); x.fillStyle = wood; x.fill();
+        x.fillStyle = ink[look.tape || 'a']; x.fillRect(w * .07, hh / 2 - hh * .11, w * .16, hh * .22);
+        x.beginPath(); x.arc(w * .05, hh / 2, hh * .16, 0, 7); x.fillStyle = ink.a; x.fill();
+        shape(2, 2); x.strokeStyle = ink.a; x.lineWidth = Math.max(2, hh * .04); x.stroke();
+        x.globalCompositeOperation = 'source-over';
+      },
+      drawInkset: function (c, ink) {
+        var x = ctx(c), w = c.width, hh = c.height;
+        x.fillStyle = ink.paper || BB.INKS.paper; x.fillRect(0, 0, w, hh);
+        x.globalCompositeOperation = 'multiply';
+        var r = Math.min(w, hh) * .3;
+        [[ink.a, .36, .42], [ink.b, .54, .58], [ink.c, .66, .4]].forEach(function (p) { x.fillStyle = p[0]; x.beginPath(); x.arc(w * p[1], hh * p[2], r, 0, 7); x.fill(); });
+        x.globalCompositeOperation = 'source-over';
+      },
+      drawPitcher: function (c, p) {
+        var x = ctx(c), w = c.width, hh = c.height, ink = inks(null), s = w / 100;
+        x.fillStyle = ink.paper; x.fillRect(0, 0, w, hh);
+        x.globalCompositeOperation = 'multiply';
+        dots(x, w, hh, ink.c, 6 * s, 2.2 * s);
+        x.fillStyle = ink.a; x.beginPath(); x.moveTo(12 * s, hh); x.quadraticCurveTo(50 * s, hh * .5, 88 * s, hh); x.fill();
+        x.beginPath(); x.arc(50 * s, hh * .42, 20 * s, 0, 7); x.fillStyle = ink.b; x.fill();
+        x.fillStyle = ink.a; x.fillRect(28 * s, hh * .26, 44 * s, 10 * s); x.fillRect(50 * s, hh * .3, 30 * s, 5 * s);
+        x.globalCompositeOperation = 'source-over';
+        x.fillStyle = ink.paper; x.font = Math.round(18 * s) + 'px ' + BB.FONTS.display; x.textAlign = 'center';
+        x.fillText(String((p && p.look && p.look.number) || ''), 50 * s, hh * .9);
+      },
+      drawPark: function (c, park) {
+        var x = ctx(c), w = c.width, hh = c.height, ink = park && park.inkset ? inkById(park.inkset) : inks(null);
+        x.fillStyle = ink.paper; x.fillRect(0, 0, w, hh);
+        x.globalCompositeOperation = 'multiply';
+        dots(x, w, hh * .55, ink.c, 6 * dpr(), 2 * dpr());
+        x.fillStyle = ink.a; x.beginPath(); x.moveTo(w * .5, hh * 1.05); x.lineTo(-w * .1, hh * .45); x.quadraticCurveTo(w * .5, hh * .1, w * 1.1, hh * .45); x.closePath(); x.fill();
+        x.fillStyle = ink.b; x.beginPath(); x.moveTo(w * .5, hh * .98); x.lineTo(w * .38, hh * .78); x.lineTo(w * .5, hh * .6); x.lineTo(w * .62, hh * .78); x.closePath(); x.fill();
+        x.globalCompositeOperation = 'source-over';
+      },
+    };
+  })();
+
+  // ------------------------------------------------------------------ toasts
+  function toast(text, kind) {
+    if (!toastsEl) return;
+    kind = kind || 'info';
+    var label = { ach: 'STAMPED', unlock: 'UNLOCKED', error: 'HOLD UP', info: 'NOTE', coins: '+COINS', level: 'LEVEL UP' }[kind] || 'NOTE';
+    var t = String(text || '');
+    if (kind === 'ach') t = t.replace(/^STAMPED:\s*/i, '');
+    var e = h('div.toast.' + kind, null, [h('span.tk', { text: label }), h('span', { text: t })]);
+    toastsEl.appendChild(e);
+    while (toastsEl.children.length > 3) toastsEl.removeChild(toastsEl.firstChild);
+    if (kind !== 'ach') sfx('toast');
+    setTimeout(function () { e.classList.add('out'); setTimeout(function () { if (e.parentNode) e.parentNode.removeChild(e); }, 320); }, kind === 'error' ? 2200 : 2800);
+  }
+  M() && M().onAchievement && M().onAchievement(function (a) {
+    // achievements earned outside a game (packs, equips) toast here; in-game ones are toasted by main
+    if (!inGameFlag && cur !== 'results') later(function () { toast(a.name, 'ach'); sfx('unlock'); }, 250);
+  });
+
+  // ------------------------------------------------------------------ screen management
+  function show(name, data) {
+    if (!SCREENS[name]) { console.warn('UI.show: unknown screen ' + name); name = 'title'; }
+    clearTimers();
+    redraws = [];
+    var el;
+    try { el = SCREENS[name](data || {}); }
+    catch (e) { console.error('UI screen ' + name, e); el = SCREENS.title({}); name = 'title'; }
+    screensEl.innerHTML = '';
+    screensEl.appendChild(el);
+    cur = name; curData = data || {}; curEl = el;
+    document.body.classList.toggle('paused', name === 'pause');
+    if (name !== 'pause' && name !== 'results') {
+      if (!inGameFlag) setInks(name === 'brief' && data && data.ink ? data.ink : menuInk());
+      startMenuMusic();
+    }
+    return el;
+  }
+  function hideAll() {
+    clearTimers();
+    screensEl.innerHTML = '';
+    cur = null; curEl = null;
+    document.body.classList.remove('paused');
+  }
+  function inGame(on) {
+    inGameFlag = !!on;
+    document.body.classList.toggle('ingame', inGameFlag);
+    if (on) { menuMusic = false; document.body.classList.remove('paused'); }
+  }
+  function startMenuMusic() {
+    if (inGameFlag || menuMusic || !audioUnlocked) return;
+    if (M().settings().music === false) return;
+    menuMusic = true;
+    audio('organ', 'menu');
+  }
+  function refresh() { if (cur && cur !== 'results' && cur !== 'pause') show(cur, curData); }
+
+  // ------------------------------------------------------------------ starting games
+  function startGame(mode, cfg) {
+    if (!BB.Game || typeof BB.Game.start !== 'function') { toast('The press is still warming up — game engine not loaded.', 'error'); return; }
+    menuMusic = false;
+    audio('organ', 'stop');
+    try { M().startGame(mode, cfg); } catch (e) {}
+    lastStart = { mode: mode, cfg: cfg };
+    hideAll();
+    inGame(true);
+    try { BB.Game.start(mode, cfg); } catch (e) { console.error('Game.start', e); inGame(false); show('title'); toast('Could not start that game.', 'error'); }
+  }
+  function dailyCfg() {
+    var key = U.dayKey();
+    if (BB.Rules && BB.Rules.dailyCfg) { try { return BB.Rules.dailyCfg(key); } catch (e) {} }
+    return { dayKey: key, mode: 'daily' };
+  }
+  function derbyCfg() {
+    var P = (C() && C().PARKS) || [], n = M().derby().games;
+    return P.length ? { park: P[n % P.length].id } : {};
+  }
+
+  // ================================================================== SCREENS
+  var SCREENS = {};
+
+  // ---------------------------------------------------------------- title
+  SCREENS.title = function () {
+    var m = M(), lv = m.levelInfo(), di = m.dailyInfo(), g = m.currentTourGame(), at = g && m.locate(g);
+    var unseen = BB.Meta.BATS.filter(function (b) { return b.id !== 'b_hickory' && m.batUnlocked(b.id) && !m.isSeen('bat:' + b.id); }).length +
+      BB.INKSETS.filter(function (s) { return s.id !== 'classic' && m.inksetUnlocked(s.id) && !m.isSeen('inkset:' + s.id); }).length;
+    var album = m.albumStats(), ach = m.achList().filter(function (a) { return a.earned; }).length;
+
+    var tourSub = at ? 'Issue ' + (at.ch + 1) + ' · Game ' + (at.k + 1) + ' — ' + g.title + ' · ' + m.tourStars() + '★' : 'Six parks, thirty games';
+    var dailySub = di.played ? 'Played ✓ ' + (di.result && di.result.label ? di.result.label : '') + ' · streak ' + di.streak
+      : (di.streak ? 'Keep your ' + di.streak + '-day streak alive!' : 'Same pitches for everyone today');
+    var derbyBest = m.derbyBest();
+
+    var tourBtn = btn(h('span.lab', null, [h('span', { text: 'Barnstorm Tour' }), h('span.chev', { text: '▶' })]), 'big primary', function () { show('tour'); }, tourSub);
+    var dailyBtn = btn(h('span.lab', null, [h('span', { text: 'Daily Derby #' + di.number }), !di.played ? h('span.dot-live') : null]), 'big', function () { openDaily(); }, dailySub);
+    var derbyBtn = btn(h('span.lab', null, [h('span', { text: 'Endless Derby' })]), 'big', function () { openDerby(); }, derbyBest ? 'Best: ' + derbyBest + ' HR' : 'Ten outs. Only homers count.');
+
+    var shopB = btn('Card Shop', '', function () { show('shop'); });
+    if (m.packInfo().canAfford) shopB.appendChild(h('span.badge', { text: '!' }));
+    var albumB = btn('Album', '', function () { show('album'); }, album.owned + '/' + album.total);
+    var lockerB = btn('Locker', '', function () { show('locker'); });
+    if (unseen) lockerB.appendChild(h('span.badge', { text: String(unseen) }));
+    var bookB = btn('Scorebook', '', function () { show('book'); }, ach + '/' + m.ACH.length + ' stamps');
+
+    var el = h('div.scr.clear.title', null, [
+      h('div.top', null, [
+        h('div.lvl', null, [h('span.num', { text: 'LV ' + lv.level }), h('div.bar', null, h('i', { style: 'width:' + Math.round(lv.frac * 100) + '%' }))]),
+        coinPill(),
+        h('button.iconbtn', { 'aria-label': 'Settings', on: { click: tap(function () { show('settings'); }) },
+          html: '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M10.3 2h3.4l.5 2.6 1.9.8 2.2-1.5 2.4 2.4-1.5 2.2.8 1.9 2.6.5v3.4l-2.6.5-.8 1.9 1.5 2.2-2.4 2.4-2.2-1.5-1.9.8-.5 2.6h-3.4l-.5-2.6-1.9-.8-2.2 1.5-2.4-2.4 1.5-2.2-.8-1.9L2 13.7v-3.4l2.6-.5.8-1.9-1.5-2.2 2.4-2.4 2.2 1.5 1.9-.8zM12 8.4a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2z"/></svg>' }),
+      ]),
+      h('div.mast', null, [
+        h('span.l1', { text: 'HALFTONE' }),
+        mis('HARDBALL', 'l2 flip'),
+        h('span.tag', { text: 'A one-tap batting zine' }),
+        h('span.no', { html: 'NO.<br>' + di.number }),
+      ]),
+      h('div.spacer'),
+      h('div.menu', null, [
+        tourBtn, dailyBtn, derbyBtn,
+        h('div.grid2', null, [shopB, albumB, lockerB, bookB]),
+        h('div.links', null, [
+          h('button', { text: 'How to play', on: { click: tap(function () { show('howto'); }) } }),
+          h('button', { text: 'Settings', on: { click: tap(function () { show('settings'); }) } }),
+        ]),
+      ]),
+    ]);
+    return el;
+  };
+
+  function openDaily() {
+    var cfg = dailyCfg();
+    show('brief', { mode: 'daily', cfg: cfg });
+  }
+  function openDerby() { show('brief', { mode: 'derby', cfg: derbyCfg() }); }
+
+  // ---------------------------------------------------------------- tour map
+  SCREENS.tour = function () {
+    var m = M(), T = m.tour();
+    var total = 0; T.forEach(function (c) { total += c.games.length * 3; });
+    var body = h('div.body');
+    var el = h('div.scr.tourmap', null, [
+      header('Barnstorm Tour', function () { show('title'); }, h('div.pill', null, [h('span', { html: star(true) }), h('span', { text: m.tourStars() + '/' + total })])),
+      body,
+    ]);
+    if (!T.length) {
+      body.appendChild(h('div.card', null, [h('p', { text: 'The tour schedule is still at the printer. Check back soon!' })]));
+      return el;
+    }
+    var nextG = m.currentTourGame(), focus = null;
+    T.forEach(function (ch, i) {
+      var park = getPark(ch.park), unlocked = m.chapterUnlocked(i);
+      var ink = park ? inkById(park.inkset) : null;
+      var issue = h('div.issue' + (unlocked ? '' : '.locked'));
+      scopeInks(issue, ink);
+      issue.appendChild(h('div.cover', null, [
+        h('div.no', null, [h('small', { text: 'ISSUE' }), h('b', { text: String(i + 1) })]),
+        h('h3', null, mis(ch.title)),
+        h('div.park', { text: park ? park.name + ' · ' + park.town : '' }),
+        h('div.blurb', { text: ch.blurb || '' }),
+        unlocked ? h('div.tot', { text: m.chapterStars(i) + '/' + ch.games.length * 3 + '★' }) : null,
+      ]));
+      if (!unlocked) {
+        var prev = T[i - 1], boss = prev && prev.games[prev.games.length - 1], bp = boss && getPitcher(boss.pitcher);
+        issue.appendChild(h('div.lockmsg', null, [lockIcon(), h('span', { text: 'Beat ' + (bp ? bp.name + (bp.nick ? ' "' + bp.nick + '"' : '') : 'the boss') + ' in Issue ' + i + ' to open this issue.' })]));
+      } else {
+        var ul = h('ul.games');
+        ch.games.forEach(function (g, k) {
+          var won = m.gameWon(g.id), open = m.gameUnlocked(g), isBoss = k === ch.games.length - 1;
+          var li = h('li' + (won ? '.won' : '') + (open ? '' : '.locked') + (isBoss ? '.boss' : '') + (g === nextG && !won ? '.next' : ''), { role: 'button' }, [
+            h('span.gstamp', { text: isBoss ? 'BOSS' : String(k + 1) }),
+            h('span.gt', null, [h('b', { text: g.title }), h('span', { text: open ? (g.scenario && g.scenario.goal) || g.blurb || '' : 'Win the previous game to unlock' })]),
+            open ? stars(m.gameStars(g)) : lockIcon(),
+          ]);
+          li.addEventListener('click', tap(function () {
+            if (!open) { toast('Win the previous game to unlock this one.', 'error'); return; }
+            show('brief', { mode: 'tour', cfg: g });
+          }));
+          if (g === nextG) focus = li;
+          ul.appendChild(li);
+        });
+        issue.appendChild(ul);
+      }
+      body.appendChild(issue);
+    });
+    if (focus) later(function () { try { var r = focus.getBoundingClientRect(); if (r.top > window.innerHeight * 0.7) body.scrollTop += r.top - window.innerHeight * 0.4; } catch (e) {} }, 30);
+    return el;
+  };
+
+  // ---------------------------------------------------------------- briefing
+  SCREENS.brief = function (d) {
+    var m = M(), mode = d.mode || 'tour', cfg = d.cfg || {};
+    var sc = cfg.scenario || null;
+    var pitcher = getPitcher(cfg.pitcher || (C() && C().DERBY_PITCHER)) || null;
+    var park = getPark(cfg.park) || null;
+    var ink = m.currentInkset(park);
+    d.ink = ink;
+    var at = mode === 'tour' ? m.locate(cfg) : null;
+    var kicker, title, back;
+    if (mode === 'tour') { kicker = at ? 'Issue ' + (at.ch + 1) + ' · Game ' + (at.k + 1) + (cfg.boss ? ' · Boss' : '') : 'Barnstorm Tour'; title = cfg.title || 'Tour game'; back = function () { show('tour'); }; }
+    else if (mode === 'daily') { var di = m.dailyInfo(cfg.dayKey); kicker = 'Daily Derby · ' + di.dayKey; title = 'Daily Derby #' + di.number; back = function () { show('title'); }; }
+    else { kicker = 'Endless Derby'; title = 'Home Run Derby'; back = function () { show('title'); }; }
+    if (!sc && mode === 'derby') sc = { goal: 'Ten outs. Takes are free; any swing that isn\'t a home run is an out.', starText: ['3 HR', '6 HR', '10 HR'] };
+
+    var body = h('div.body');
+    var el = h('div.scr.brief', null, [header(mode === 'tour' ? 'Briefing' : title, back, coinPill()), body]);
+    body.appendChild(h('div.kicker', { text: kicker }));
+    body.appendChild(h('h2', null, mis(title)));
+
+    // matchup: pitcher portrait + scouting report
+    var pw = Math.min(140, Math.round(window.innerWidth * 0.36));
+    var portrait = h('div.portrait', null, [art('drawPitcher', cnv(pw, Math.round(pw * 1.3)), pitcher || {}), pitcher && pitcher.boss ? h('span.bossmark', { text: 'BOSS' }) : null]);
+    var chips = h('div.chips');
+    if (pitcher && pitcher.arsenal) {
+      var arr = Object.keys(pitcher.arsenal).sort(function (a, b) { return pitcher.arsenal[b] - pitcher.arsenal[a]; });
+      arr.forEach(function (k, i) {
+        var nm = BB.Pitch && BB.Pitch.TYPES && BB.Pitch.TYPES[k] ? BB.Pitch.TYPES[k].name : k;
+        chips.appendChild(h('span.chip' + (i === 0 ? '.hot' : ''), { text: nm + ' ' + Math.round(pitcher.arsenal[k] * 100) + '%' }));
+      });
+    }
+    body.appendChild(h('div.matchup', null, [
+      portrait,
+      h('div.pinfo', null, pitcher ? [
+        h('div.nm', { text: pitcher.name }),
+        h('div.nick', { text: (pitcher.nick ? '"' + pitcher.nick + '" · ' : '') + (pitcher.hand === 'L' ? 'LHP' : 'RHP') + ' · ' + pitcher.velo + ' mph' }),
+        chips,
+        h('div.bio', { text: pitcher.bio || '' }),
+      ] : [h('div.nm', { text: 'Mystery Arm' }), h('div.bio', { text: 'Scouting report unavailable.' })]),
+    ]));
+    if (park) {
+      var sw = Math.min(window.innerWidth - 40, 420);
+      body.appendChild(h('div.parkstrip', null, [art('drawPark', cnv(sw, Math.round(sw * 0.34)), park), h('span.lab', { text: park.name })]));
+    }
+    var goal = h('div.goal.card', null, [h('div.sect', { style: 'margin-top:0', text: mode === 'tour' ? 'The Assignment' : 'Rules' }), h('div.gtxt', { text: (sc && sc.goal) || cfg.blurb || '' })]);
+    if (sc && (sc.starText || sc.stars)) {
+      var have = mode === 'tour' ? m.gameStars(cfg) : mode === 'daily' ? ((m.dailyInfo(cfg.dayKey).result || {}).stars || 0) : 0;
+      var ul = h('ul');
+      for (var i = 0; i < 3; i++) {
+        var txt = sc.starText ? sc.starText[i] : String(sc.stars[i]);
+        ul.appendChild(h('li', null, [h('span', { html: star(i < have) }), h('span', { text: txt })]));
+      }
+      goal.appendChild(ul);
+    }
+    if (mode === 'tour' && cfg.blurb) goal.appendChild(h('div.small.muted', { style: 'margin-top:8px;font-style:italic', text: cfg.blurb }));
+    body.appendChild(goal);
+    if (mode === 'daily') {
+      var dI = m.dailyInfo(cfg.dayKey);
+      body.appendChild(h('div.note', { text: dI.played
+        ? 'Already played today (' + ((dI.result && dI.result.label) || dI.result.score) + '). Replays are just for fun — they don\'t count toward your score or streak.'
+        : 'One scored attempt per day. Everyone gets the same pitches.' + (dI.streak ? ' Streak: ' + dI.streak + ' day' + (dI.streak > 1 ? 's' : '') + '.' : '') }));
+    }
+    if (mode === 'derby' && m.derbyBest()) body.appendChild(h('div.note', { text: 'Your best: ' + m.derbyBest() + ' HR' + (m.derby().bestDist ? ' · longest ' + m.derby().bestDist + ' ft' : '') + '. Beat it.' }));
+    body.appendChild(h('div.note', { style: 'border-color:var(--ink-a);border-style:dotted', text: 'Swinging ' + m.currentBat().name + '. Change bats in the Locker.' }));
+
+    el.appendChild(h('div.foot', null, [btn('Play Ball!', 'big hot', function () { startGame(mode, cfg); })]));
+    return el;
+  };
+
+  // ---------------------------------------------------------------- pause
+  SCREENS.pause = function () {
+    var s = M().settings();
+    function tog(label, key) {
+      var b = btn(label + (s[key] !== false ? ': ON' : ': OFF'), s[key] !== false ? 'on' : '', function () {
+        M().setSetting(key, !(M().settings()[key] !== false));
+        show('pause');
+      });
+      return b;
+    }
+    return h('div.scr.overlay.pause', null, [
+      h('div.center', null, [
+        h('div.vstamp.worn', { text: 'TIME OUT' }),
+        btn('Resume', 'big primary', function () {
+          if (BB.Game && BB.Game.resume) BB.Game.resume(); else { hideAll(); }
+        }),
+        btn('Restart', '', function () {
+          if (lastStart) { try { M().startGame(lastStart.mode, lastStart.cfg); } catch (e) {} }
+          if (BB.Game && BB.Game.restart) { hideAll(); BB.Game.restart(); }
+          else if (lastStart) startGame(lastStart.mode, lastStart.cfg);
+        }),
+        btn('Quit to Menu', '', function () {
+          if (BB.Game && BB.Game.quit) BB.Game.quit();
+          if (cur === 'pause' || !cur) { inGame(false); show('title'); }
+        }),
+        h('div.toggles', null, [tog('Sound', 'sound'), tog('Music', 'music'), tog('Haptics', 'haptics'), tog('Read ring', 'assist')]),
+      ]),
+    ]);
+  };
+
+  // ---------------------------------------------------------------- results
+  SCREENS.results = function (d) {
+    var m = M(), mode = d.mode || 'tour', cfg = d.cfg || {}, res = d.result || {}, rw = d.rewards;
+    if (!rw) { try { rw = m.endGame(mode, cfg, res); } catch (e) { rw = {}; } }
+    rw = rw || {};
+    var win = !!res.win;
+    var body = h('div.body');
+    var el = h('div.scr.results', null, [body]);
+
+    var verdict;
+    if (mode === 'tour') verdict = win ? 'WIN!' : 'LOSS';
+    else if (mode === 'daily') verdict = 'FINAL';
+    else verdict = rw.best ? 'RECORD!' : 'FINAL';
+    var good = win || mode !== 'tour' && (res.score > 0);
+    body.appendChild(h('div.verdict', null, [
+      h('div.vstamp.worn.' + (good ? 'win' : 'lose'), { text: verdict }),
+      res.headline ? h('div.head', null, mis(res.headline)) : null,
+      h('div.score', { text: res.scoreLabel || (res.score != null ? String(res.score) : '') }),
+    ]));
+    later(function () { sfx('stamp'); haptic('thud'); }, 180);
+
+    var nStars = res.stars || 0;
+    var starRow = h('div.bigstars');
+    var starEls = [];
+    for (var i = 0; i < 3; i++) { var sp = h('span', { html: star(false) }); starRow.appendChild(sp); starEls.push(sp); }
+    body.appendChild(starRow);
+    for (var j = 0; j < nStars; j++) (function (j) {
+      later(function () { starEls[j].innerHTML = star(true); sfx('stamp'); haptic('tap'); }, 650 + j * 420);
+    })(j);
+
+    var st = res.stats || {};
+    var parts = [];
+    if (st.hits != null) parts.push(st.hits + ' H');
+    if (st.hr) parts.push(st.hr + ' HR');
+    if (st.bb) parts.push(st.bb + ' BB');
+    if (st.k) parts.push(st.k + ' K');
+    if (st.longest) parts.push('long ' + Math.round(st.longest) + ' ft');
+    if (st.maxEV) parts.push('max ' + Math.round(st.maxEV) + ' mph');
+    if (st.perfects) parts.push(st.perfects + ' perfect');
+    if (parts.length) body.appendChild(h('div.statline', null, parts.map(function (p) { return h('span', { text: p }); })));
+
+    if (mode === 'tour' && rw.starsBefore != null && nStars > rw.starsBefore && rw.starsBefore > 0) body.appendChild(h('div.statline', { text: 'New best! (was ' + rw.starsBefore + '★)' }));
+    if (mode === 'daily' && rw.daily) {
+      body.appendChild(h('div.note', { style: 'text-align:center', text: rw.daily.replay
+        ? 'Replay — today\'s scored attempt stands: ' + ((rw.daily.result && rw.daily.result.label) || '') + '.'
+        : 'Daily Derby #' + rw.daily.number + ' logged. Streak: ' + rw.daily.streak + ' day' + (rw.daily.streak === 1 ? '' : 's') + (rw.daily.bestStreak > rw.daily.streak ? ' (best ' + rw.daily.bestStreak + ')' : '') + '.' }));
+    }
+
+    // rewards tally
+    var tally = h('div.tally.card');
+    tally.appendChild(h('div.sect', { style: 'margin-top:0', text: 'Payday' }));
+    var lines = (rw.lines || []).slice();
+    if (rw.newAch && rw.newAch.length) lines.push({ label: rw.newAch.length + ' stamp' + (rw.newAch.length > 1 ? 's' : ''), coins: rw.newAch.length * (m.ACH_COINS || 25), xp: 0 });
+    var lineBox = h('div');
+    tally.appendChild(lineBox);
+    var ctot = h('span', { text: '0' });
+    var lvBefore = rw.levelInfoBefore || m.levelInfo(), lvAfter = rw.levelInfo || m.levelInfo();
+    var barI = h('i', { style: 'width:' + Math.round(lvBefore.frac * 100) + '%;transition:width .9s ease-out' });
+    var lvLab = h('span.stamp', { style: 'font-size:.9rem', text: 'LV ' + lvBefore.level });
+    tally.appendChild(h('div.totals', null, [h('span.ctot', null, [coin(), ctot]), h('div.lvwrap', null, [lvLab, h('div.bar', null, barI)])]));
+    var xpLab = h('div.small', { style: 'text-align:right;font-weight:700;margin-top:4px', text: '+' + (rw.xp || 0) + ' XP' });
+    tally.appendChild(xpLab);
+    body.appendChild(tally);
+    var t0 = 900 + nStars * 420;
+    lines.forEach(function (l, i) {
+      later(function () {
+        lineBox.appendChild(h('div.ln', null, [h('span', { text: l.label }), h('span', { text: (l.coins ? '+' + l.coins + 'c' : '') + (l.xp ? '  +' + l.xp + 'xp' : '') })]));
+        sfx('coin');
+      }, t0 + i * 220);
+    });
+    var tEnd = t0 + lines.length * 220;
+    later(function () {
+      var target = rw.coins || 0, start = performance.now();
+      var iv = every(function () {
+        var f = Math.min(1, (performance.now() - start) / 700);
+        ctot.textContent = '+' + fmt(target * U.easeOut(f));
+        if (f >= 1) clearInterval(iv);
+      }, 30);
+      if ((rw.level || 0) > (rw.levelBefore || 0)) {
+        barI.style.width = '100%';
+        later(function () {
+          barI.style.transition = 'none'; barI.style.width = '0%';
+          lvLab.innerHTML = ''; lvLab.appendChild(h('span.lvup', { text: 'LEVEL ' + rw.level + '!' }));
+          sfx('levelUp'); haptic('thud');
+          later(function () { barI.style.transition = 'width .7s ease-out'; barI.style.width = Math.round(lvAfter.frac * 100) + '%'; }, 60);
+        }, 950);
+      } else barI.style.width = Math.round(lvAfter.frac * 100) + '%';
+    }, tEnd);
+
+    // stamps + unlocks
+    if (rw.newAch && rw.newAch.length) {
+      var achBox = h('div.card', { style: 'margin-top:14px' }, [h('div.sect', { style: 'margin-top:0', text: 'New Stamps' })]);
+      var list = h('div.achs');
+      rw.newAch.forEach(function (a, i) {
+        list.appendChild(h('div.achrow', { style: 'animation-delay:' + (tEnd + 300 + i * 250) / 1000 + 's' }, [h('span.astamp.sm.worn', { text: a.mark || '★' }), h('span', null, [h('b', { text: a.name }), a.desc])]));
+      });
+      achBox.appendChild(list);
+      body.appendChild(achBox);
+    }
+    if (rw.unlocks && rw.unlocks.length) {
+      var ub = h('div.card', { style: 'margin-top:14px' }, [h('div.sect', { style: 'margin-top:0', text: 'Unlocked' })]);
+      var row = h('div.unl');
+      rw.unlocks.forEach(function (u) { row.appendChild(h('span.chip', { text: (u.kind === 'bat' ? 'Bat: ' : u.kind === 'inkset' ? 'Inks: ' : '') + u.name })); });
+      ub.appendChild(row);
+      body.appendChild(ub);
+      later(function () { sfx('unlock'); }, tEnd + 400);
+    }
+
+    // daily share + countdown
+    var foot = h('div.foot');
+    if (mode === 'daily') {
+      var cd = h('div.countdown');
+      body.appendChild(cd);
+      var tick = function () {
+        var now = new Date(), mid = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+        var s = Math.max(0, Math.floor((mid - now) / 1000));
+        cd.innerHTML = '';
+        add(cd, ['Next Daily Derby in ', h('b', { text: pad(Math.floor(s / 3600)) + ':' + pad(Math.floor(s / 60) % 60) + ':' + pad(s % 60) })]);
+      };
+      tick(); every(tick, 1000);
+      var shareText = res.share || ((rw.daily && rw.daily.result && rw.daily.result.share) || buildShare(res, rw));
+      foot.appendChild(btn('Share', 'primary', function () { share(shareText); }));
+      foot.appendChild(btn('Menu', '', function () { show('title'); }));
+    } else if (mode === 'tour') {
+      var next = win ? m.nextTourGame(cfg) : null;
+      if (next) foot.appendChild(btn('Next', 'primary', function () { show('brief', { mode: 'tour', cfg: next }); }));
+      foot.appendChild(btn('Retry', next ? '' : 'primary', function () { startGame('tour', cfg); }));
+      foot.appendChild(btn('Map', '', function () { show('tour'); }));
+    } else {
+      foot.appendChild(btn('Again', 'primary', function () { startGame('derby', derbyCfg()); }));
+      foot.appendChild(btn('Menu', '', function () { show('title'); }));
+    }
+    el.appendChild(foot);
+    return el;
+  };
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function buildShare(res, rw) {
+    var n = rw && rw.daily ? rw.daily.number : U.dayNumber(U.dayKey());
+    var s = 'Halftone Hardball · Daily Derby #' + n + '\n' + (res.scoreLabel || (res.score + ' HR'));
+    var st = ''; for (var i = 0; i < 3; i++) st += i < (res.stars || 0) ? '★' : '☆';
+    s += ' ' + st;
+    if (rw && rw.daily && rw.daily.streak > 1) s += '\nStreak: ' + rw.daily.streak;
+    return s;
+  }
+  function share(text) {
+    var url = location.protocol.indexOf('http') === 0 ? location.href.split('#')[0].split('?')[0] : '';
+    var full = text + (url ? '\n' + url : '');
+    function copied() { toast('Copied to clipboard — paste it anywhere.', 'info'); }
+    function legacy() {
+      try {
+        var ta = h('textarea', { style: 'position:fixed;top:-100px;opacity:0' }); ta.value = full; document.body.appendChild(ta);
+        ta.select(); document.execCommand('copy'); document.body.removeChild(ta); copied();
+      } catch (e) { toast('Could not copy. Screenshot it!', 'error'); }
+    }
+    function clip() {
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(full).then(copied, legacy);
+      else legacy();
+    }
+    if (navigator.share) {
+      navigator.share({ text: full }).catch(function (e) { if (!e || e.name !== 'AbortError') clip(); });
+    } else clip();
+  }
+
+  // ---------------------------------------------------------------- card shop
+  SCREENS.shop = function () {
+    var m = M(), pi = m.packInfo(), P = m.PACK;
+    var body = h('div.body');
+    var el = h('div.scr.shop', null, [header('Card Shop', function () { show('title'); }, coinPill()), body]);
+    var stage = h('div.shopstage');
+    var pack = packEl(pi.guaranteedNext);
+    stage.appendChild(pack);
+    var buy = btn('Buy Pack', 'big primary', function () { openPack(el); }, P.cost + ' coins · ' + P.size + ' cards');
+    if (!pi.canAfford) buy.classList.add('off');
+    stage.appendChild(h('div', { style: 'width:100%;max-width:340px;margin-top:6px' }, buy));
+    stage.appendChild(h('div.note', { style: 'text-align:center;max-width:320px', text: pi.guaranteedNext ? 'This pack is guaranteed RARE or better!' : 'Guaranteed RARE+ in ' + pi.guaranteedIn + ' packs (every ' + P.guaranteeEvery + 'rd pack).' }));
+    stage.appendChild(h('div.odds', { html: 'Odds per card: common ' + Math.round(P.odds.common * 100) + '% · rare ' + Math.round(P.odds.rare * 100) + '% · foil ' + Math.round(P.odds.foil * 100) + '%<br>Ultra-rare MISPRINT variant: ' + (P.misprint * 100).toFixed(1) + '% per card<br>Dupes pay back ' + P.refund.common + ' / ' + P.refund.rare + ' / ' + P.refund.foil + ' coins' }));
+    var a = m.albumStats();
+    stage.appendChild(h('div.small', { style: 'font-weight:700', text: 'Album: ' + a.owned + '/' + a.total + ' · misprints ' + a.misprints + ' · sets ' + a.sets + '/6' }));
+    body.appendChild(stage);
+    return el;
+  };
+  function packEl(guaranteed) {
+    return h('div.packwrap', null, h('div.pack', null, [
+      h('div.pk1', { html: 'HALFTONE<br>HARDBALL' }),
+      h('div.pk2', { text: 'SERIES ONE' }),
+      h('div.pk3', { text: '3 riso-printed cards' }),
+      guaranteed ? h('div.burst', { html: 'RARE+<br>INSIDE' }) : null,
+    ]));
+  }
+  function openPack(shopEl) {
+    var m = M(), r = m.openPack();
+    if (r.error) { toast('Not enough coins — ' + r.need + ' more. Win some games!', 'error'); audio('sfx', 'error'); return; }
+    audio('sfx', 'packRip'); haptic('thud');
+    var ov = h('div.opening');
+    shopEl.appendChild(ov);
+    var top = h('div.rip', { style: 'height:40px;width:190px;background:var(--ink-a);clip-path:polygon(0 100%,4% 70%,9% 100%,15% 60%,22% 100%,30% 75%,38% 100%,47% 65%,55% 100%,63% 70%,72% 100%,80% 60%,88% 100%,95% 75%,100% 100%,100% 0,0 0)' });
+    var low = h('div.packlow', null, packEl(r.guaranteed));
+    ov.appendChild(top); ov.appendChild(low);
+    var idx = 0;
+    var cw = Math.min(250, Math.round(window.innerWidth * 0.62), Math.round((window.innerHeight - 260) / 1.4));
+    var stageBox = h('div', { style: 'position:relative;display:flex;flex-direction:column;align-items:center;gap:12px' });
+    var tagBox = h('div.reveal-tag');
+    var hint = h('div.small', { style: 'font-weight:700', text: 'Tap the card to flip' });
+    later(function () {
+      ov.innerHTML = '';
+      ov.appendChild(h('div.stamp', { style: 'font-size:.9rem', text: 'Card ' + (idx + 1) + ' of ' + r.cards.length }));
+      ov.appendChild(stageBox);
+      ov.appendChild(tagBox);
+      ov.appendChild(hint);
+      showCard();
+    }, 900);
+    function showCard() {
+      var e = r.cards[idx];
+      stageBox.innerHTML = ''; tagBox.innerHTML = '';
+      ov.firstChild.textContent = 'Card ' + (idx + 1) + ' of ' + r.cards.length;
+      var flip = h('div.flip', { style: 'width:' + cw + 'px;height:' + Math.round(cw * 1.4) + 'px' });
+      var inner = h('div.in', { style: 'width:100%;height:100%' });
+      var back = h('div.face.back', null, h('div.cardback', null, h('span', { html: 'HALFTONE<br>HARDBALL' })));
+      var front = h('div.face.front');
+      inner.appendChild(back); inner.appendChild(front); flip.appendChild(inner);
+      stageBox.appendChild(flip);
+      var flipped = false;
+      flip.addEventListener('click', function () {
+        if (flipped) { next(); return; }
+        flipped = true;
+        front.appendChild(cardCanvas(e.card, cw, e.rarity));
+        flip.classList.add('shown');
+        sfx('cardFlip'); haptic('tap');
+        var special = e.rarity !== 'common';
+        if (special) {
+          later(function () { sfx('rare'); haptic('buzz'); }, 260);
+          stageBox.insertBefore(h('div.fanfare' + (e.misprint ? '.misprint' : '')), stageBox.firstChild);
+        }
+        var tags = [];
+        if (special) tags.push(h('span.t.' + e.rarity, { text: e.rarity === 'misprint' ? 'MISPRINT!!' : e.rarity === 'foil' ? 'FOIL!' : 'RARE' }));
+        tags.push(e.isNew ? h('span.t.new', { text: 'NEW!' }) : h('span.t.dupe', { text: 'DUPE +' + e.refund + 'c' }));
+        add(tagBox, tags.map(function (t, i) { if (i) t.style.marginLeft = '8px'; return t; }));
+        hint.textContent = idx < r.cards.length - 1 ? 'Tap for the next card' : 'Tap to finish';
+      });
+    }
+    function next() {
+      idx++;
+      if (idx < r.cards.length) { showCard(); return; }
+      // summary
+      ov.innerHTML = '';
+      ov.appendChild(h('div.stamp', { style: 'font-size:1.3rem' }, mis('Pack Pulled!')));
+      var minis = h('div.minis');
+      var mw = Math.min(104, Math.round((window.innerWidth - 60) / 3));
+      r.cards.forEach(function (e) {
+        minis.appendChild(h('div.cslot', null, [cardCanvas(e.card, mw, e.rarity), h('span.nm', { text: e.isNew ? 'NEW' : 'dupe +' + e.refund + 'c' })]));
+      });
+      ov.appendChild(minis);
+      if (r.refund) ov.appendChild(h('div.small', { style: 'font-weight:700', text: 'Duplicates paid back ' + r.refund + ' coins.' }));
+      r.sets.forEach(function (s) {
+        var rw = s.reward, nm = rw.kind === 'bat' ? (M().getBat(rw.id) || {}).name + ' bat' : inkById(rw.id).name + ' inks';
+        ov.appendChild(h('div.note', { text: 'SET COMPLETE: ' + s.team.name + '! Unlocked ' + nm + '.' }));
+        sfx('unlock');
+      });
+      var row = h('div.row', { style: 'width:100%;max-width:360px' }, [
+        btn('Another (' + M().PACK.cost + ')', 'primary', function () { ov.remove(); refreshShop(); openPack(curEl); }),
+        btn('Album', '', function () { show('album'); }),
+      ]);
+      if (M().coins() < M().PACK.cost) row.firstChild.classList.add('off');
+      ov.appendChild(row);
+      ov.appendChild(btn('Done', 'ghost', function () { show('shop'); }));
+    }
+    function refreshShop() { var pill = shopEl.querySelector('.hdr .pill span'); if (pill) pill.textContent = fmt(M().coins()); }
+    refreshShop();
+  }
+
+  // ---------------------------------------------------------------- album
+  var albumTeam = 0;
+  SCREENS.album = function (d) {
+    var m = M(), a = m.albumStats();
+    if (d && d.team != null) albumTeam = d.team;
+    var body = h('div.body');
+    var el = h('div.scr.album', null, [header('Album', function () { show('title'); }, h('div.pill', { text: a.owned + '/' + a.total })), body]);
+    var tabs = h('div.tabs');
+    m.TEAMS.forEach(function (t, i) {
+      var b = h('button.tab' + (i === albumTeam ? '.on' : '') + (m.teamComplete(i) ? '.done' : ''), null, [h('span', { text: t.short }), h('small', { text: a.byTeam[i] + '/12' })]);
+      b.addEventListener('click', tap(function () { albumTeam = i; show('album'); }));
+      tabs.appendChild(b);
+    });
+    body.appendChild(tabs);
+    var team = m.TEAMS[albumTeam];
+    var teamBox = h('div');
+    scopeInks(teamBox, inkById(team.inkset));
+    teamBox.appendChild(h('div.sect', { style: 'margin-top:4px' }, mis(team.name)));
+    var rwd = m.SET_REWARDS[albumTeam], rname = rwd.kind === 'bat' ? (m.getBat(rwd.id) || {}).name + ' (bat)' : inkById(rwd.id).name + ' (inks)';
+    var done = m.teamComplete(albumTeam);
+    teamBox.appendChild(h('div.setnote' + (done ? '.done' : ''), null, [h('span.astamp.sm' + (done ? '' : '.off'), { text: 'SET' }), h('span', { text: (done ? 'Set complete! Unlocked ' : 'Complete the set to unlock ') + rname + '.' })]));
+    var grid = h('div.cgrid');
+    var cw = Math.floor((Math.min(window.innerWidth, 520) - 28 - 20) / 3);
+    var queue = [];
+    m.CARDS.filter(function (c) { return c.teamIdx === albumTeam; }).forEach(function (c) {
+      var n = m.owned(c.id), mp = m.misprints(c.id);
+      var slot = h('div.cslot');
+      if (n) {
+        var holder = h('div', { style: 'width:' + cw + 'px;height:' + Math.round(cw * 1.4) + 'px' });
+        queue.push(function () { holder.appendChild(cardCanvas(c, cw)); });
+        slot.appendChild(holder);
+        if (n > 1) slot.appendChild(h('span.cnt', { text: 'x' + n }));
+        if (mp) slot.appendChild(h('span.mp', { text: 'ERR' }));
+        slot.appendChild(h('span.nm', { text: c.name }));
+        slot.addEventListener('click', tap(function () { cardModal(el, c); }));
+      } else {
+        slot.appendChild(h('div.empty', { style: 'width:' + cw + 'px;height:' + Math.round(cw * 1.4) + 'px', text: '#' + ('00' + c.no).slice(-3) }));
+        slot.appendChild(h('span.nm.dim', { text: c.posName }));
+      }
+      grid.appendChild(slot);
+    });
+    teamBox.appendChild(grid);
+    body.appendChild(teamBox);
+    // draw a few per frame so the screen appears instantly
+    (function pump() { var k = 0; while (queue.length && k++ < 4) queue.shift()(); if (queue.length) requestAnimationFrame(pump); })();
+    return el;
+  };
+  function cardModal(parent, c) {
+    var m = M(), mp = m.misprints(c.id), showMis = false;
+    var w = Math.min(260, Math.round(window.innerWidth * 0.66), Math.round((window.innerHeight - 300) / 1.4));
+    var md = h('div.modal');
+    scopeInks(md, inkById(c.inkset));
+    var holder = h('div');
+    function draw() { holder.innerHTML = ''; holder.appendChild(cardCanvas(c, w, showMis ? 'misprint' : null)); }
+    draw();
+    md.appendChild(holder);
+    md.appendChild(h('div.info', null, [
+      h('b', { text: c.name }),
+      h('p', { style: 'font-weight:700', text: (c.nick ? '"' + c.nick + '" · ' : '') + c.posName + ' · #' + c.number + ' · ' + c.team }),
+      h('p', { style: 'font-weight:700', text: c.stat }),
+      h('p', { style: 'font-style:italic', text: c.flavor }),
+      h('p', { text: c.rarity.toUpperCase() + ' · card ' + ('00' + c.no).slice(-3) + '/072 · owned x' + m.owned(c.id) + (mp ? ' · misprint x' + mp : '') }),
+    ]));
+    var row = h('div.row', { style: 'width:100%;max-width:340px' });
+    if (mp) row.appendChild(btn('Misprint', '', function () { showMis = !showMis; draw(); }));
+    row.appendChild(btn('Close', 'primary', function () { md.remove(); }));
+    md.appendChild(row);
+    md.addEventListener('click', function (e) { if (e.target === md) md.remove(); });
+    parent.appendChild(md);
+  }
+
+  // ---------------------------------------------------------------- locker
+  var lockerTab = 'bats';
+  SCREENS.locker = function () {
+    var m = M();
+    var body = h('div.body');
+    var el = h('div.scr.locker', null, [header('Locker', function () { show('title'); }, coinPill()), body]);
+    var tabs = h('div.tabs.two', null, [
+      h('button.tab' + (lockerTab === 'bats' ? '.on' : ''), { text: 'Bats', on: { click: tap(function () { lockerTab = 'bats'; show('locker'); }) } }),
+      h('button.tab' + (lockerTab === 'inks' ? '.on' : ''), { text: 'Ink Sets', on: { click: tap(function () { lockerTab = 'inks'; show('locker'); }) } }),
+    ]);
+    body.appendChild(tabs);
+    var bw = Math.min(window.innerWidth - 60, 440);
+    if (lockerTab === 'bats') {
+      var curBat = m.currentBat().id;
+      m.BATS.forEach(function (b) {
+        var open = m.batUnlocked(b.id), eq = b.id === curBat, fresh = open && b.id !== 'b_hickory' && !m.isSeen('bat:' + b.id);
+        var card = h('div.card.item' + (eq ? '.eq' : '') + (open ? '' : '.locked'));
+        card.appendChild(h('div.ihead', null, [h('b', { text: b.name }), eq ? h('span.eqtag', { text: 'EQUIPPED' }) : null, fresh ? h('span.newtag', { text: 'NEW' }) : null]));
+        card.appendChild(art('drawBat', cnv(bw, 54), b));
+        card.appendChild(h('div.desc', { text: b.desc }));
+        card.appendChild(meters(b));
+        if (open) {
+          if (!eq) card.addEventListener('click', tap(function () {
+            m.equipBat(b.id); toast(b.name + ' is in your hands.', 'info'); show('locker');
+          }));
+          if (fresh) m.markSeen('bat:' + b.id);
+        } else {
+          var rule = b.unlock, lr = h('div.lockrow', null, [lockIcon(), h('span', { style: 'flex:1', text: m.condText(rule) })]);
+          if (rule.kind === 'coins') lr.appendChild(btn('Buy', 'primary', function () {
+            var r = m.buy('bat', b.id);
+            if (r.error) toast('Need ' + fmt(r.need) + ' more coins.', 'error');
+            else { sfx('unlock'); m.equipBat(b.id); toast('Bought ' + b.name + '!', 'unlock'); show('locker'); }
+          }));
+          card.appendChild(lr);
+        }
+        body.appendChild(card);
+      });
+    } else {
+      var choice = m.inksetChoice();
+      var grid = h('div.igrid');
+      var tiles = [{ id: 'park', name: 'Park Press', park: true }].concat(BB.INKSETS);
+      var tw = Math.floor((Math.min(window.innerWidth, 520) - 28 - 12) / 2) - 22;
+      tiles.forEach(function (s) {
+        var open = m.inksetUnlocked(s.id), eq = choice === s.id, fresh = open && s.id !== 'park' && s.id !== 'classic' && !m.isSeen('inkset:' + s.id);
+        var tile = h('div.card.itile.item' + (eq ? '.eq' : '') + (open ? '' : '.locked'));
+        if (s.park) {
+          var strip = h('div', { style: 'display:grid;grid-template-columns:repeat(6,1fr);height:' + Math.round(tw * 0.62) + 'px;width:' + tw + 'px' });
+          ((C() && C().PARKS) || BB.INKSETS).slice(0, 6).forEach(function (p) {
+            var ink = p.a ? p : inkById(p.inkset);
+            strip.appendChild(h('div', { style: 'background:linear-gradient(' + ink.a + ' 0 34%,' + ink.b + ' 34% 67%,' + ink.c + ' 67%)' }));
+          });
+          tile.appendChild(strip);
+        } else tile.appendChild(art('drawInkset', cnv(tw, Math.round(tw * 0.62)), s));
+        tile.appendChild(h('div.ihead', null, [h('b', { text: s.name }), eq ? h('span.eqtag', { text: 'ON' }) : null, fresh ? h('span.newtag', { text: 'NEW' }) : null]));
+        tile.appendChild(h('div.desc', { text: m.INK_DESC[s.id] || '' }));
+        if (open) {
+          if (!eq) tile.addEventListener('click', tap(function () { m.equipInkset(s.id); setInks(menuInk()); show('locker'); }));
+          if (fresh) m.markSeen('inkset:' + s.id);
+        } else tile.appendChild(h('div.lockrow', null, [lockIcon(), h('span', { text: m.condText(m.inksetRule(s.id)) })]));
+        grid.appendChild(tile);
+      });
+      body.appendChild(grid);
+      body.appendChild(h('div.note', { text: 'Your press colours the whole game: menus, ballparks and cards in play. "Park Press" lets each park print in its own house inks.' }));
+    }
+    return el;
+  };
+  function meters(b) {
+    function bar(v, lo, hi) {
+      var f = U.clamp((v - lo) / (hi - lo), 0.04, 1), base = U.clamp((({ timing: 1, power: 1, lift: 0 })[arguments[3]] - lo) / (hi - lo), 0, 1);
+      return h('div.meter', null, [h('i', { style: 'width:' + Math.round(f * 100) + '%' }), h('span.mid', { style: 'left:' + Math.round(base * 100) + '%' })]);
+    }
+    return h('div.meters', null, [
+      h('span', { text: 'TIMING' }), bar(b.timing, 0.6, 1.5, 'timing'),
+      h('span', { text: 'POWER' }), bar(b.power, 0.86, 1.14, 'power'),
+      h('span', { text: 'LIFT' }), bar(b.lift, -6, 10, 'lift'),
+    ]);
+  }
+
+  // ---------------------------------------------------------------- scorebook
+  SCREENS.book = function () {
+    var m = M(), st = m.stats(), di = m.dailyInfo(), list = m.achList();
+    var body = h('div.body');
+    var el = h('div.scr.book', null, [header('Scorebook', function () { show('title'); }), body]);
+    var avg = st.swings ? (st.hits / Math.max(1, st.swings)).toFixed(3).replace(/^0/, '') : '.000';
+    body.appendChild(h('div.bigfig', null, [
+      h('div', null, [h('b', { text: fmt(st.hr) }), 'home runs']),
+      h('div', null, [h('b', { text: st.longest ? st.longest + '′' : '—' }), 'longest']),
+      h('div', null, [h('b', { text: st.maxEV ? st.maxEV : '—' }), 'top mph']),
+    ]));
+    body.appendChild(h('div.sect', { text: 'Lifetime' }));
+    var rows = [
+      ['Games played', st.games], ['Wins', st.wins], ['Pitches seen', st.pitches], ['Swings', st.swings],
+      ['Hits', st.hits], ['Singles / 2B / 3B', st.singles + ' / ' + st.doubles + ' / ' + st.triples], ['Walks', st.bb], ['Strikeouts', st.k],
+      ['Runs driven', st.runs], ['PERFECT swings', st.perfects], ['Hits per swing', avg], ['Best hit streak', st.bestStreak],
+      ['Times On Fire', st.onFire], ['Total HR distance', fmt(st.hrDist) + ' ft'], ['Tour stars', m.tourStars()],
+      ['Derby best', m.derbyBest() + ' HR'], ['Coins earned', fmt(st.coinsEarned)], ['Level', m.levelInfo().level],
+    ];
+    var led = h('div.ledger');
+    rows.forEach(function (r) { led.appendChild(h('span', { text: r[0] })); led.appendChild(h('span', { text: String(r[1]) })); });
+    body.appendChild(led);
+
+    body.appendChild(h('div.sect', { text: 'Daily Derby' }));
+    body.appendChild(h('div.small', { style: 'font-weight:700;margin-bottom:8px', text: 'Streak ' + di.streak + ' · best streak ' + (di.bestStreak || 0) + ' · best score ' + (di.best || 0) + ' HR' }));
+    var strip = h('div.strip');
+    m.dailyHistory(14).forEach(function (d) {
+      var isToday = d.dayKey === di.dayKey, p = d.result;
+      var dd = d.dayKey.split('-');
+      strip.appendChild(h('div.day' + (p ? '.played' : '.miss') + (isToday ? '.today' : ''), null, [
+        h('span', { style: 'position:relative', text: (+dd[1]) + '/' + (+dd[2]) }),
+        h('b', { style: 'position:relative', text: p ? String(p.score) : d.number > 0 ? '·' : '' }),
+      ]));
+    });
+    body.appendChild(strip);
+
+    var earned = list.filter(function (a) { return a.earned; }).length;
+    body.appendChild(h('div.sect', { text: 'Stamps ' + earned + '/' + list.length }));
+    var grid = h('div.stampgrid');
+    list.forEach(function (a) {
+      var cell = h('div.cell', null, [h('span.astamp' + (a.earned ? '.worn' : '.off'), { text: a.earned ? a.mark : '?' }), h('span' + (a.earned ? '' : '.muted'), { text: a.name })]);
+      cell.addEventListener('click', tap(function () { toast(a.name + ' — ' + a.desc + (a.earned ? ' ✓' : ''), a.earned ? 'ach' : 'info'); }, true));
+      grid.appendChild(cell);
+    });
+    body.appendChild(grid);
+    return el;
+  };
+
+  // ---------------------------------------------------------------- settings
+  SCREENS.settings = function () {
+    var m = M(), s = m.settings();
+    var body = h('div.body');
+    var el = h('div.scr.settings', null, [header('Settings', function () { show('title'); }), body]);
+    function toggle(key, label, sub) {
+      var on = s[key] !== false;
+      var t = h('button.tog' + (on ? '.on' : ''), { 'aria-label': label }, [h('b', { text: on ? 'ON' : 'OFF' }), h('i')]);
+      var row = h('div.set', null, [h('div.lab', null, [h('b', { text: label }), h('span', { text: sub })]), t]);
+      row.addEventListener('click', tap(function () { m.setSetting(key, !on); if (key === 'music') { menuMusic = false; if (on) audio('organ', 'stop'); } show('settings'); }));
+      return row;
+    }
+    body.appendChild(toggle('sound', 'Sound', 'Bat cracks, crowd, organ stabs.'));
+    body.appendChild(toggle('music', 'Music', 'The ballpark organ in the menus.'));
+    body.appendChild(toggle('haptics', 'Haptics', 'Buzz on contact (where supported).'));
+    body.appendChild(toggle('assist', 'Pitch-read ring', 'Shows where the pitch will cross the plate. Turn off for hard mode.'));
+
+    body.appendChild(h('div.sect', { text: 'Timing calibration' }));
+    var val = h('b.stamp', { text: s.latencyMs + ' ms' });
+    var slider = h('input.slider', { type: 'range', min: 0, max: 150, step: 5, value: s.latencyMs });
+    slider.addEventListener('input', function () { val.textContent = slider.value + ' ms'; });
+    slider.addEventListener('change', function () { m.setSetting('latencyMs', +slider.value); sfx('tap'); });
+    body.appendChild(h('div.row', null, [h('span.small', { style: 'flex:1;font-weight:700', text: 'Touch latency compensation' }), val]));
+    body.appendChild(slider);
+    body.appendChild(h('div.small', { text: 'Screens and fingers lag a little. If your on-time swings keep coming up LATE, slide right; if they read EARLY, slide left. Default 30 ms.' }));
+    // tap test
+    var beat = h('div.beat'), out = h('span.small', { style: 'flex:1;font-weight:700', text: 'Or tap along: 8 beats, tap the big dot each time it flashes.' });
+    var testBtn = btn('Tap test', '', function () { runTapTest(beat, out, slider, val); });
+    testBtn.style.width = 'auto';
+    body.appendChild(h('div.calib', null, [beat, out]));
+    body.appendChild(h('div', { style: 'margin-top:10px' }, testBtn));
+
+    body.appendChild(h('div.sect', { text: 'Help' }));
+    body.appendChild(btn('How to play', '', function () { show('howto', { from: 'settings' }); }));
+
+    body.appendChild(h('div.sect', { text: 'Danger zone' }));
+    var armed = false, reset = btn('Reset progress', 'danger', function () {
+      if (!armed) { armed = true; reset.firstChild.textContent = 'Tap again to erase everything'; later(function () { armed = false; reset.firstChild.textContent = 'Reset progress'; }, 3500); return; }
+      m.resetProgress(); toast('Fresh notebook. Good luck out there.', 'info'); show('title');
+    });
+    body.appendChild(reset);
+    body.appendChild(h('div.small', { style: 'margin-top:14px;text-align:center', text: (BB.Save.persistent() ? 'Progress is saved on this device.' : 'Private browsing: progress will not be saved after you close this tab.') + ' · v' + BB.VERSION }));
+    return el;
+  };
+  function runTapTest(beat, out, slider, val) {
+    var n = 8, period = 700, t0 = performance.now() + 600, offs = [], k = 0, done = false;
+    function flash() { beat.classList.add('on'); sfx('tap'); setTimeout(function () { beat.classList.remove('on'); }, 110); }
+    for (var i = 0; i < n; i++) later(flash, 600 + i * period);
+    out.textContent = 'Tap the dot on each flash...';
+    function onTap(e) {
+      e.preventDefault();
+      var t = (e.timeStamp && e.timeStamp > 1e3 ? e.timeStamp : performance.now()) - t0;
+      var beatIdx = Math.round(t / period);
+      if (beatIdx < 0 || beatIdx >= n) return;
+      offs.push(t - beatIdx * period);
+      k++;
+      beat.style.transform = 'scale(.9)'; setTimeout(function () { beat.style.transform = ''; }, 80);
+    }
+    beat.addEventListener('pointerdown', onTap);
+    later(function () {
+      beat.removeEventListener('pointerdown', onTap);
+      if (offs.length < 4) { out.textContent = 'Not enough taps — try again.'; return; }
+      offs.sort(function (a, b) { return a - b; });
+      var med = offs[Math.floor(offs.length / 2)];
+      var ms = U.clamp(Math.round(med / 5) * 5, 0, 150);
+      M().setSetting('latencyMs', ms); slider.value = ms; val.textContent = ms + ' ms';
+      out.textContent = 'You tap ' + Math.round(med) + ' ms after the flash. Set to ' + ms + ' ms.';
+      sfx('unlock');
+    }, 600 + n * period + 400);
+  }
+
+  // ---------------------------------------------------------------- how to play
+  var HOWTO = [
+    { t: 'Tap to swing', p: 'The pitcher winds up and lets go. Tap anywhere the moment the ball reaches the plate. Early pulls it to left, late pushes it to right.',
+      svg: '<rect x="70" y="40" width="120" height="140" fill="none" stroke="var(--ink-a)" stroke-width="4" stroke-dasharray="8 7"/>' +
+        '<circle cx="130" cy="110" r="26" fill="var(--ink-c)" style="mix-blend-mode:multiply"/><circle cx="134" cy="113" r="26" fill="none" stroke="var(--ink-b)" stroke-width="4"/>' +
+        '<path d="M115 98q15 12 0 26M150 98q-15 12 0 26" stroke="var(--ink-b)" stroke-width="3" fill="none"/>' +
+        '<circle cx="200" cy="200" r="16" fill="var(--ink-b)"/><circle cx="200" cy="200" r="30" fill="none" stroke="var(--ink-b)" stroke-width="3"/><circle cx="200" cy="200" r="44" fill="none" stroke="var(--ink-b)" stroke-width="2" stroke-dasharray="4 6"/>' +
+        '<text x="200" y="262" text-anchor="middle" font-family="Bungee, sans-serif" font-size="22" fill="var(--ink-a)">TAP!</text>' },
+    { t: 'Hold to load', p: 'Press and hold during the windup to coil a power swing, then let go to swing. Smaller timing window, a lot more pop.',
+      svg: '<path d="M40 210 L200 60" stroke="var(--ink-a)" stroke-width="22" stroke-linecap="round"/><path d="M44 214 L204 64" stroke="var(--ink-b)" stroke-width="22" stroke-linecap="round" opacity=".55" style="mix-blend-mode:multiply"/>' +
+        '<path d="M40 210 L80 173" stroke="var(--ink-c)" stroke-width="22" stroke-linecap="round" style="mix-blend-mode:multiply"/>' +
+        '<path d="M150 200 A80 80 0 0 0 220 120" fill="none" stroke="var(--ink-b)" stroke-width="5" stroke-dasharray="10 8"/><path d="M212 108l12 14-17 4z" fill="var(--ink-b)"/>' +
+        '<rect x="30" y="240" width="200" height="18" fill="none" stroke="var(--ink-a)" stroke-width="3"/><rect x="33" y="243" width="150" height="12" fill="var(--ink-b)"/>' +
+        '<text x="130" y="40" text-anchor="middle" font-family="Bungee, sans-serif" font-size="22" fill="var(--ink-a)">HOLD...</text>' },
+    { t: 'Lay off balls', p: 'Pitches outside the box are hard to hit. Let them go by — four balls is a walk. The ring shows where the ball will cross.',
+      svg: '<rect x="70" y="50" width="120" height="140" fill="none" stroke="var(--ink-a)" stroke-width="4" stroke-dasharray="8 7"/>' +
+        '<circle cx="222" cy="210" r="22" fill="var(--ink-c)" style="mix-blend-mode:multiply"/><circle cx="225" cy="212" r="22" fill="none" stroke="var(--ink-a)" stroke-width="4"/>' +
+        '<circle cx="222" cy="210" r="34" fill="none" stroke="var(--ink-b)" stroke-width="3" stroke-dasharray="5 5"/>' +
+        '<path d="M60 230l50 30M110 230l-50 30" stroke="var(--ink-b)" stroke-width="7" stroke-linecap="round"/>' +
+        '<text x="130" y="30" text-anchor="middle" font-family="Bungee, sans-serif" font-size="22" fill="var(--ink-a)">BALL ONE</text>' },
+  ];
+  SCREENS.howto = function (d) {
+    var i = (d && d.page) || 0, P = HOWTO[i], last = i === HOWTO.length - 1;
+    var from = d && d.from;
+    function done() { M().markHowToSeen(); show(from === 'settings' ? 'settings' : 'title'); }
+    var pips = h('div.pips'); HOWTO.forEach(function (_, k) { pips.appendChild(h('i' + (k === i ? '.on' : ''))); });
+    var el = h('div.scr.howto', null, [
+      h('div.hdr', null, [h('div.ttl', null, mis('How to Hit')), h('button.back', { style: 'width:auto;padding:0 12px;font-size:.8rem', text: 'SKIP', on: { click: tap(done) } })]),
+      h('div.panel', null, [
+        h('span.num', { text: (i + 1) + ' / ' + HOWTO.length }),
+        h('div', { html: '<svg class="ill" viewBox="0 0 260 280">' + P.svg + '</svg>' }),
+        h('h2', null, mis(P.t)),
+        h('p', { text: P.p }),
+      ]),
+      pips,
+      h('div.foot', null, [
+        i > 0 ? btn('Back', '', function () { show('howto', { page: i - 1, from: from }); }) : null,
+        btn(last ? 'Let\'s go!' : 'Next', 'primary', function () { if (last) done(); else show('howto', { page: i + 1, from: from }); }),
+      ]),
+    ]);
+    // swipe between panels
+    var sx = null;
+    el.addEventListener('pointerdown', function (e) { sx = e.clientX; });
+    el.addEventListener('pointerup', function (e) {
+      if (sx == null) return; var dx = e.clientX - sx; sx = null;
+      if (dx < -60 && !last) show('howto', { page: i + 1, from: from }); else if (dx > 60 && i > 0) show('howto', { page: i - 1, from: from });
+    });
+    return el;
+  };
+
+  // ------------------------------------------------------------------ init
+  function init() {
+    root = document.getElementById('ui');
+    if (!root) { root = h('div', { id: 'ui' }); document.body.appendChild(root); }
+    screensEl = document.getElementById('screens') || root.appendChild(h('div', { id: 'screens' }));
+    toastsEl = document.getElementById('toasts') || root.appendChild(h('div', { id: 'toasts' }));
+    pauseBtn = document.getElementById('pausebtn');
+    if (!pauseBtn) { pauseBtn = h('button.pausebtn', { id: 'pausebtn', 'aria-label': 'Pause' }, [h('span'), h('span')]); root.appendChild(pauseBtn); }
+    pauseBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      sfx('tap');
+      if (BB.Game && BB.Game.pause) BB.Game.pause();
+      show('pause');
+    });
+    pauseBtn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+    // first gesture unlocks audio (iOS) and starts the menu organ
+    var unlock = function () {
+      if (audioUnlocked) return;
+      audioUnlocked = true;
+      audio('unlock');
+      if (!inGameFlag && cur && cur !== 'results' && cur !== 'pause') startMenuMusic();
+    };
+    document.addEventListener('pointerdown', unlock, true);
+    document.addEventListener('touchend', unlock, true);
+    // no pinch / double-tap zoom, no rubber-band on the page itself
+    document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
+    document.addEventListener('touchmove', function (e) {
+      var t = e.target;
+      while (t && t !== document.body) { if (t.classList && (t.classList.contains('body') || t.classList.contains('slider'))) return; t = t.parentNode; }
+      if (e.cancelable) e.preventDefault();
+    }, { passive: false });
+    // redraw art once the web fonts arrive (canvas text uses Bungee / Space Mono)
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { redraws.forEach(function (f) { try { f(); } catch (e) {} }); });
+    window.addEventListener('resize', function () { if (cur && cur !== 'results' && cur !== 'pause' && cur !== 'shop' && !inGameFlag) refresh(); });
+    setInks(menuInk());
+    if (!M().seenHowTo()) show('howto'); else show('title');
+    // without the game engine there is no loop to paint the title backdrop: paint it here if the renderer exists
+    if (!BB.Game && BB.Render && BB.Render.init) {
+      try {
+        var cv = document.getElementById('game'); BB.Render.init(cv);
+        var t0 = performance.now();
+        var loop = function (now) {
+          if (BB.Game) return;
+          if (BB.Render.resize) BB.Render.resize(window.innerWidth, window.innerHeight, dpr());
+          var P = C() && C().PARKS;
+          BB.Render.frame({ scene: 'title', time: (now - t0) / 1000, park: P ? P[0] : null, hud: null });
+          requestAnimationFrame(loop);
+        };
+        if (BB.Render.setInks) BB.Render.setInks(menuInk());
+        requestAnimationFrame(loop);
+      } catch (e) { console.error('title backdrop', e); }
+    }
+  }
+
+  BB.UI = {
+    init: init,
+    show: show,
+    hideAll: hideAll,
+    toast: toast,
+    inGame: inGame,
+    setInks: setInks,                 // main may call this when the title backdrop changes ink
+    current: function () { return cur; },
+    refresh: refresh,
+    startGame: startGame,
+    _fallbackArt: FB,
   };
 })();
 

@@ -15,8 +15,8 @@
   --rough: 255px 12px 225px 14px / 14px 225px 12px 255px;
   --rough2: 12px 225px 14px 255px / 255px 14px 225px 12px;
   --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .32  0 0 0 0 .27  0 0 0 0 .2  1.6 0 0 0 -.62'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
-  --fibers: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='f'><feTurbulence type='fractalNoise' baseFrequency='.012 .2' numOctaves='2' seed='4'/><feColorMatrix values='0 0 0 0 .45  0 0 0 0 .38  0 0 0 0 .3  2.2 0 0 0 -1.25'/></filter><rect width='100%' height='100%' filter='url(%23f)'/></svg>");
-  --worn: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='w'><feTurbulence type='fractalNoise' baseFrequency='.55' numOctaves='3' seed='7' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -4.2 0 0 0 3.05'/></filter><rect width='100%' height='100%' filter='url(%23w)'/></svg>");
+  --fibers: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300'><filter id='f'><feTurbulence type='fractalNoise' baseFrequency='.012 .2' numOctaves='2' seed='4'/><feColorMatrix values='0 0 0 0 .45  0 0 0 0 .38  0 0 0 0 .3  1.5 0 0 0 -.98'/></filter><rect width='100%' height='100%' filter='url(%23f)'/></svg>");
+  --worn: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='w'><feTurbulence type='fractalNoise' baseFrequency='.55' numOctaves='3' seed='7' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -4.6 0 0 0 3.75'/></filter><rect width='100%' height='100%' filter='url(%23w)'/></svg>");
 }
 @supports not (color: color-mix(in srgb, red 50%, blue)) {
   :root { --ink-a-t: rgba(0,0,0,.12); --ink-b-t: rgba(0,0,0,.08); --ink-c-t: rgba(255,232,0,.5); }
@@ -44,7 +44,7 @@ canvas.art { display: block; }
 }
 .scr::before { /* paper grain + fibres, printed with the paper */
   content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
-  background-image: var(--grain), var(--fibers); background-size: 180px 180px, 300px 300px; opacity: .55; mix-blend-mode: multiply;
+  background-image: var(--grain), var(--fibers); background-size: 180px 180px, 300px 300px; opacity: .42; mix-blend-mode: multiply;
 }
 .scr.clear { background-color: transparent; }
 .scr.clear::before { display: none; }
@@ -70,7 +70,7 @@ canvas.art { display: block; }
   transform: translate(.07em, .045em); mix-blend-mode: multiply; pointer-events: none; white-space: inherit;
 }
 .mis.flip { color: var(--ink-b); }
-.mis.flip::after { color: var(--ink-a); opacity: .9; }
+.mis.flip::after { color: transparent; -webkit-text-stroke: .045em var(--ink-a); transform: translate(.06em, .05em); }
 .mis.c::after { color: var(--ink-c); }
 .ts { text-shadow: .06em .04em 0 var(--ink-b-t); }
 .stamp { font-family: var(--stamp); text-transform: uppercase; line-height: 1; }
@@ -267,9 +267,10 @@ canvas.art { display: block; }
 .countdown b { font-family: var(--stamp); font-weight: 400; font-size: 1.1rem; }
 
 /* ---------- stamps (achievements) */
-.astamp { position: relative; width: 58px; height: 58px; flex: none; border-radius: 50%; border: 3px solid var(--ink-b); display: grid; place-items: center; color: var(--ink-b); font-family: var(--stamp); font-size: .82rem; line-height: 1; text-align: center; transform: rotate(-12deg); box-sizing: border-box; }
+.astamp { position: relative; width: 58px; height: 58px; flex: none; border-radius: 50%; border: 3px solid var(--ink-b); display: grid; place-items: center; color: var(--ink-b); font-family: var(--stamp); font-size: .95rem; line-height: 1; text-align: center; transform: rotate(-12deg); box-sizing: border-box; }
 .astamp::before { content: ""; position: absolute; inset: 3px; border-radius: 50%; border: 1.5px solid currentColor; }
-.astamp.sm { width: 44px; height: 44px; font-size: .64rem; }
+.astamp.sm { width: 44px; height: 44px; font-size: .72rem; }
+.hdr .ttl.long { font-size: 1.12rem; }
 .astamp.off { color: var(--ink-a); border-color: var(--ink-a); border-style: dashed; opacity: .3; transform: rotate(0); }
 .astamp.off::before { display: none; }
 .stampgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px 6px; }
@@ -282,9 +283,8 @@ canvas.art { display: block; }
 .pack {
   position: relative; width: 190px; height: 268px; transform: rotate(-4deg); background: var(--ink-a); color: var(--paper);
   box-shadow: 7px 7px 0 var(--ink-b); text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  -webkit-mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / 12px 100%, conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) 50% / 12px 51% no-repeat;
 }
-.pack { -webkit-mask: none; mask: none; clip-path: polygon(0 3%, 4% 0, 8% 3%, 12% 0, 16% 3%, 20% 0, 24% 3%, 28% 0, 32% 3%, 36% 0, 40% 3%, 44% 0, 48% 3%, 52% 0, 56% 3%, 60% 0, 64% 3%, 68% 0, 72% 3%, 76% 0, 80% 3%, 84% 0, 88% 3%, 92% 0, 96% 3%, 100% 0, 100% 97%, 96% 100%, 92% 97%, 88% 100%, 84% 97%, 80% 100%, 76% 97%, 72% 100%, 68% 97%, 64% 100%, 60% 97%, 56% 100%, 52% 97%, 48% 100%, 44% 97%, 40% 100%, 36% 97%, 32% 100%, 28% 97%, 24% 100%, 20% 97%, 16% 100%, 12% 97%, 8% 100%, 4% 97%, 0 100%); box-shadow: none; }
+.pack { clip-path: polygon(0 3%, 4% 0, 8% 3%, 12% 0, 16% 3%, 20% 0, 24% 3%, 28% 0, 32% 3%, 36% 0, 40% 3%, 44% 0, 48% 3%, 52% 0, 56% 3%, 60% 0, 64% 3%, 68% 0, 72% 3%, 76% 0, 80% 3%, 84% 0, 88% 3%, 92% 0, 96% 3%, 100% 0, 100% 97%, 96% 100%, 92% 97%, 88% 100%, 84% 97%, 80% 100%, 76% 97%, 72% 100%, 68% 97%, 64% 100%, 60% 97%, 56% 100%, 52% 97%, 48% 100%, 44% 97%, 40% 100%, 36% 97%, 32% 100%, 28% 97%, 24% 100%, 20% 97%, 16% 100%, 12% 97%, 8% 100%, 4% 97%, 0 100%); box-shadow: none; }
 .packwrap { position: relative; filter: drop-shadow(7px 7px 0 var(--ink-b)); }
 .pack::before { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(-35deg, transparent 0 16px, color-mix(in srgb, var(--ink-b) 70%, transparent) 16px 30px); mix-blend-mode: multiply; }
 .pack::after { content: ""; position: absolute; inset: 0; background-image: radial-gradient(circle, var(--ink-c) 0 32%, transparent 36%); background-size: 7px 7px; mix-blend-mode: multiply; opacity: .45; }
@@ -295,7 +295,7 @@ canvas.art { display: block; }
 .pack .burst { position: absolute; z-index: 2; right: -18px; top: 26px; width: 74px; height: 74px; background: var(--ink-c); color: var(--ink-a); display: grid; place-items: center; text-align: center; font-family: var(--stamp); font-size: .64rem; line-height: 1; transform: rotate(16deg);
   clip-path: polygon(50% 0, 61% 14%, 79% 9%, 79% 27%, 96% 34%, 86% 50%, 96% 66%, 79% 73%, 79% 91%, 61% 86%, 50% 100%, 39% 86%, 21% 91%, 21% 73%, 4% 66%, 14% 50%, 4% 34%, 21% 27%, 21% 9%, 39% 14%); }
 .odds { font-size: .72rem; font-weight: 700; text-align: center; line-height: 1.5; }
-.opening { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: color-mix(in srgb, var(--paper) 94%, transparent); padding: calc(var(--sat) + 10px) 14px calc(var(--sab) + 12px); box-sizing: border-box; }
+.opening { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background-color: var(--paper); background-image: var(--grain); background-size: 180px; padding: calc(var(--sat) + 10px) 14px calc(var(--sab) + 12px); box-sizing: border-box; }
 .opening .rip { animation: ripTop .55s ease-in both; }
 @keyframes ripTop { 0% { transform: none; } 30% { transform: translateY(-4px) rotate(-3deg); } 100% { transform: translate(60px, -260px) rotate(28deg); opacity: 0; } }
 .opening .packlow { animation: packDrop .5s ease-in both .45s; }
