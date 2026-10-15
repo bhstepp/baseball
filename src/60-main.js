@@ -69,6 +69,7 @@
     G.paused = false;
     call('UI', 'inGame', false);
     call('Audio', 'crowd', 0);
+    call('Audio', 'organ', 'menu');
     G.rs = null; G.loading = null;
     setPhase('menu');
     call('UI', 'show', 'title');

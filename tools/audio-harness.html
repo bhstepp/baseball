@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hardball Audio Harness</title>
+<style>
+  :root { --paper: #F4EEE1; --a: #0078BF; --b: #FF48B0; --c: #FFE800; --ink: #1A1A1A; }
+  body { margin: 0; padding: 16px; background: var(--paper); color: var(--ink); font: 14px/1.4 "Space Mono", ui-monospace, Menlo, monospace; }
+  h1 { font: 900 22px "Arial Black", sans-serif; color: var(--a); text-shadow: 2px 1px 0 var(--b); mix-blend-mode: multiply; margin: 0 0 8px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .1em; margin: 18px 0 6px; color: var(--b); }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  button { font: inherit; padding: 9px 12px; border: 2px solid var(--a); background: transparent; color: var(--a); border-radius: 3px; cursor: pointer; }
+  button:active { background: var(--c); }
+  label { display: inline-flex; gap: 6px; align-items: center; margin-right: 10px; }
+  input[type=range] { width: 140px; }
+  #log { white-space: pre-wrap; font-size: 12px; background: #fff8; padding: 8px; margin-top: 12px; min-height: 3em; }
+</style>
+</head>
+<body>
+<h1>Halftone Hardball — audio</h1>
+<div class="row">
+  <button id="unlock">unlock</button>
+  <label><input type="checkbox" id="mute"> muted</label>
+  <label><input type="checkbox" id="music" checked> music</label>
+  <label><input type="checkbox" id="hap" checked> haptics</label>
+  <span id="state">state: none</span>
+</div>
+<h2>Bat</h2>
+<div class="row">
+  <label>quality <input type="range" id="q" min="0" max="1" step="0.05" value="0.8"><b id="qv">0.80</b></label>
+  <label><input type="checkbox" id="sweet"> sweet</label>
+  <label>mph <input type="range" id="mph" min="50" max="102" step="1" value="92"><b id="mv">92</b></label>
+</div>
+<h2>Sound effects</h2>
+<div class="row" id="sfx"></div>
+<h2>Organ</h2>
+<div class="row" id="organ"></div>
+<h2>Crowd</h2>
+<div class="row">
+  <label>bed level <input type="range" id="crowd" min="0" max="1" step="0.05" value="0"><b id="cv">0.00</b></label>
+  <label>cheer size <input type="range" id="size" min="0" max="1" step="0.05" value="0.7"><b id="sv">0.70</b></label>
+  <button id="cheer">cheer</button><button id="groan">groan</button>
+</div>
+<h2>Haptics</h2>
+<div class="row"><button data-h="tap">tap</button><button data-h="thud">thud</button><button data-h="buzz">buzz</button></div>
+<h2>Offline render check</h2>
+<div class="row"><button id="check">render all + measure</button></div>
+<div id="log"></div>
+<script src="../src/00-const.js"></script>
+<script src="../src/40-audio.js"></script>
+<script>
+(function () {
+  var A = BB.Audio, $ = function (id) { return document.getElementById(id); };
+  function log(s) { $('log').textContent = s + '\n' + $('log').textContent; }
+  function btn(parent, text, fn) { var b = document.createElement('button'); b.textContent = text; b.onclick = function () { A.unlock(); fn(); }; parent.appendChild(b); return b; }
+  function opts() { return { quality: +$('q').value, sweet: $('sweet').checked, mph: +$('mph').value }; }
+  A.SFX.forEach(function (n) { btn($('sfx'), n, function () { A.sfx(n, opts()); }); });
+  A.ORGAN.concat(['stop']).forEach(function (n) { btn($('organ'), n, function () { A.organ(n); }); });
+  $('unlock').onclick = function () { A.unlock(); };
+  $('mute').onchange = function () { A.setMuted(this.checked); };
+  $('music').onchange = function () { A.setMusic(this.checked); };
+  $('hap').onchange = function () { BB.Haptics.enabled = this.checked; };
+  $('q').oninput = function () { $('qv').textContent = (+this.value).toFixed(2); };
+  $('mph').oninput = function () { $('mv').textContent = this.value; };
+  $('crowd').oninput = function () { A.unlock(); A.crowd(+this.value); $('cv').textContent = (+this.value).toFixed(2); };
+  $('size').oninput = function () { $('sv').textContent = (+this.value).toFixed(2); };
+  $('cheer').onclick = function () { A.unlock(); A.cheer(+$('size').value); };
+  $('groan').onclick = function () { A.unlock(); A.groan(); };
+  document.querySelectorAll('[data-h]').forEach(function (b) { b.onclick = function () { BB.Haptics[b.dataset.h](); }; });
+  setInterval(function () { $('state').textContent = 'state: ' + A.state(); }, 250);
+
+  // Renders every sound offline; resolves to [{kind, name, peak, rms}]. Used by tools/audio-test.js too.
+  window.audioCheckAll = function () {
+    var jobs = [];
+    A.SFX.forEach(function (n) { jobs.push(['sfx', n, n === 'crack' ? { quality: 1, sweet: true } : { mph: 100 }, 1.5]); });
+    jobs.push(['sfx', 'crack', { quality: 0.1 }, 1.2]);
+    A.ORGAN.forEach(function (n) { jobs.push(['organ', n, {}, n === 'menu' ? 19 : 6]); });
+    jobs.push(['cheer', '', { size: 1 }, 6], ['cheer', '', { size: 0.2 }, 4], ['groan', '', {}, 3],
+      ['crowd', '', { level: 0.2 }, 4], ['crowd', '', { level: 1 }, 4]);
+    var out = [];
+    return jobs.reduce(function (p, j) {
+      return p.then(function () { return A.render(j[0], j[1], j[2], j[3]); }).then(function (r) {
+        out.push({ kind: j[0], name: j[1] + (j[2].level != null ? '@' + j[2].level : j[2].size != null ? '@' + j[2].size : j[2].quality === 0.1 ? '@poor' : ''),
+          peak: r ? +r.peak.toFixed(4) : null, rms: r ? +r.rms.toFixed(4) : null });
+      });
+    }, Promise.resolve()).then(function () { return out; });
+  };
+  $('check').onclick = function () {
+    log('rendering...');
+    window.audioCheckAll().then(function (rows) { log(rows.map(function (r) { return (r.kind + ' ' + r.name).padEnd(22) + ' peak ' + r.peak + '  rms ' + r.rms; }).join('\n')); });
+  };
+})();
+</script>
+</body>
+</html>
