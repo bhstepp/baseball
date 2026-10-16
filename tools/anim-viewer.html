@@ -66,13 +66,13 @@
   const zone = new T.LineLoop(new T.BufferGeometry().setFromPoints([new T.Vector3(-0.83, 0, 1.55), new T.Vector3(0.83, 0, 1.55), new T.Vector3(0.83, 0, 3.45), new T.Vector3(-0.83, 0, 3.45)]), zoneMat);
   world.add(zone);
 
-  function outlineMaterial(width) {
+  function outlineMaterial(width, rigid) {
     const m = new T.MeshBasicMaterial({ color: INK, side: T.BackSide });
     m.userData.width = { value: width };
     m.onBeforeCompile = (sh) => {
       sh.uniforms.uWidth = m.userData.width; sh.uniforms.uRes = res;
       sh.vertexShader = 'uniform float uWidth; uniform vec2 uRes;\n' + sh.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
-        vec4 nc = projectionMatrix * modelViewMatrix * vec4(objectNormal, 0.0);
+        vec4 nc = projectionMatrix * modelViewMatrix * vec4(${rigid ? 'normal' : 'objectNormal'}, 0.0);
         vec2 dir = length(nc.xy) > 1e-5 ? normalize(nc.xy) : vec2(0.0);
         gl_Position.xy += dir * uWidth * gl_Position.w * 2.0 / uRes;
         gl_Position.z += 0.0004 * gl_Position.w;`);
@@ -113,8 +113,8 @@
     A.mixer = new T.AnimationMixer(model);
     for (const n in V.clips) { const a = A.mixer.clipAction(V.clips[n]); a.play(); a.setEffectiveWeight(0); a.enabled = false; A.acts[n] = a; }
     // props: ball (white), optional catcher mitt marker
-    A.ball = new T.Mesh(new T.SphereGeometry(0.121, 18, 12), toon(0xffffff)); A.ball.visible = false; world.add(A.ball);
-    const bo = new T.Mesh(A.ball.geometry, outlineMaterial(1.4)); A.ball.add(bo);
+    A.ball = new T.Mesh(new T.SphereGeometry(0.121, 18, 12), toon(window.BALL_COLOR || 0xffffff)); A.ball.visible = false; world.add(A.ball);
+    const bo = new T.Mesh(A.ball.geometry, outlineMaterial(1.4, true)); A.ball.add(bo);
     if (opts.tailless) ['tail.1', 'tail1'].forEach((b) => { if (A.bones[b]) A.bones[b].scale.setScalar(0.001); });
     A.hipK = (opts.hipHeight || V.bodyHip || V.ref) / V.ref;
     V.actors.push(A);
@@ -273,6 +273,21 @@
       return Object.keys(V.clips);
     },
     clipInfo() { const o = {}; for (const n in V.clips) o[n] = { duration: +V.clips[n].duration.toFixed(4), tracks: V.clips[n].tracks.length }; return o; },
+    // pose difference between (clip a @ ta) and (clip b @ tb): worst bone angle (deg) and position (ft), root at the origin
+    compare(a, ta, b, tb, skip) {
+      if (!V.actors.length) makeActor({});
+      const A = V.actors[0]; placeActor(A, {});
+      const snap = (c, t) => { pose(A, c, t, { noBall: true }); const o = {}; A.model.traverse((n) => { if (n.isBone) { const p = new T.Vector3(), q = new T.Quaternion(); n.getWorldPosition(p); n.getWorldQuaternion(q); o[nameOf(n)] = [p, q]; } }); return o; };
+      const SA = snap(a, ta), SB = snap(b, tb);
+      let wa = 0, wp = 0, ba = '', bp = '';
+      for (const k in SA) {
+        if (skip && skip.some((s) => k.startsWith(s))) continue;
+        const [pa, qa] = SA[k], [pb, qb] = SB[k];
+        const ang = 2 * Math.acos(Math.min(1, Math.abs(qa.dot(qb)))) * 180 / PI, d = pa.distanceTo(pb);
+        if (ang > wa) { wa = ang; ba = k; } if (d > wp) { wp = d; bp = k; }
+      }
+      return { deg: +wa.toFixed(2), boneDeg: ba, ft: +wp.toFixed(4), bonePos: bp };
+    },
     // world positions of bones over time (for numeric checks in the harness)
     sample(clip, bones, times, place) {
       if (!V.actors.length) makeActor({});

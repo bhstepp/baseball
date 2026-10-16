@@ -1,5 +1,6 @@
-# rocco.py - builds Rocco the raccoon (model, rig, face shapes, animation clips) and exports assets/rocco.glb.
-#   <blender-python> tools/blender/rocco.py --out assets/rocco.glb [--blockout] [--quick] [--clips a,b]
+# rocco.py - builds Rocco the raccoon (model, rig, face shapes, animation clips) and exports the raw assets/src/rocco.glb
+# (tools/pack-assets.js packs it into the shipped assets/rocco.glb).
+#   <blender-python> tools/blender/rocco.py [--out assets/src/rocco.glb] [--blockout] [--quick] [--clips a,b]
 # Deterministic: same inputs -> same file. Writes to a temp file and renames it into place.
 # Blender space: Z up, Rocco faces -Y, his left is +X; glTF (exported): Y up, faces +Z, his left is +X.
 import os
@@ -238,7 +239,7 @@ def build(args):
 if __name__ == '__main__':
     argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else sys.argv[1:]
     ap = argparse.ArgumentParser()
-    ap.add_argument('--out', default=os.path.join(HERE, '..', '..', 'assets', 'rocco.glb'))
+    ap.add_argument('--out', default=os.path.join(HERE, '..', '..', 'assets', 'src', 'rocco.glb'))
     ap.add_argument('--blockout', action='store_true')
     ap.add_argument('--quick', action='store_true')
     ap.add_argument('--clips', default='')

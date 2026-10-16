@@ -25,7 +25,7 @@
 <script>
 // Rocco viewer: MeshToonMaterial (3-step gradient) + inverted-hull outlines on the skinned glb, cream background,
 // ground plane, model-sheet cameras and the game's bat camera. Driven interactively (open the file in a browser with
-// ?glb=../assets/rocco.glb, or pick a file) or by tools/rocco-shots.js through window.viewer.
+// ?glb=../assets/src/rocco.glb (raw) or a packed ../assets/rocco.glb, or pick a file) or by tools/rocco-shots.js through window.viewer.
 (function () {
   const T = THREE, PI = Math.PI;
   const CREAM = 0xFFF4DC, INK = 0x1B1420;
@@ -245,7 +245,10 @@
     compare, snapshot,
     _res: { value: new T.Vector2(800, 800) },
     load(buf) {
-      return new Promise((ok, err) => { new T.GLTFLoader().parse(buf, '', (g) => { const names = adopt(g); ok(names); }, err); });
+      // packed files (tools/pack-assets.js: meshopt) need the decoder; raw exports load either way
+      return T.MeshoptDecoder.ready.then(() => new Promise((ok, err) => {
+        new T.GLTFLoader().setMeshoptDecoder(T.MeshoptDecoder).parse(buf, '', (g) => { const names = adopt(g); ok(names); }, err);
+      }));
     },
     sheet, pose, boneWorld, R,
     info() {
@@ -269,7 +272,7 @@
     function fill(names) { selC.innerHTML = '<option value="">(rest)</option>' + names.map((n) => `<option>${n}</option>`).join(''); }
     function loadBuf(b) { viewer.load(b).then(fill); }
     document.getElementById('file').onchange = (e) => { const f = e.target.files[0]; if (f) f.arrayBuffer().then(loadBuf); };
-    fetch(q.get('glb') || '../assets/rocco.glb').then((r) => r.arrayBuffer()).then(loadBuf).catch(() => {});
+    fetch(q.get('glb') || '../assets/src/rocco.glb').then((r) => r.arrayBuffer()).then(loadBuf).catch(() => {});
     let t0 = performance.now();
     function loop() {
       requestAnimationFrame(loop);

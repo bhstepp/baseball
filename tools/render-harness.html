@@ -23,15 +23,22 @@ canvas#game { display: block; position: fixed; left: 0; top: 0; }
 <script src="../src/00-const.js"></script>
 <script>
 // load the sim + render modules (missing optional ones are fine)
-var MODS = ['10-pitch.js', '15-bat.js', '20-content.js', '30-assets.js', '31-toon.js', '32-cast.js', '33-park.js', '34-anim.js', '35-scene.js', '36-actors.js', '36-rocco.js', '37-ink.js', '38-cards.js'];
+var MODS = ['10-pitch.js', '15-bat.js', '20-content.js', '30-assets.js', '31-toon.js', '32-cast.js', '33-park.js', '34-anim.js', '35-scene.js', '36-actors.js', '36-rocco.js', '36-crew.js', '37-ink.js', '38-cards.js'];
 // the hero model: ?glb=<path> (tools/render-shots.js passes what the build ships: the packed model, or e.g. the
 // integration proxy), else ../assets/rocco.glb; ?lod1=<path> adds his level of detail. Handed to BB.Assets before the
 // renderer boots. Needs --allow-file-access-from-files for file:// XHR; without it the procedural Rocco is used.
-var GLB = {};
+// The game's cast (BB.Crew): ?cast=1 adds the clip libraries ../assets/anim_<lib>.glb + .json sidecars, &chars=a,b,...
+// the character files ../assets/<name>.glb, &standin=<path> a stand-in body for every role (as 'ref_body', &standin1=
+// its LOD1). The view's park and pitcher are prepared (as the briefing does) before each shot.
+var GLB = {}, META = {};
 (function () {
   function arg(k) { var m = new RegExp('[?&]' + k + '=([^&]*)').exec(location.search); return m ? decodeURIComponent(m[1]) : null; }
   var want = [['rocco', arg('glb') || '../assets/rocco.glb']];
   if (arg('lod1')) want.push(['rocco_lod1', arg('lod1')]);
+  if (arg('cast')) ['pitcher', 'catcher', 'umpire', 'fielder'].forEach(function (l) { want.push(['anim_' + l, '../assets/anim_' + l + '.glb']); want.push(['anim_' + l, '../assets/anim_' + l + '.json', true]); });
+  (arg('chars') || '').split(',').filter(Boolean).forEach(function (n) { want.push([n, '../assets/' + n + '.glb']); });
+  if (arg('standin')) { want.push(['ref_body', arg('standin')]); window.BB_CAST_STANDIN = 'ref_body'; }
+  if (arg('standin1')) want.push(['ref_body_lod1', arg('standin1')]);
   function go() { (function next(i) {
     if (i >= MODS.length) return boot();
     var s = document.createElement('script'); s.src = '../src/' + MODS[i];
@@ -41,8 +48,12 @@ var GLB = {};
   (function fetchOne(i) {
     if (i >= want.length) return go();
     try {
-      var x = new XMLHttpRequest(); x.open('GET', want[i][1]); x.responseType = 'arraybuffer';
-      x.onload = function () { if ((x.status === 200 || x.status === 0) && x.response && x.response.byteLength) GLB[want[i][0]] = x.response; fetchOne(i + 1); };
+      var x = new XMLHttpRequest(), js = !!want[i][2]; x.open('GET', want[i][1]); x.responseType = js ? 'text' : 'arraybuffer';
+      x.onload = function () {
+        if (js) { try { if ((x.status === 200 || x.status === 0) && x.responseText) META[want[i][0]] = JSON.parse(x.responseText); } catch (e) {} }
+        else if ((x.status === 200 || x.status === 0) && x.response && x.response.byteLength) GLB[want[i][0]] = x.response;
+        fetchOne(i + 1);
+      };
       x.onerror = function () { fetchOne(i + 1); };
       x.send();
     } catch (e) { fetchOne(i + 1); }
@@ -62,10 +73,10 @@ var MOCK_PITCHER = { id: 'p_mock', name: 'Mock McGee', hand: 'R', team: 'Mockers
   look: { build: 'tall', hair: 'mustache', windup: 'classic', number: 27 } };
 function parks() { return (BB.Content && BB.Content.PARKS && BB.Content.PARKS.length) ? BB.Content.PARKS : [MOCK_PARK]; }
 function pitchers() { return (BB.Content && BB.Content.PITCHERS && BB.Content.PITCHERS.length) ? BB.Content.PITCHERS : [MOCK_PITCHER]; }
-function mockPitch(pitcher, seed, type, strike, pz, px) {
+function mockPitch(pitcher, seed, type, strike, pz, px, live) {
   if (BB.Pitch && BB.Pitch.make) {
-    for (var k = 0; k < 4000; k++) {
-      var p = BB.Pitch.make(pitcher, { balls: 0, strikes: 0, derby: true, id: 1 }, BB.U.rng(seed + k));
+    for (var k = 0; k < 4000; k++) {   // derby pitches stay mid-zone; live=1 (&live=1) pitches cover the whole zone and beyond
+      var p = BB.Pitch.make(pitcher, { balls: 0, strikes: 0, derby: !live, id: 1 }, BB.U.rng(seed + k));
       if ((!type || p.type === type) && (strike == null || p.strike === strike) && (pz == null || Math.abs(p.plate.z - pz) < 0.12) && (px == null || Math.abs(p.plate.x - px) < 0.15)) return p;
     }
   }
@@ -109,6 +120,7 @@ function boot() {
   var w = +(Q.w || window.innerWidth), h = +(Q.h || window.innerHeight);
   canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
   if (BB.Assets) for (var gn in GLB) BB.Assets.provide(gn, GLB[gn]);
+  window.BB_ASSET_META = Object.assign(window.BB_ASSET_META || {}, META);
   BB.Render.init(canvas);
   BB.Render._S.noAdapt = true;
   BB.Render.resize(w, h, Math.min(window.devicePixelRatio || 1, 2));
@@ -137,7 +149,7 @@ function buildView(q) {
   if (v.onFire) v.hud.streak = 4;
   if (q.outs10) v.hud = mockHud({ outs: 4, outsMax: 10, inning: 'DERBY', score: '3 HR', progress: '1,204 ft', goal: 'Hit home runs. Anything but a homer is an out.' });
   if (v.scene === 'bat') {
-    var pitch = mockPitch(pitcher, +(q.seed || 7), q.ptype, q.strike != null ? q.strike === '1' : null, q.pz != null ? +q.pz : null, q.px != null ? +q.px : null);
+    var pitch = mockPitch(pitcher, +(q.seed || 7), q.ptype, q.strike != null ? q.strike === '1' : null, q.pz != null ? +q.pz : null, q.px != null ? +q.px : null, q.live === '1');
     var st = q.state || 'idle';
     if (st === 'windup') v.windup = +(q.w || 0.5);
     if (st === 'loading') { v.windup = +(q.w || 0.85); v.loading = +(q.l || 1); }
@@ -157,6 +169,10 @@ function buildView(q) {
   if (v.scene === 'field') {
     var play = mockPlay(park, q.play || 'hr');
     v.play = play; v.playT = q.pt != null ? Math.min(play.dur, +q.pt) : Math.min(play.dur, play.dur * +(q.f || 0.5));
+    // times relative to the play's events: &ct= (the catch), &tt= (the throw's release), &ta= (the throw's arrival)
+    if (q.ct != null && play.catchT >= 0) v.playT = Math.min(play.dur, Math.max(0, play.catchT + +q.ct));
+    if (q.tt != null && play.throwT) v.playT = Math.min(play.dur, Math.max(0, play.throwT[0] + +q.tt));
+    if (q.ta != null && play.throwT) v.playT = Math.min(play.dur, Math.max(0, play.throwT[1] + +q.ta));
     if (q.extra) v._extra = +q.extra;
     v.runners = q.play === 'gap' ? [{ from: 1, to: 4 }, { from: 0, to: 2 }] : q.play === 'ground' ? [{ from: 1, to: 2 }, { from: 0, to: -1 }] : q.play === 'hr' || !q.play ? [{ from: 1, to: 4 }, { from: 0, to: 4 }] : [];
     if (q.play === 'gap') v.hud.bases = [false, true, false];
@@ -169,8 +185,15 @@ function buildView(q) {
 }
 function setup(search) {
   var q = qs(search);
+  var v = buildView(q);
+  BB.Render._S.noCrew = q.cast === 'proc' || /[?&]rocco=old/.test(location.search);   // &cast=proc: the procedural cast (before/after shots)
+  // the game prepares a match's cast during the briefing: here, before the shot
+  if (BB.Crew && BB.Crew.available && !BB.Render._S.noCrew) return BB.Render.prepare(v.park, null, { pitcher: v.pitcher }).then(function () { return shoot(q, v); }, function () { return shoot(q, v); });
+  return shoot(q, v);
+}
+function shoot(q, v) {
   var ov = document.getElementById('bb-overlay'); if (ov) ov.style.display = '';
-  last = buildView(q);
+  last = v;
   // a scene change opens with an iris: render a frame of the same scene first unless the shot asks for the wipe
   BB.Render._S.prevScene = ''; BB.Render._S.lastScene = '';
   if (!q.iris) { var pre = Object.assign({}, last, { time: last.time - 1 }); BB.Render.frame(pre); }

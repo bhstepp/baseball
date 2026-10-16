@@ -16,7 +16,7 @@
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
 const ROOT = path.join(__dirname, '..');
 const ORDER = ['00-const.js', '10-pitch.js', '15-bat.js', '20-content.js', '25-rules.js', '30-assets.js', '31-toon.js', '32-cast.js', '33-park.js', '34-anim.js', '35-scene.js',
-  '36-actors.js', '36-rocco.js', '37-ink.js', '38-cards.js', '40-audio.js', '50-save.js', '55-meta.js', '56-ui.js', '60-main.js'];
+  '36-actors.js', '36-rocco.js', '36-crew.js', '37-ink.js', '38-cards.js', '40-audio.js', '50-save.js', '55-meta.js', '56-ui.js', '60-main.js'];
 const BOOT = ['rocco'];
 // what the game can load: the boot assets, characters (char_<id>) and clip libraries (anim_<lib>), docs/CAST-CONTRACT.md;
 // anything else in assets/ (e.g. a generator's reference body) is not shipped
@@ -37,24 +37,32 @@ const VENDOR = ['vendor/three.min.js', 'vendor/three-addons.js'].filter(have).ma
 const ASSET_DIR = path.join(ROOT, 'assets'), PACKED = path.join(ROOT, 'dist', 'packed');
 const isPacked = buf => { try { const len = buf.readUInt32LE(12), json = JSON.parse(buf.subarray(20, 20 + len).toString('utf8')); return (json.extensionsUsed || []).some(e => /meshopt_compression/.test(e)); } catch (e) { return false; } };
 const assets = [];   // { name, file, buf, packed, boot }
-if (fs.existsSync(ASSET_DIR)) fs.readdirSync(ASSET_DIR).filter(f => /\.glb$/.test(f)).sort().forEach(f => {
-  const name = f.replace(/\.glb$/, '');
-  if (/_lod\d$/.test(name)) return;                      // levels of detail (<name>_lod1) follow their model below
-  if (!SHIPS(name)) { console.log(`build: assets/${f} is not a game asset (not shipped)`); return; }
+const GLBS = fs.existsSync(ASSET_DIR) ? fs.readdirSync(ASSET_DIR).filter(f => /\.glb$/.test(f)).sort() : [];
+GLBS.forEach(f => {
+  const name = f.replace(/\.glb$/, ''), base = name.replace(/_lod\d$/, '');
+  // levels of detail (<name>_lod1) follow their model below; a character that only has a LOD1 (fielders, runners:
+  // docs/CAST-CONTRACT.md) ships it on its own
+  if (base !== name && GLBS.includes(base + '.glb')) return;
+  if (!SHIPS(base)) { console.log(`build: assets/${f} is not a game asset (not shipped)`); return; }
   let file = path.join(ASSET_DIR, f), buf = fs.readFileSync(file), lods = [];
   const meta = path.join(PACKED, name + '.pack.json');
   if (!isPacked(buf) && fs.existsSync(meta)) {          // exported in place: use the packed copy of this exact file
     const m = JSON.parse(fs.readFileSync(meta, 'utf8')), pf = path.join(PACKED, name + '.glb');
     if (m.source === sha(buf) && fs.existsSync(pf)) { file = pf; buf = fs.readFileSync(pf); if (m.lod1Out && fs.existsSync(path.join(PACKED, name + '_lod1.glb'))) lods.push(path.join(PACKED, name + '_lod1.glb')); }
   }
-  if (!lods.length && path.dirname(file) === ASSET_DIR) fs.readdirSync(ASSET_DIR).filter(g => g.startsWith(name + '_lod') && /\.glb$/.test(g)).forEach(g => lods.push(path.join(ASSET_DIR, g)));
+  if (!lods.length && path.dirname(file) === ASSET_DIR && base === name) GLBS.filter(g => /_lod\d\.glb$/.test(g) && g.startsWith(name + '_lod')).forEach(g => lods.push(path.join(ASSET_DIR, g)));
   if (!isPacked(buf)) console.warn(`build: assets/${f} is not compressed (${(buf.length / 1024).toFixed(0)} KB): run node tools/pack-assets.js`);
   assets.push({ name, file, buf, boot: BOOT.includes(name) });
   lods.forEach(lf => { const lb = fs.readFileSync(lf); assets.push({ name: path.basename(lf).replace(/\.glb$/, ''), file: lf, buf: lb, boot: false }); });
 });
 // sidecars (assets/<name>.json: clip markers, retargeting data) are small: inlined in the page as window.BB_ASSET_META
-const META = {};
-if (fs.existsSync(ASSET_DIR)) fs.readdirSync(ASSET_DIR).filter(f => /\.json$/.test(f)).forEach(f => { try { META[f.replace(/\.json$/, '')] = JSON.parse(fs.readFileSync(path.join(ASSET_DIR, f), 'utf8')); } catch (e) { console.warn('build: bad JSON in assets/' + f); } });
+// (only what the runtime reads: the authoring notes stay in the files)
+const META = {}, NOTES = ['reference', 'axes', 'retarget', 'poses', 'file', 'note', 'from', 'to', 'keys', 'frames', 'style'];
+const trim = o => { if (Array.isArray(o)) return o.map(trim); if (!o || typeof o !== 'object') return o; const r = {}; for (const k in o) if (!NOTES.includes(k)) r[k] = trim(o[k]); return r; };
+if (fs.existsSync(ASSET_DIR)) fs.readdirSync(ASSET_DIR).filter(f => /\.json$/.test(f) && SHIPS(f.replace(/\.json$/, ''))).forEach(f => {
+  try { const j = JSON.parse(fs.readFileSync(path.join(ASSET_DIR, f), 'utf8')); META[f.replace(/\.json$/, '')] = Object.assign(trim(j), j.face ? { face: j.face } : {}); }
+  catch (e) { console.warn('build: bad JSON in assets/' + f); }
+});
 const metaTag = Object.keys(META).length ? `<script>\nwindow.BB_ASSET_META = ${JSON.stringify(META)};\n</script>\n` : '';
 const b64 = a => a.buf.toString('base64');
 const inlineOf = list => `<script>\nwindow.BB_ASSETS = {${list.map(a => `\n  ${JSON.stringify(a.name)}: "${b64(a)}"`).join(',')}\n};\n</script>\n`;

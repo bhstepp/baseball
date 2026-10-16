@@ -67,15 +67,14 @@ def foot(c, side, ball, rz=0.0, rx=0.0, ry=0.0, toe=0.0, knee=None):
     return c
 
 
-def hand(c, side, pos, rx=0.0, ry=0.0, rz=0.0, rel=None, relh=None, sock=None, elbow=None):
+def hand(c, side, pos, rx=0.0, ry=0.0, rz=0.0, rel=0.0, relh=0.0, sock=None, elbow=None):
     """Free hand target (wrist, or a socket: sock='grip' | 'mitt'). rel=1: given in the rest body frame and carried
-    by the chest; relh=1: carried by the head; else model space. rx/ry/rz: hand rotation relative to the forearm."""
+    by the chest; relh=1: carried by the head; default: model space (always explicit, never inherited from the pose
+    it was copied from). rx/ry/rz: hand rotation relative to the forearm."""
     V(c, 'hand' + side, pos)
     c['hand%s.rx' % side], c['hand%s.ry' % side], c['hand%s.rz' % side] = rx, ry, rz
-    if rel is not None:
-        c['hand%s.rel' % side] = float(rel)
-    if relh is not None:
-        c['hand%s.relh' % side] = float(relh)
+    c['hand%s.rel' % side] = float(rel)
+    c['hand%s.relh' % side] = float(relh)
     if sock is not None:
         c['hand%s.sg' % side] = 1.0 if sock == 'grip' else 0.0
         if side == 'L':
@@ -107,10 +106,11 @@ HAND_SHAPES = {
     'jazz': dict(fing=-0.4, thumb=-0.9, spread=1.0, point=0.0),
     'knife': dict(fing=-0.2, thumb=0.35, spread=0.0, point=0.0),
     'fist': dict(fing=1.0, thumb=1.0, spread=0.0, point=0.0),
-    'ball': dict(fing=0.52, thumb=0.55, spread=0.15, point=0.0),     # around a baseball at grip.*
+    'ball': dict(fing=0.30, thumb=0.30, spread=0.35, point=0.0),     # fingertips on a baseball at grip.* (it shows)
     'loose': dict(fing=0.42, thumb=0.15, spread=0.35, point=0.0),
     'point': dict(fing=1.0, thumb=0.85, spread=0.0, point=1.0),
     'claw': dict(fing=0.55, thumb=-0.3, spread=0.8, point=0.0),
+    'tip': dict(fing=0.30, thumb=0.30, spread=0.0, point=0.0),       # fingers together on a cap brim
     'sign1': dict(fing=1.0, thumb=0.9, spread=0.0, point=1.0),       # catcher's sign: one finger down
     'flat': dict(fing=0.0, thumb=0.0, spread=0.0, point=0.0),
     'mitt_open': dict(fing=-0.45, thumb=-0.5, spread=0.0, point=0.0),

@@ -10,6 +10,7 @@ from ak_math import euler, rot_vec
 import ak_rig as AR
 
 FPS = 40
+SETTLE = 0.3            # s: one-shot clips fade their spring follow-through out over this much of their end
 
 
 class Clip:
@@ -103,9 +104,9 @@ def evaluate(clip, times, sk):
         chans.update(k[1].keys())
     out = {}
     for ch in chans:
-        V = [k[1].get(ch, base.get(ch, 0.0)) for k in keys]
+        V = [float(k[1].get(ch, base.get(ch, 0.0))) for k in keys]
         if max(V) - min(V) < 1e-12:
-            out[ch] = np.full(len(times), V[0])
+            out[ch] = np.full(len(times), V[0], dtype=float)
             continue
         lag = 0.0
         for pre, lg in clip.lags.items():
@@ -118,19 +119,26 @@ def evaluate(clip, times, sk):
         for j, t in enumerate(times):
             for ch, dv in layer(t).items():
                 if ch not in out:
-                    out[ch] = np.full(len(times), base.get(ch, 0.0))
+                    out[ch] = np.full(len(times), float(base.get(ch, 0.0)), dtype=float)
                 out[ch][j] += dv
     for ov in clip.overrides:
         for j, t in enumerate(times):
             for ch, (val, w) in ov(t).items():
                 if ch not in out:
-                    out[ch] = np.full(len(times), base.get(ch, 0.0))
+                    out[ch] = np.full(len(times), float(base.get(ch, 0.0)), dtype=float)
                 out[ch][j] = out[ch][j] * (1 - w) + val * w
-    # tail: per-bone values from the tail.* channels with progressive lag (a whip down the chain)
+    # one-shot clips settle their follow-through over the last SETTLE s (the tail's lag and the springs fade out), so
+    # each ends exactly on its keyed pose: the next clip starts there without a pop, and a held last frame is at rest
     n = len(times)
+    env = np.ones(n)
+    if not clip.loop and clip.length > 0:
+        tf = min(SETTLE, 0.25 * clip.length)
+        u = np.clip((np.asarray(times, float) - (clip.length - tf)) / tf, 0.0, 1.0)
+        env = 1.0 - u * u * (3 - 2 * u)
+    # tail: per-bone values from the tail.* channels with progressive lag (a whip down the chain)
     for i in range(1, 6):
         lag = clip.tail_lag * i
-        tt = np.asarray(times) - lag
+        tt = np.asarray(times) - lag * env
         tt = np.mod(tt, clip.length) if clip.loop else np.clip(tt, 0, clip.length)
         vals = {}
         for k in ('rx', 'rz', 'curl'):
@@ -149,16 +157,19 @@ def evaluate(clip, times, sk):
         hp = np.stack([out['hip.x'], out['hip.y'], out['hip.z'] + sk.J['hips'][2] / sk.U], 1) * sk.U
         g = clip.sec_gain
         tr = spring_response(Rs['hips'], hp, dt, freq=2.2, damp=0.28, gain=0.55 * g, loop=clip.loop, lin_gain=0.6 * g, u=(0, 1, 0))
+        tr = tr * env[:, None]
         for i in range(1, 6):
             k = 0.35 + 0.22 * i
             out['_tail%d.rx' % i] = out['_tail%d.rx' % i] + np.degrees(tr[:, 0]) * k * 0.6
             out['_tail%d.rz' % i] = out['_tail%d.rz' % i] + np.degrees(tr[:, 2]) * k
         hr = spring_response(Rs['head'], hp + np.array([0, 0, 2.3]), dt, freq=3.2, damp=0.3, gain=0.35 * g, loop=clip.loop, lin_gain=0.4 * g, u=(0, 0, 1))
+        hr = hr * env[:, None]
         for sd in ('L', 'R'):
             for ax, idx in (('rx', 0), ('ry', 1), ('rz', 2)):
                 key = 'ear%s.%s' % (sd, ax)
                 out[key] = out[key] + np.degrees(hr[:, idx]) * 1.4
         cr = spring_response(Rs['head'], hp + np.array([0, 0, 2.6]), dt, freq=4.0, damp=0.45, gain=0.12 * g, loop=clip.loop, lin_gain=0.15 * g, u=(0, 0, 1))
+        cr = cr * env[:, None]
         for ax, idx in (('rx', 0), ('ry', 1), ('rz', 2)):
             out['cap.' + ax] = out['cap.' + ax] + np.degrees(cr[:, idx]) * 0.5
     return out

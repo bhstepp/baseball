@@ -232,3 +232,24 @@ def read_glb_json(path):
     data = open(path, 'rb').read()
     ln = struct.unpack('<I', data[12:16])[0]
     return json.loads(data[20:20 + ln]), len(data)
+
+
+# ------------------------------------------------------------------------------------------- cached build results
+# (defined here, not in cbuild.py, so the pickles in dist/cast-cache load from any entry point)
+class HeadResult:
+    """The picklable part of a built head (design space)."""
+    def __init__(self, h):
+        self.parts = h.parts
+        self.pupils = h.pupils
+        self.joints = {k: np.asarray(v, float) for k, v in h.joints.items()}
+        self.cap_letter = h.cap_letter
+        self.face_y = h.face_y
+        self.keys = h.keys
+        self.info = h.info
+
+
+class BodyResult:
+    def __init__(self, parts, decals, tail):
+        self.parts = parts
+        self.decals = decals
+        self.tail = {k: np.asarray(v, float) for k, v in tail.items()}      # the tail chain, re-seated on the seat

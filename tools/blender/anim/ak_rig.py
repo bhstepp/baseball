@@ -202,17 +202,17 @@ class Solver:
             fdir = np.array([c['hand%s.fx' % sd], c['hand%s.fy' % sd], c['hand%s.fz' % sd]])
             pdir = np.array([c['hand%s.px' % sd], c['hand%s.py' % sd], c['hand%s.pz' % sd]])
             pole = vec('elbow' + sd)
-            if relh > 1e-4:
-                Ph = W['head'][:3, 3] + Rhd @ (P - sk.J['head'])
-                P = P * (1 - relh) + Ph * relh
-                fdir = fdir * (1 - relh) + (Rhd @ fdir) * relh
-                pdir = pdir * (1 - relh) + (Rhd @ pdir) * relh
-            elif rel > 1e-4:
+            # world / chest-carried / head-carried targets, blended by weight (head wins over chest)
+            wh = min(max(relh, 0.0), 1.0)
+            wc = min(max(rel, 0.0), 1.0) * (1.0 - wh)
+            ww = 1.0 - wh - wc
+            if wh > 1e-4 or wc > 1e-4:
                 Pc = W['chest'][:3, 3] + Rc @ (P - sk.J['chest'])
-                P = P * (1 - rel) + Pc * rel
-                fdir = fdir * (1 - rel) + (Rc @ fdir) * rel
-                pdir = pdir * (1 - rel) + (Rc @ pdir) * rel
-                pole = pole * (1 - rel) + (Rc @ pole) * rel
+                Ph = W['head'][:3, 3] + Rhd @ (P - sk.J['head'])
+                P = P * ww + Pc * wc + Ph * wh
+                fdir = fdir * ww + (Rc @ fdir) * wc + (Rhd @ fdir) * wh
+                pdir = pdir * ww + (Rc @ pdir) * wc + (Rhd @ pdir) * wh
+                pole = pole * (ww + wh) + (Rc @ pole) * wc
             wabs = float(np.clip(g('hand%s.abs' % sd), 0, 1))
             Rh_rest = rest['hand.' + sd][:3, :3]
             f0, p0 = Rh_rest[:, 1], Rh_rest[:, 0] * (-SX[sd])

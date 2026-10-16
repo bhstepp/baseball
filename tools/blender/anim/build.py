@@ -56,6 +56,13 @@ def main(argv):
         clips = [c for c in clips if c.name in keep]
         if not clips:
             raise SystemExit('no clips match ' + a.clips)
+    for c in clips:                           # lengths on the 40 fps grid (loops must close exactly on a sample)
+        if abs(c.length * AB.FPS - round(c.length * AB.FPS)) > 1e-6:
+            raise SystemExit('%s: length %r is not on the %d fps grid' % (c.name, c.length, AB.FPS))
+    for c in clips:                           # markers must sit on the 40 fps grid (a key is forced there)
+        for k, v in c.markers.items():
+            if abs(v * AB.FPS - round(v * AB.FPS)) > 1e-6:
+                raise SystemExit('%s: marker %s = %r is not on the %d fps grid' % (c.name, k, v, AB.FPS))
     partial = bool(a.clips)
     out_glb = a.out_glb or (os.path.join(ROOT, 'qa', 'anim', 'partial_%s.glb' % a.lib) if partial else os.path.join(ROOT, 'assets', 'src', 'anim_%s.glb' % a.lib))
     out_json = a.out_json or (os.path.join(ROOT, 'qa', 'anim', 'partial_%s.json' % a.lib) if partial else os.path.join(ROOT, 'assets', 'anim_%s.json' % a.lib))
@@ -79,11 +86,30 @@ def main(argv):
         'axes': 'glTF model space of the character: +X his left, +Y up, +Z forward (he faces +Z); feet; positions are '
                 'relative to the root (on the ground between the feet at rest) for the reference build',
         'retarget': 'scale root/hips translation by hipHeight / refHipHeight; rotations apply as they are',
+        'notes': {
+            'clips': 'length (s), loop, frames (40 fps samples), keys (authoring key times), markers (event times, all on the 40 fps grid; '
+                     'a key is forced there), from/to (named poses the clip starts and ends in, so clips chain without a pop)',
+            'channels': 'every bone animates rotation; translation only on root (never moves) and hips; the root also carries a small '
+                        'volume-preserving squash/stretch scale (y = s, x = z = 1/sqrt(s), s within about 0.88..1.10) that you can drop '
+                        '(the "root.scale" track) if unwanted; tail.*, ear.*, cap carry spring follow-through and are ignored on species '
+                        'that lack them',
+            'ball': 'where the ball is during the clip: [[socket, fromTime], ...]; socket is a bone of the character (grip.R / grip.L / '
+                    'mitt) or null (not in this character\'s hands: in flight, released, or with someone else)',
+            'positions': 'all positions are in the character\'s glTF model space relative to its root, for the reference build: x his '
+                         'left, y up, z forward; multiply by the character\'s size and rotate by its yaw for the world',
+            'face': 'shape-key curves per clip: {key: [[t, value], ...]} (piecewise linear), for the actor\'s face helpers',
+        },
         'clips': {},
         'face': {},
     }
+    side['sockets'] = {}
+    for sname in ('grip.L', 'grip.R', 'mitt'):
+        if sk.has(sname):
+            L = sk.local[sname]
+            side['sockets'][sname] = {'parent': sk.parent[sname], 'offset': [float(x) for x in L[:3, 3]],
+                                      'restModel': [float(sk.J[sname][0]), float(sk.J[sname][2]), float(-sk.J[sname][1])]}
     for c, r in zip(clips, baked):
-        e = {'length': round(c.length, 4), 'loop': c.loop, 'frames': c.frames()}
+        e = {'length': round(c.length, 4), 'loop': c.loop, 'frames': c.frames(), 'keys': sorted(set(round(k[0], 3) for k in c.keys))}
         if c.markers:
             e['markers'] = {k: round(v, 4) for k, v in c.markers.items()}
         e.update(c.meta)

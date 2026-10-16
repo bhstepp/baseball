@@ -66,22 +66,28 @@ def bake(clip, sk, solver, verbose=False):
     return res
 
 
+def _squashed(res, j, name):
+    """World position (model space, root on the ground at the origin) of a bone at frame j, with the root's squash
+    (vertical s, horizontal 1/sqrt(s), about the root) applied like the exported root node does."""
+    p = res.worlds[j][name][:3, 3]
+    s = float(res.channels['root.s'][j]) if 'root.s' in res.channels else 1.0
+    hs = 1.0 / math.sqrt(max(s, 1e-3))
+    return p * np.array([hs, hs, s])
+
+
 def socket_at(res, sk, name, t):
-    """World (model space, root on the ground at the origin, rest squash ignored) position of a bone at time t,
-    interpolated between frames."""
+    """World position of a bone at time t (model space, root at the origin), interpolated between frames."""
     f = t * FPS
     j0 = int(math.floor(f + 1e-9))
     j1 = min(j0 + 1, len(res.times) - 1)
     u = f - j0
-    p0 = res.worlds[j0][name][:3, 3]
-    p1 = res.worlds[j1][name][:3, 3]
-    return p0 * (1 - u) + p1 * u
+    return _squashed(res, j0, name) * (1 - u) + _squashed(res, j1, name) * u
 
 
 def socket_vel(res, name, t):
     j = int(round(t * FPS))
     j0, j1 = max(j - 1, 0), min(j + 1, len(res.times) - 1)
-    return (res.worlds[j1][name][:3, 3] - res.worlds[j0][name][:3, 3]) / ((j1 - j0) / FPS)
+    return (_squashed(res, j1, name) - _squashed(res, j0, name)) / ((j1 - j0) / FPS)
 
 
 def face_tracks(res, tol=0.01):

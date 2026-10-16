@@ -55,6 +55,12 @@ BB.Actors = (function () {
   var SHADOW_M = new T.MeshBasicMaterial({ color: 0x1B1420, transparent: true, opacity: 0.22, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -12, polygonOffsetUnits: -40 });
 
   // ------------------------------------------------------------------ small helpers shared by the drivers
+  function sampleCurve(k, t) { // [[t, v], ...] linear
+    if (!k || !k.length) return 0;
+    if (t <= k[0][0]) return k[0][1];
+    for (var i = 1; i < k.length; i++) if (t <= k[i][0]) { var a = k[i - 1], b = k[i], u = (t - a[0]) / Math.max(1e-6, b[0] - a[0]); return a[1] + (b[1] - a[1]) * u; }
+    return k[k.length - 1][1];
+  }
   function L(c, t, w) { return { c: c, t: t, w: w == null ? 1 : w }; }
   function mixL(a, b, k) { // blend two layer lists
     if (k <= 0) return a; if (k >= 1) return b;
@@ -163,6 +169,28 @@ BB.Actors = (function () {
     return g;
   }
 
+  // One armature skins every mesh of a character, but the loader (and SkeletonUtils.clone) give each mesh its own
+  // Skeleton: bone matrices computed and a bone texture uploaded per mesh, every frame. Meshes bound to the same bones
+  // with the same inverse bind matrices share one Skeleton instead (once per character per frame).
+  function shareSkeletons(root) {
+    var groups = {};
+    root.traverse(function (m) {
+      if (!m.isSkinnedMesh || !m.skeleton) return;
+      var sk = m.skeleton, key = sk.bones.map(function (b) { return b.uuid; }).join(), g = groups[key];
+      if (!g) { groups[key] = [sk]; return; }
+      for (var i = 0; i < g.length; i++) if (sameInverses(g[i], sk)) { if (g[i] !== sk) { sk.dispose(); m.skeleton = g[i]; } return; }
+      g.push(sk);
+    });
+  }
+  function sameInverses(a, b) {
+    if (a.boneInverses.length !== b.boneInverses.length) return false;
+    for (var i = 0; i < a.boneInverses.length; i++) {
+      var x = a.boneInverses[i].elements, y = b.boneInverses[i].elements;
+      for (var j = 0; j < 16; j++) if (Math.abs(x[j] - y[j]) > 1e-6) return false;
+    }
+    return true;
+  }
+
   // ------------------------------------------------------------------ colours
   var _c1 = new T.Color(), _c2 = new T.Color();
   function near(a, b) { return Math.max(Math.abs(a.r - b.r), Math.abs(a.g - b.g), Math.abs(a.b - b.b)); }
@@ -196,16 +224,18 @@ BB.Actors = (function () {
     var model = T.SkeletonUtils.clone(tpl);
     this.gltf = gltf; this.json = gltf.parser && gltf.parser.json;
     model.updateMatrixWorld(true);
+    shareSkeletons(model);
     var self = this, bones = {}, byName = {};
     model.traverse(function (o) { byName[o.name] = o; if (o.isBone || o.type === 'Object3D' || o.isGroup) { var nm = nameOf(o); if (!bones[nm]) bones[nm] = o; } });
     var missing = (cfg.bones || []).filter(function (b) { return !bones[b]; });
     if (missing.length) this.warn('missing bones: ' + missing.join(', '));
     (cfg.need || ['root']).forEach(function (b) { if (!bones[b]) throw new Error(self.asset + ' has no "' + b + '" bone'); });
     this.model = model; this.bones = bones; this.byName = byName;
-    this.colors = {}; this.mats = {}; this.over = {}; this.hidden = {}; this.lodLevel = 0; this.lods = { 0: [] }; this.face = [];
+    var baseLod = this.baseLod = opts.baseLod || 0;   // fielders and runners load only their LOD1 file: its meshes are level 1
+    this.colors = {}; this.mats = {}; this.over = {}; this.hidden = {}; this.lodLevel = baseLod; this.lods = {}; this.face = []; this.faceCurves = {};
     this.decalTex = {}; this.decalFlip = {}; this.decalText = opts.decalText || {};
     this.extras = Object.assign({}, tpl.userData || {});   // glTF scene extras: { id, species, role, height, hipHeight, lod, hand }
-    var meshes = this.adoptMeshes(model, 0);
+    var meshes = this.adoptMeshes(model, baseLod);
     if (!meshes.length) throw new Error(this.asset + ' has no meshes');
     this.base = Object.assign({}, this.colors);
     // face shapes
@@ -334,7 +364,8 @@ BB.Actors = (function () {
     if (!c) return;
     this.team = c;
     var team = this.cfg.team || {};
-    for (var name in team) if (name in this.base) this.colors[name] = c[team[name]] || this.base[name];
+    var fb = this.cfg.teamFallback || {};
+    for (var name in team) if (name in this.base) { var slot = team[name]; this.colors[name] = c[slot] || (fb[slot] && c[fb[slot]]) || this.base[name]; }
     this.paint();
   };
   A.setColor = function (name, hex) { if (name in this.colors) { this.colors[name] = hex || this.base[name]; this.paint(); } };
@@ -390,7 +421,7 @@ BB.Actors = (function () {
     if (spec.post) spec.post(this, spec);
     if (spec.gaze) { this.root.updateMatrixWorld(true); this.gaze(spec.gaze, spec.gazeK == null ? 1 : spec.gazeK, spec.gazeLimit); }
     this.hideKinds(spec.hide || null);
-    this.applyFace(spec.face || {});
+    this.applyFace(this.curveFace(spec.layers, spec.face || {}));
     this.eyeSquash();
     var mem = this.mem, dt = time - mem.time, i;
     if (spec.key !== mem.key && mem.time >= 0 && dt >= 0 && dt < 0.25 && (spec.fade || 0) > 0) {
@@ -418,6 +449,18 @@ BB.Actors = (function () {
   };
 
   // ------------------------------------------------------------------ faces & gaze
+  // shape-key curves that come with a clip library's sidecar ({clip: {shape: [[t, v], ...]}}): shared clips can't key
+  // a character's own morph targets, so the library ships them as data; they add to the driver's face (max)
+  A.addFaceCurves = function (curves) { for (var c in (curves || {})) this.faceCurves[c] = curves[c]; };
+  A.curveFace = function (layers, face) {
+    var out = face, any = false;
+    for (var i = 0; layers && i < layers.length; i++) {
+      var l = layers[i], fc = this.faceCurves[l.c]; if (!fc || !(l.w > 0.05)) continue;
+      if (!any) { out = Object.assign({}, face); any = true; }
+      for (var sh in fc) { var v = sampleCurve(fc[sh], l.t) * Math.min(1, l.w); if (!(out[sh] >= v)) out[sh] = v; }
+    }
+    return out;
+  };
   A.blinkAt = function (t, seed) { var c = this.cfg.blinkCycle || 3.7, p = (t + seed * 1.7) % c; return p < 0.13 ? Math.sin(p / 0.13 * PI) : 0; };
   A.applyFace = function (face) {
     for (var j = 0; j < this.face.length; j++) {
@@ -460,10 +503,52 @@ BB.Actors = (function () {
       b.quaternion.premultiply(Q);
     });
   };
+  // two-bone reach (analytic IK): move the end of a limb (b1 -> b2 -> b3, e.g. upper_arm.L -> forearm.L -> hand.L)
+  // so that the effector bone (a socket under b3, e.g. the mitt pocket) lands on a world point. The bend stays in
+  // its current plane (the clip's elbow direction) and the hand keeps its world orientation; w blends it in. Out of
+  // reach, the limb straightens toward the point.
+  var _s = new T.Vector3(), _e = new T.Vector3(), _h = new T.Vector3(), _p = new T.Vector3(), _t = new T.Vector3(), _d = new T.Vector3(), _n = new T.Vector3();
+  var _hq = new T.Quaternion(), _dq = new T.Quaternion(), _pq2 = new T.Quaternion();
+  function worldDelta(b, dq) {                                  // rotate bone b by a world-space delta rotation
+    b.parent.getWorldQuaternion(_pq2);
+    Q2.copy(_pq2).invert().multiply(dq).multiply(_pq2);
+    b.quaternion.premultiply(Q2);
+    b.updateMatrixWorld(true);
+  }
+  A.reach = function (b1, b2, b3, eff, target, w) {
+    var B1 = this.bones[b1], B2 = this.bones[b2], B3 = this.bones[b3], E = (eff && this.bones[eff]) || B3;
+    if (!B1 || !B2 || !B3 || !target || !(w > 0)) return false;
+    this.root.updateMatrixWorld(true);
+    B1.getWorldPosition(_s); B2.getWorldPosition(_e); B3.getWorldPosition(_h); E.getWorldPosition(_p);
+    B3.getWorldQuaternion(_hq);
+    // where the wrist must go: the target less the (rigid) wrist -> effector offset, blended by w
+    _t.set(target.x, target.y, target.z).sub(_p).multiplyScalar(w).add(_h);
+    var a = _e.distanceTo(_s), b = _h.distanceTo(_e);
+    _d.subVectors(_t, _s); var dl = _d.length(); if (dl < 1e-5 || a < 1e-5 || b < 1e-5) return false;
+    var d = clamp(dl, Math.abs(a - b) + 1e-4, a + b - 1e-4); _d.multiplyScalar(1 / dl);
+    // the elbow: in the plane of the reach direction and the current elbow
+    _n.subVectors(_e, _s); _n.addScaledVector(_d, -_n.dot(_d));
+    if (_n.lengthSq() < 1e-8) _n.set(0, 0, -1).addScaledVector(_d, -_d.z);
+    _n.normalize();
+    var ca = clamp((a * a + d * d - b * b) / (2 * a * d), -1, 1), sa = Math.sqrt(1 - ca * ca);
+    var e2 = V.copy(_s).addScaledVector(_d, a * ca).addScaledVector(_n, a * sa);
+    // upper limb: old elbow direction -> new; lower limb: wrist direction -> the wrist target
+    _dq.setFromUnitVectors(V2.subVectors(_e, _s).normalize(), _p.subVectors(e2, _s).normalize());
+    worldDelta(B1, _dq);
+    B2.getWorldPosition(_e); B3.getWorldPosition(_h);
+    _dq.setFromUnitVectors(V2.subVectors(_h, _e).normalize(), _p.subVectors(_t, _e).normalize());
+    worldDelta(B2, _dq);
+    // the hand keeps its world orientation (the mitt still faces the ball)
+    B3.parent.getWorldQuaternion(_pq2);
+    B3.quaternion.copy(_pq2.invert().multiply(_hq));
+    B3.updateMatrixWorld(true);
+    return true;
+  };
   // inverse of a bone's bind-pose rotation relative to the model (from the skin's inverse bind matrices)
   A.restInv = function (bone) {
     var q = new T.Quaternion(), b = this.bones[bone], sk = null;
-    this.meshes.some(function (m) { if (m.isSkinnedMesh && m.userData.lod === 0) { sk = m.skeleton; return true; } return false; });
+    var base = this.baseLod || 0;
+    this.meshes.some(function (m) { if (m.isSkinnedMesh && m.userData.lod === base) { sk = m.skeleton; return true; } return false; });
     if (sk && b) { var i = sk.bones.indexOf(b); if (i >= 0) { var m = sk.boneInverses[i].clone().invert(), p = new T.Vector3(), s = new T.Vector3(); m.decompose(p, q, s); } }
     return q.invert();
   };
@@ -483,6 +568,9 @@ BB.Actors = (function () {
       src.tracks.forEach(function (tr) {
         var pp = T.PropertyBinding.parseTrackName(tr.name);
         if (!names[pp.nodeName]) return;
+        // shared clips drive bones only: a face keyed on another character's meshes doesn't carry over (libraries
+        // bring their face as sidecar curves, see addFaceCurves)
+        if (pp.propertyName === 'morphTargetInfluences') return;
         if (pp.propertyName === 'position' && k !== 1) {
           var node = self.byName[pp.nodeName], bn = node ? nameOf(node) : pp.nodeName;
           if (bn === 'root' || bn === 'hips') { tr = tr.clone(); for (var i = 0; i < tr.values.length; i++) tr.values[i] *= k; }
@@ -507,21 +595,33 @@ BB.Actors = (function () {
     if (key === this.hiddenKey) return;
     this.hidden = h; this.hiddenKey = key; this.updateVisibility();
   };
+  A.hasLod = function (level) { return !!(this.lods[level] && this.lods[level].length); };
   A.updateVisibility = function () {
-    var lvl = this.lods[this.lodLevel] && this.lods[this.lodLevel].length ? this.lodLevel : 0, h = this.hidden;
+    var lvl = this.hasLod(this.lodLevel) ? this.lodLevel : this.hasLod(0) ? 0 : 1, h = this.hidden;
     this.meshes.forEach(function (m) { m.visible = m.userData.lod === lvl && !h[m.userData.kind]; });
   };
-  A.setLod = function (level) { if (!this.lods[level] || !this.lods[level].length) level = 0; if (level !== this.lodLevel) { this.lodLevel = level; this.updateVisibility(); } };
-  // LOD1 when he is small on screen: projected height in px against a threshold (with hysteresis)
-  A.autoLod = function (cam, viewH, px) {
-    if (!this.lods[1] || !this.lods[1].length || !cam) return this.lodLevel;
-    px = px || 120;
+  A.setLod = function (level) { if (!this.hasLod(level)) level = this.hasLod(0) ? 0 : 1; if (level !== this.lodLevel) { this.lodLevel = level; this.updateVisibility(); } };
+  // projected height in px (for LOD choice and budgets)
+  A.screenHeight = function (cam, viewH) {
     this.root.getWorldPosition(V); V.z += this.height * this.size * 0.5;
     var d = Math.max(0.1, V.distanceTo(cam.position)), f = viewH / (2 * Math.tan(cam.fov * PI / 360));
-    var h = this.height * this.size * f / d;
-    this.screenPx = h;
-    this.setLod(this.lodLevel === 1 ? (h > px * 1.15 ? 0 : 1) : (h < px ? 1 : 0));
-    return this.lodLevel;
+    return (this.screenPx = this.height * this.size * f / d);
+  };
+  // LOD1 when small on screen: projected height in px against a threshold (with hysteresis). Returns the level it
+  // would like (0 may be wanted while only LOD1 is loaded: the caller can fetch it)
+  A.autoLod = function (cam, viewH, px) {
+    if (!cam) return this.lodLevel;
+    px = px || 120;
+    var h = this.screenHeight(cam, viewH), want = this.lodLevel === 1 ? (h > px * 1.15 ? 0 : 1) : (h < px ? 1 : 0);
+    this.setLod(want);
+    return want;
+  };
+  // whole-actor frustum culling (skinned meshes keep frustumCulled off: their bind-pose bounds are wrong once posed)
+  var _sph = new T.Sphere();
+  A.inView = function (frustum) {
+    this.root.getWorldPosition(_sph.center); _sph.center.z += this.height * this.size * 0.5;
+    _sph.radius = this.height * this.size * 0.8;
+    return frustum.intersectsSphere(_sph);
   };
   // a level-of-detail file (same rig and material names): its meshes are re-bound to this actor's bones
   A.addLod = function (gltf, level) {
@@ -544,6 +644,7 @@ BB.Actors = (function () {
     });
     if (!made.length) return false;
     this.model.add(grp);
+    shareSkeletons(grp);
     var faceBefore = this.face.length;
     this.adoptMeshes(grp, level);
     for (var j = faceBefore; j < this.face.length; j++) this.morphSaved.push(this.face[j].morphTargetInfluences.slice());
@@ -591,6 +692,49 @@ BB.Actors = (function () {
     M4.copy(this.model.matrixWorld).invert(); out.applyMatrix4(M4);
     return out;
   };
+  // a bone's model-space position at a clip time (or a layer list), measured once after loading (sockets at markers)
+  A.socketAt = function (layers, name, out) {
+    var b = this.bones[name]; out = out || new T.Vector3();
+    if (!b) return null;
+    this.evaluate(Array.isArray(layers) ? layers : [L(layers.c, layers.t)]);
+    this.model.updateMatrixWorld(true);
+    return this.modelPoint(b, out);
+  };
+  // the model-space position of a bone at its bind pose (skin inverse bind matrices), e.g. the hips for retargeting
+  A.bindPoint = function (name) {
+    var b = this.bones[name], base = this.baseLod || 0, out = null;
+    if (!b) return null;
+    this.meshes.some(function (m) {
+      if (!m.isSkinnedMesh || m.userData.lod !== base) return false;
+      var i = m.skeleton.bones.indexOf(b); if (i < 0) return false;
+      out = new T.Vector3().setFromMatrixPosition(M4.copy(m.skeleton.boneInverses[i]).invert());
+      return true;
+    });
+    return out;
+  };
+  // a run cycle played in place: how far the planted foot slides back per clip second (its ground speed at 1x) and
+  // per cycle (stride), so the legs can be played at the rate that keeps the feet from skating. The contact point is
+  // the lower of ankle and toe; it counts as planted within 0.06 ft of its lowest. Model units (unscaled).
+  A.gait = function (c) {
+    var d = this.dur(c), n = 80, out = { stride: 0, treadmill: 0 }, back = [], self = this;
+    if (!this.has(c)) return out;
+    ['L', 'R'].forEach(function (side) {
+      var f = self.bones['foot.' + side], to = self.bones['toe.' + side]; if (!f) return;
+      var p = [];
+      for (var i = 0; i <= n; i++) {
+        self.evaluate([L(c, d * i / n)]); self.model.updateMatrixWorld(true);
+        var a = self.modelPoint(f, new T.Vector3()), b = to ? self.modelPoint(to, new T.Vector3()) : a;
+        p.push(b.y < a.y ? b : a);
+      }
+      var lo = Math.min.apply(null, p.map(function (q) { return q.y; }));
+      for (var j = 0; j < n; j++) if (p[j].y < lo + 0.06 && p[j + 1].y < lo + 0.06) back.push(-(p[j + 1].z - p[j].z) / (d / n));
+    });
+    if (!back.length) return out;
+    back.sort(function (a, b) { return a - b; });
+    out.treadmill = back[back.length >> 1];
+    out.stride = out.treadmill * d;
+    return out;
+  };
   A.headPoint = function (out) {
     out = out || new T.Vector3();
     var b = this.bones.head; if (!b) return this.point('root', out).setZ(this.height * this.size * 0.8);
@@ -625,7 +769,7 @@ BB.Actors = (function () {
     this.restBox = hb; this.height = Math.max(1, hb.max.y - hb.min.y);
     var B = this.bones.head, sum = new T.Vector3(), cnt = 0;
     if (B) this.meshes.forEach(function (m) {
-      if (!m.isSkinnedMesh || m.userData.kind !== 'body' || m.userData.lod !== 0) return;
+      if (!m.isSkinnedMesh || m.userData.kind !== 'body' || m.userData.lod !== (self.baseLod || 0)) return;
       var bi = m.skeleton.bones.indexOf(B); if (bi < 0) return;
       var P = m.geometry.attributes.position, SI = m.geometry.attributes.skinIndex, SW = m.geometry.attributes.skinWeight;
       var toBone = new T.Matrix4().multiplyMatrices(m.skeleton.boneInverses[bi], m.bindMatrix);
@@ -636,12 +780,11 @@ BB.Actors = (function () {
       }
     });
     this.headLocal = cnt ? sum.multiplyScalar(1 / cnt) : new T.Vector3(0, 0.6, 0);
-    void self;
   };
   // a static copy of the meshes of one kind (e.g. the bat) in a bone's space, with toon materials and outlines: a prop
   // that can leave the character (a bat lying in the dirt, a flipped bat tumbling on)
   A.makeProp = function (kind, boneName) {
-    var list = this.lods[0].filter(function (m) { return m.userData.kind === kind; }), bone = this.bones[boneName];
+    var list = (this.lods[this.baseLod || 0] || []).filter(function (m) { return m.userData.kind === kind; }), bone = this.bones[boneName];
     if (!list.length || !bone) return null;
     var grp = new T.Group(); grp.name = this.asset + '_' + kind + '_prop';
     list.forEach(function (src) {
@@ -665,7 +808,8 @@ BB.Actors = (function () {
     var self = this, o = { asset: this.asset, warnings: this.warnings.slice(), clips: Object.keys(this.clips).map(function (c) { return c + ' ' + self.clips[c].duration.toFixed(2) + 's'; }) };
     var lod = function (l) { return (self.lods[l] || []).reduce(function (s, m) { var g = m.geometry; return s + (g.index ? g.index.count : g.attributes.position.count) / 3; }, 0); };
     o.triangles = lod(0); if (this.lods[1]) o.lod1Triangles = lod(1);
-    o.drawCalls = this.lods[0].length + this.lods[0].filter(function (m) { return m.userData.outline; }).length;
+    var bl = this.lods[this.baseLod || 0] || [];
+    o.drawCalls = bl.length + bl.filter(function (m) { return m.userData.outline; }).length;
     o.materials = Object.keys(this.colors).map(function (n) { return n + ' ' + self.colors[n]; });
     o.droppedTracks = this.dropped; o.bones = this.allBones.length; o.restHeight = +this.height.toFixed(3);
     return o;
@@ -698,9 +842,10 @@ BB.Actors = (function () {
       catch (e) { BB.Assets.release(asset); throw e; }
     });
   }
-  // add a level of detail from '<asset>_lod<level>' (docs/CAST-CONTRACT.md: char_<id>_lod1) if the build has one
-  function loadLod(actor, level) {
-    var name = actor.asset + '_lod' + level;
+  // add a level of detail from '<asset>_lod<level>' (docs/CAST-CONTRACT.md: char_<id>_lod1) if the build has one;
+  // loadLevel(actor, file, level) adds any file as a level (e.g. LOD0 for a fielder that came close)
+  function loadLod(actor, level) { return loadLevel(actor, actor.asset + '_lod' + level, level); }
+  function loadLevel(actor, name, level) {
     if (!BB.Assets.has(name)) return Promise.resolve(false);
     if (actor.lods[level] && actor.lods[level].length) return Promise.resolve(true);
     actor.lodPending = actor.lodPending || {};
@@ -717,7 +862,7 @@ BB.Actors = (function () {
   // the phase B cast (docs/CAST-CONTRACT.md): one description for every character file; per character: colours from
   // the model (fur, markings), team colours and decal text (team letter, card number) per instance
   define('cast', {
-    team: { team_a: 'a', team_b: 'b', cap: 'a', cap_brim: 'b', decal_chest: 'a', decal_back: 'a' },
+    team: { team_a: 'a', team_b: 'b', cap: 'a', cap_brim: 'brim', decal_chest: 'a', decal_back: 'a' }, teamFallback: { brim: 'a' },
     hull: { pupil: 0, tongue: 0, teeth: 0.5, mouth: 0.4, nose: 0.6, eye_white: 0.55, lace: 0.45, mitt_lace: 0.45, sole: 0.9, decal_chest: 0, decal_back: 0 },
     ink: { pupil: 0.55, eye_white: 0.7, nose: 0.8, mouth: 0.7, tongue: 0.6, teeth: 0.6, lace: 0.6, mitt_lace: 0.6 },
     decals: { decal_chest: { text: '?', side: 'front' }, decal_back: { text: '?', side: 'back' } },
@@ -729,6 +874,6 @@ BB.Actors = (function () {
     shapes: ['blink', 'smile', 'grin', 'frown', 'mouth_open', 'brows_up', 'brows_angry', 'brows_sad', 'squint', 'cheeks_puff', 'smirk'],
     eyeSquash: true, trustModelColors: true,
   });
-  return { available: true, define: define, create: create, loadLod: loadLod, kinds: KINDS, Actor: Actor,
+  return { available: true, define: define, create: create, loadLod: loadLod, loadLevel: loadLevel, sampleCurve: sampleCurve, kinds: KINDS, Actor: Actor,
     L: L, mixL: mixL, twos: twos, onTwos: onTwos, warp: warp, HULL: HULL, restPositions: restPositions };
 })();

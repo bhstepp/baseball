@@ -19,6 +19,7 @@
   // (add &stage=new to see the procedural Rocco on the new staging, which is what players get if the model fails).
   function flag(re) { try { return re.test(location.search); } catch (e) { return false; } }
   var OLD = flag(/[?&]rocco=(old|0|off|proc)(&|$)/) && !flag(/[?&]stage=new(&|$)/);
+  // ?cast=proc keeps the procedural pitcher, catcher, umpire, fielders and runners (the modelled cast is BB.Crew)
   var ROCCO = { x: -2.35, y: 0.9, size: 1.12 };             // render spot of the right-handed hero (physics uses K.BATTER_X)
   var CATCHER = OLD ? { x: 0.4, y: -5.4, size: 0.9 } : { x: 0.75, y: -4.75, size: 0.76, shift: 0.55, mitt: { x: 0.2, y: -3.2, z: 2.1 } };
   var UMP = OLD ? { x: 1.75, y: -3.2, size: 1.08, off: 4.6 } : { x: 2.25, y: -4.5, size: 0.92, off: 5.6 };
@@ -31,6 +32,11 @@
     wide: { a: 0.563, pos: [-1.6, -23, 7.3], ppfW: 0.156, ppfH: 0.078, at: [0.62, 0.675] },     // 320x568 (16:9) and wider
   };
   var PITCHER_K = OLD ? 1 : 1.08;                               // pitcher size multiplier
+  // the modelled catcher and umpire (BB.Crew) on the same staging: where they stand and their scale (the modelled
+  // pitcher's place and scale are solved from his release point)
+  // (height: ft tall standing, so the cast's builds keep their proportions; shift: the share of a sideways move the
+  // catcher's feet make, his glove arm reaches the rest; clear: ft his head stays right of a ball on his right)
+  var CATCHER_M = { x: CATCHER.x, y: CATCHER.y, height: 4.0, shift: 0.35, clear: 0.3 }, UMP_M = { height: 4.4 };
   // the modelled Rocco (BB.Rocco, 36-rocco.js): where his contact frame meets a middle-middle pitch
   var HERO_AIM = { x: 0, y: 0, z: 2.5 };
   var HR_HOLD = { pos: [-7, -34, 12], look: [0, 16, 4.5] };   // field camera while the model Rocco flips his bat on a homer
@@ -44,8 +50,9 @@
     ball: null, ballG: null, ballShadow: null,
     lastScene: '', sceneT0: 0, prevScene: '', lastTime: 0,
     perf: [], lastNow: 0, warm: 0, noAdapt: false, lastBuildMs: 0, frameMs: 0,
-    hud: { key: '', canvas: null }, fontsOk: false, fontCheck: 0,
+    hud: { key: '', canvas: null }, fontsOk: false, fontCheck: 0, noCrew: OLD || flag(/[?&]cast=(proc|0|off)(&|$)/),
   };
+  S.stage = { catcher: CATCHER_M, ump: UMP_M };
   var V = new T.Vector3(), V2 = new T.Vector3(), V3 = new T.Vector3();
 
   // ------------------------------------------------------------------ colour helpers
@@ -181,6 +188,7 @@
     S.col = { a: tame(ink.a), b: tame(ink.b), c: tame(ink.c) };
     buildHero();
     if (BB.Rocco && BB.Rocco.setColors) BB.Rocco.setColors(S.col);
+    if (crew()) crew().setHeroColors(S.col);
     S.hud.key = '';
   }
   function heroOpts(species, simple) {
@@ -297,13 +305,16 @@
     if (!S.renderer) return Promise.resolve(false);
     if (inkset) setInks(inkset);
     if (park) ensurePark(park);
-    return prepareCast(opts || {});
+    return prepareCast(park, opts || {});
   }
-  function prepareCast(opts) {
+  function prepareCast(park, opts) {
     var jobs = [];
     // the hero's distant-runner level of detail (a file; fetched and parsed now, dropped after the game)
     if (BB.Rocco && BB.Rocco.whenReady) jobs.push(BB.Rocco.whenReady().then(function (ok) { return ok && BB.Rocco.prepareLod ? BB.Rocco.prepareLod() : false; }));
-    void opts;   // phase B: the game's pitcher, catcher, umpire and fielders (BB.Actors.create per role)
+    // the game's pitcher, catcher, umpire, fielding team and Rocco's teammates (BB.Crew, 36-crew.js); a role whose
+    // model isn't in keeps the procedural cast
+    var cr = crew();
+    if (cr) jobs.push(cr.prepare(park || null, opts.pitcher || null).then(function (st) { warmCrew(); return st; }));
     S.castLive = true;
     return Promise.all(jobs).then(function (r) { S.castReady = true; return r; }, function (e) { console.warn('BB.Render.prepare', e); return false; });
   }
@@ -312,8 +323,19 @@
     if (!S.castLive) return;
     S.castLive = false; S.castReady = false;
     if (BB.Rocco && BB.Rocco.releaseLod) BB.Rocco.releaseLod();
-    (S.castAssets || []).forEach(function (n) { if (BB.Assets) BB.Assets.release(n); });
-    S.castAssets = [];
+    if (crew()) crew().release();
+  }
+  // the modelled cast (BB.Crew) when the build has it
+  function crew() { return BB.Crew && BB.Crew.available && !S.noCrew ? BB.Crew : null; }
+  function adopt(A) { if (A && A.root.parent !== S.scene) S.scene.add(A.root); return A; }
+  // compile the cast's shaders once it is in (while the briefing is up), so the first pitch doesn't hitch
+  function warmCrew() {
+    var cr = crew(), g = cr && cr.game(); if (!g || !S.renderer) return;
+    var shown = [];
+    g.list.forEach(function (M) { if (M.state === 'ready' && M.actor) { adopt(M.actor); M.actor.root.visible = true; M.actor.root.position.set(0, 60, -50); shown.push(M.actor); } });
+    if (!shown.length) return;
+    try { S.renderer.compile(S.scene, S.cam || S.camBat); } catch (e) {}
+    shown.forEach(function (A) { A.root.visible = false; });
   }
 
   // ------------------------------------------------------------------ helpers for poses in world space
@@ -334,6 +356,7 @@
     [S.rocco, S.pitcher, S.catcher, S.ump].forEach(function (c) { if (c) c.root.visible = false; });
     S.fielders.forEach(function (f) { f.root.visible = false; });
     S.mates.forEach(function (f) { f.root.visible = false; });
+    if (BB.Crew && BB.Crew.hideAll) BB.Crew.hideAll();
     S.ballG.visible = false; S.ballShadow.visible = false;
   }
 
@@ -385,42 +408,66 @@
       S.bat.scale.set(1, smear ? 1.22 : 1, 1);
       st.pose = pose; st.o = o;
     }
-    // --- pitcher
-    var Pm = S.pitcher, rel = releaseOf(v);
-    place(Pm, 0, 60.5, 0.83, 0);
-    if (PITCHER_K !== 1) Pm.root.scale.setScalar(PITCHER_K);
-    var react = null, reactT = 0;
-    if (ci && ci.hit && v.play) { react = v.play.type === 'HR' || v.play.type === '3B' || v.play.type === '2B' ? 'jaw' : v.play.type === 'OUT' || v.play.type === 'FOUL' ? null : 'grr'; reactT = ci.tc; }
-    else if (p && v.pitchT != null && v.pitchT > p.T + 0.15 && !(ci && ci.hit) && (sw || p.strike)) { react = 'smug'; reactT = v.pitchT - p.T - 0.15; }
-    var pp = A.pitcher({ windup: v.windup, pitchT: v.windup != null ? null : (p ? v.pitchT : null), style: (v.pitcher && v.pitcher.look && v.pitcher.look.windup) || Pm.style, rel: toUp(Pm, rel.x, rel.y, rel.z), time: t, react: react, reactT: reactT });
-    if (react === 'jaw' && ci) { pp.hy = (pp.hy || 0) + 0.4 * smooth(ci.tc / 0.2); pp.hx = -0.6; }
-    C.apply(Pm, pp);
-    // --- catcher: reads the pitch late, then sticks it
-    var Cc = S.catcher, cxs = CATCHER.x;
-    var mitt = CATCHER.mitt ? { x: CATCHER.mitt.x, y: CATCHER.mitt.y, z: CATCHER.mitt.z } : { x: 0.1, y: -2.55, z: 2.3 }, pop = 0;
-    if (p && v.pitchT != null) {
-      var fin = pitchPos(p, p.T + 0.5), w = smooth((v.pitchT / p.T - 0.35) / 0.55);
-      if (CATCHER.shift) cxs = lerp(CATCHER.x, fin.x + 0.5, CATCHER.shift * w);   // shuffles over, glove side to the ball
-      mitt = { x: lerp(mitt.x, fin.x, w), y: lerp(mitt.y, fin.y - 0.15, w), z: lerp(mitt.z, fin.z, w) };
-      if (!(ci && ci.hit) && v.pitchT > p.T) pop = Math.max(0, 1 - (v.pitchT - p.T - 0.05) / 0.25);
-      if (ci && ci.hit) { mitt = { x: 0.6, y: -3.0, z: 3.4 + smooth(ci.tc / 0.15) * 1.2 }; }
+    // --- pitcher: the modelled one (BB.Crew) when his model and clips are in, else the procedural pitcher
+    var Pm = S.pitcher, rel = releaseOf(v), CR = crew(), intro = introT(v);
+    var mp = CR ? CR.posePitcher(v, { ci: ci, intro: intro, batter: { x: ROCCO.x, y: ROCCO.y, z: 4.6 }, catcherHead: { x: CATCHER.x, y: CATCHER.y, z: 3 },
+      ball: p && v.pitchT != null ? pitchPos(p, Math.min(v.pitchT + 0.05, p.T + 0.3)) : null, ballAfter: ci && ci.hit && v.play ? v.play.ballAt(Math.max(0, ci.tc) + 0.2) : null }) : null;
+    if (mp) adopt(mp.actor);
+    else {
+      place(Pm, 0, 60.5, 0.83, 0);
+      if (PITCHER_K !== 1) Pm.root.scale.setScalar(PITCHER_K);
+      var react = null, reactT = 0;
+      if (ci && ci.hit && v.play) { react = v.play.type === 'HR' || v.play.type === '3B' || v.play.type === '2B' ? 'jaw' : v.play.type === 'OUT' || v.play.type === 'FOUL' ? null : 'grr'; reactT = ci.tc; }
+      else if (p && v.pitchT != null && v.pitchT > p.T + 0.15 && !(ci && ci.hit) && (sw || p.strike)) { react = 'smug'; reactT = v.pitchT - p.T - 0.15; }
+      var pp = A.pitcher({ windup: v.windup, pitchT: v.windup != null ? null : (p ? v.pitchT : null), style: (v.pitcher && v.pitcher.look && v.pitcher.look.windup) || Pm.style, rel: toUp(Pm, rel.x, rel.y, rel.z), time: t, react: react, reactT: reactT });
+      if (react === 'jaw' && ci) { pp.hy = (pp.hy || 0) + 0.4 * smooth(ci.tc / 0.2); pp.hx = -0.6; }
+      C.apply(Pm, pp);
     }
-    place(Cc, cxs, CATCHER.y, 0, PI);
-    var cp = A.catcher({ mitt: toUp(Cc, mitt.x, mitt.y + 0.1, mitt.z - 0.05), pop: pop, time: t });
-    if (ci && ci.hit) { cp.hx = 0.7; cp.mouth = 0.7; cp.browY = 1; }
-    C.apply(Cc, cp);
-    // --- umpire: pops in from the right for called strikes
-    var callT = null;
-    if (p && !sw && v.pitchT != null && p.strike && v.pitchT > p.T + 0.1) callT = v.pitchT - p.T - 0.12;
-    var Um = S.ump, slide = callT == null ? 0 : smooth(callT / 0.14) * (1 - smooth((callT - 1.1) / 0.25));
+    st.mp = mp;
+    // --- catcher: reads the pitch late, then sticks it (the modelled one blends his receives by height, shuffles
+    // over by the pitch's side, and throws the ball back to the mound)
+    var mc = CR ? CR.poseCatcher(v, { stage: CATCHER_M, end: p ? pitchPos(p, p.T + 0.6) : null, pitchPos: pitchPos, ci: ci, intro: intro }) : null;
+    if (mc) adopt(mc.actor);
+    else {
+      var Cc = S.catcher, cxs = CATCHER.x;
+      var mitt = CATCHER.mitt ? { x: CATCHER.mitt.x, y: CATCHER.mitt.y, z: CATCHER.mitt.z } : { x: 0.1, y: -2.55, z: 2.3 }, pop = 0;
+      if (p && v.pitchT != null) {
+        var fin = pitchPos(p, p.T + 0.5), w = smooth((v.pitchT / p.T - 0.35) / 0.55);
+        if (CATCHER.shift) cxs = lerp(CATCHER.x, fin.x + 0.5, CATCHER.shift * w);   // shuffles over, glove side to the ball
+        mitt = { x: lerp(mitt.x, fin.x, w), y: lerp(mitt.y, fin.y - 0.15, w), z: lerp(mitt.z, fin.z, w) };
+        if (!(ci && ci.hit) && v.pitchT > p.T) pop = Math.max(0, 1 - (v.pitchT - p.T - 0.05) / 0.25);
+        if (ci && ci.hit) { mitt = { x: 0.6, y: -3.0, z: 3.4 + smooth(ci.tc / 0.15) * 1.2 }; }
+      }
+      place(Cc, cxs, CATCHER.y, 0, PI);
+      var cp = A.catcher({ mitt: toUp(Cc, mitt.x, mitt.y + 0.1, mitt.z - 0.05), pop: pop, time: t });
+      if (ci && ci.hit) { cp.hx = 0.7; cp.mouth = 0.7; cp.browY = 1; }
+      C.apply(Cc, cp);
+    }
+    st.mc = mc;
+    // --- umpire: pops in from the right for called strikes (the modelled one also for ball four), on the game clock
+    // (the modelled one is on the game clock, which runs on through 'between': he slides back out before the next windup)
+    var call = umpCall(v, CR), callT = call ? call.t : null, mOut = CR && CR.ready('U');
+    var Um = S.ump, slide = callT == null ? 0 : smooth(callT / 0.14) * (1 - smooth((callT - (mOut ? 0.6 : 1.1)) / (mOut ? 0.22 : 0.25)));
     if (slide > 0.01) {
-      place(Um, lerp(UMP.off, UMP.x, C.backOut(Math.min(1, slide))), UMP.y, 0, yawToward(-0.75, -1));
-      C.apply(Um, A.ump({ callT: callT, time: t }));
+      var ux = lerp(UMP.off, UMP.x, C.backOut(Math.min(1, slide))), uyaw = yawToward(-0.75, -1);
+      var mu = CR && CR.ready('U') ? CR.poseUmp(v, { callT: callT, kind: call.kind, x: ux, y: UMP.y, yaw: uyaw, height: UMP_M.height }) : null;
+      if (mu) adopt(mu.actor);
+      else if (call.kind !== 'ball') { place(Um, ux, UMP.y, 0, uyaw); C.apply(Um, A.ump({ callT: callT, time: t })); }
     }
     // --- fielders that happen to be in shot
     showFieldersIdle(t, S.camBat);
     // --- ball
-    if (p && v.pitchT != null) {
+    var bb = CR && (mp || mc) ? CR.ballBat(v, mp, mc, { ci: ci, pitchPos: pitchPos, pitcherMitt: mp ? null : worldPt(Pm, Pm.handL) }) : null;
+    if (bb && !(ci && ci.hit)) {
+      if (bb.hidden) S.ballG.visible = false;
+      else {
+        var bvel = bb.vel || null;
+        if (!bvel && bb.blend) { var bn = pitchPos(p, v.pitchT + 0.01), b0 = pitchPos(p, v.pitchT); bvel = { x: (bn.x - b0.x) / 0.01, y: (bn.y - b0.y) / 0.01, z: (bn.z - b0.z) / 0.01 }; }
+        st.ballR = setBall(bb.p, bvel, bb.held ? 0 : (v.pitchT || 0) * 40, 0, S.camBat);
+        if (bb.held) S.ballShadow.visible = false;
+      }
+      st.ballPos = bb.p;
+    } else if (p && v.pitchT != null) {
       var bp, vel, spin = v.pitchT * (p.type === 'KN' ? 3 : 40), squash = 0;
       if (ci && ci.hit && v.play) {
         var tt = ci.tc;
@@ -441,7 +488,7 @@
       }
       st.ballR = setBall(bp, vel, spin, squash, S.camBat);
       st.ballPos = bp;
-    } else if (v.windup != null) { // in the pitcher's hand (or glove early in the windup)
+    } else if (v.windup != null && !mp) { // in the pitcher's hand (or glove early in the windup)
       var hand = v.windup < 0.36 ? Pm.handL : Pm.handR;
       hand.updateMatrixWorld(true); hand.getWorldPosition(V3);
       setBall({ x: V3.x, y: V3.y - 0.1, z: V3.z }, null, 0, 0, S.camBat);
@@ -557,18 +604,32 @@
     S.bat.updateMatrixWorld(true); V3.set(0, 2.8, 0); S.bat.localToWorld(V3); return { x: V3.x, y: V3.y, z: V3.z };
   }
   function heroFeet(st) { var r = st && st.glb ? BB.Rocco.root().position : S.rocco.root.position; return { x: r.x, y: r.y, z: 0.1 }; }
+  var _fr = new T.Frustum(), _fm = new T.Matrix4();
+  function frustumOf(cam) { cam.updateMatrixWorld(true); return _fr.setFromProjectionMatrix(_fm.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)); }
   function showFieldersIdle(t, cam) {
-    if (!S.fielders.length || !BB.Bat) return;
-    cam.updateMatrixWorld(true);
-    var fr = new T.Frustum().setFromProjectionMatrix(new T.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
-    S.fielders.forEach(function (f, i) {
-      if (i < 2) return;
-      var d = BB.Bat.FIELDERS[BB.Bat.ORDER[i]];
+    if (!BB.Bat) return;
+    var fr = frustumOf(cam), CR = crew();
+    for (var i = 2; i < BB.Bat.ORDER.length; i++) {
+      var d = BB.Bat.FIELDERS[BB.Bat.ORDER[i]], yaw = yawToward(-d.x, -d.y);
       V.set(d.x, d.y, 2);
-      if (!fr.containsPoint(V)) return;
-      place(f, d.x, d.y, 0, yawToward(-d.x, -d.y));
+      if (!fr.containsPoint(V)) continue;
+      if (CR && CR.ready(BB.Bat.ORDER[i])) { adopt(CR.poseFielderIdle(i, d.x, d.y, yaw, t, cam, S.H)); continue; }
+      var f = S.fielders[i]; if (!f) continue;
+      place(f, d.x, d.y, 0, yaw);
       C.apply(f, A.fielder({ speed: 0, time: t, idx: i }));
-    });
+    }
+  }
+  // seconds into the 'PLAY BALL!' intro before a game's first pitch (its stamp's age), else null
+  function introT(v) { return !v.pitch && v.windup == null && v.stamp && /PLAY BALL/i.test(String(v.stamp.text || '')) ? (v.stamp.t || 0) : null; }
+  // the umpire's call this frame: { t: seconds since the call, kind } (the procedural umpire calls strikes only)
+  function umpCall(v, CR) {
+    var p = v.pitch; if (!p || v.swing || v.pitchT == null) return null;
+    if (CR && CR.ready('U')) {
+      var c = CR.pitchClock(v); if (c.r == null || c.r < p.T + 0.1) return null;
+      var out = CR.outcome(v, c), kind = out === 'k' ? 'strike3' : out === 'strike' ? 'strike' : out === 'walk' ? 'ball' : null;
+      return kind ? { t: c.r - p.T - 0.12, kind: kind } : null;
+    }
+    return p.strike && v.pitchT > p.T + 0.1 ? { t: v.pitchT - p.T - 0.12, kind: 'strike' } : null;
   }
 
   // ------------------------------------------------------------------ FIELD SCENE
@@ -682,9 +743,12 @@
     cam.lookAt(lookX, lookY, lookZ);
     cam.fov = 46; cam.updateProjectionMatrix();
     S.cam = cam;
-    // --- fielders
+    // --- fielders (the modelled ones: culled to the camera, level of detail by their size on screen)
+    var CR = crew(), fr = CR ? frustumOf(cam) : null, heldAt = null, toward = null, from = null;
     S.fielders.forEach(function (f, i) {
       if (!play.fielderAt) return;
+      var mf = CR ? CR.poseFielder(i, v, { t: t, tx: tx, cam: cam, viewH: S.H, frustum: fr }) : null;
+      if (mf) { if (mf.visible) adopt(mf.actor); if (mf.ballAt) heldAt = mf.ballAt; if (mf.toward) toward = mf.toward; if (mf.from) from = mf.from; return; }
       var a = play.fielderAt(i, t), b = play.fielderAt(i, Math.max(0, t - 0.08)), vx = (a.x - b.x) / 0.08, vy = (a.y - b.y) / 0.08, spd = Math.hypot(vx, vy);
       var ball = play.ballAt(t), fx = spd > 1.5 ? vx : ball.x - a.x, fy = spd > 1.5 ? vy : ball.y - a.y;
       place(f, a.x, a.y, groundZ(a.x, a.y), yawToward(fx, fy));
@@ -693,6 +757,11 @@
       if (i === play.catchBy && play.throwT) o.throwU = (t - play.throwT[0]) / 0.35;
       C.apply(f, A.fielder(o));
     });
+    // the umpire signals the homer (twirling finger) while the camera holds on the plate
+    if (CR && play.type === 'HR' && hero && t < 1.5 && CR.ready('U')) {
+      var mu = CR.poseUmp(v, { callT: t - 0.3, kind: 'hr', x: UMP.x, y: UMP.y, yaw: yawToward(HR_HOLD.pos[0] - UMP.x, HR_HOLD.pos[1] - UMP.y), height: UMP_M.height });
+      if (mu) adopt(mu.actor);
+    }
     // --- runners
     var moves = v.runners || [], dests = {}, mi = 0;
     var R = S.rocco, batterMoved = false;
@@ -700,12 +769,18 @@
       if (m.to >= 1 && m.to <= 3) dests[m.to] = true;
       var rp = runnerPos(m, tx, dur), to = rp.to, outRun = rp.out, startT = rp.startT, runDur = rp.runDur, bases = to - m.from, u = rp.u;
       var pos = rp, arrived = u >= 1;
-      var ch;
-      if (m.from === 0) { ch = R; batterMoved = true; } else ch = S.mates[(mi++) % S.mates.length];
+      var ch, k = -1;
+      if (m.from === 0) { ch = R; batterMoved = true; } else { k = mi++; ch = S.mates[k % S.mates.length]; }
       if (m.from === 0 && hero) { heroRunner(v, m, rp, tx, t, play, cam, st); return; }
       if (m.from === 0 && t < startT) { batterAtHome(v, t, play); return; }
-      place(ch, pos.x, pos.y, 0, arrived && to === 4 ? yawToward(cam.position.x - pos.x, cam.position.y - pos.y) : yawToward(pos.dx, pos.dy));
+      var ryaw = arrived && to === 4 ? yawToward(cam.position.x - pos.x, cam.position.y - pos.y) : yawToward(pos.dx, pos.dy);
       var spd = arrived ? 0 : bases * 90 / runDur;
+      if (k >= 0 && CR) {   // Rocco's teammates, modelled
+        var mr = CR.poseRunner(k, v, { x: pos.x, y: pos.y, yaw: ryaw, dist: u * bases * 90, speed: bases * 90 / runDur, arrived: arrived && !outRun, arriveT: arrived ? tx - (startT + runDur) : null,
+          home: to === 4, out: outRun, outT: outRun ? tx - (startT + runDur * 0.86 / 1.25) : null, cam: cam, viewH: S.H, frustum: fr });
+        if (mr) { if (mr.visible) adopt(mr.actor); return; }
+      }
+      place(ch, pos.x, pos.y, 0, ryaw);
       C.apply(ch, A.runner({ speed: spd, phase: tx * 14 + m.from, time: time, cheer: arrived && to === 4, slide: outRun ? smooth((u - 0.7) / 0.16) : arrived && to < 4 ? 0 : 0 }));
       if (ch === R && play.type !== 'HR') { // the bat gets tossed aside at the plate
         syncBatFrame(); S.batFrame.userData.up.add(S.bat); S.bat.position.set(0.9, 0.16, 1.4); V2.set(1, 0.05, 0.4).normalize(); _q.setFromUnitVectors(_up, V2); S.bat.quaternion.copy(_q);
@@ -721,16 +796,25 @@
     var bases = (v.hud && v.hud.bases) || [];
     bases.forEach(function (on, k) {
       if (!on || dests[k + 1]) return;
-      var ch = S.mates[(mi++) % S.mates.length], B = BASES[k + 1], nx = BASES[(k + 2) % 4];
-      place(ch, B.x + (nx.x - B.x) * 0.06, B.y + (nx.y - B.y) * 0.06, 0, yawToward(nx.x - B.x, nx.y - B.y));
+      var j = mi++, ch = S.mates[j % S.mates.length], B = BASES[k + 1], nx = BASES[(k + 2) % 4];
+      var sx = B.x + (nx.x - B.x) * 0.06, sy = B.y + (nx.y - B.y) * 0.06, syaw = yawToward(nx.x - B.x, nx.y - B.y);
+      var mr = CR ? CR.poseRunner(j, v, { x: sx, y: sy, yaw: syaw, standing: true, cam: cam, viewH: S.H, frustum: fr }) : null;
+      if (mr) { if (mr.visible) adopt(mr.actor); return; }
+      place(ch, sx, sy, 0, syaw);
       C.apply(ch, A.runner({ speed: 0, time: time }));
     });
     // --- ball
     var bp = play.ballAt(t), b2 = play.ballAt(t + 0.02);
     var held = play.catchBy >= 0 && t >= play.catchT && !(play.throwT && t >= play.throwT[0] && t <= play.throwT[1]);
-    st.ballR = setBall(bp, held ? null : { x: (b2.x - bp.x) / 0.02, y: (b2.y - bp.y) / 0.02, z: (b2.z - bp.z) / 0.02 }, t * 30, 0, cam);
-    if (held && play.catchBy >= 0) {
-      var fh = S.fielders[play.catchBy]; if (fh) { fh.handL.updateMatrixWorld(true); fh.handL.getWorldPosition(V3); S.ballG.position.copy(V3); }
+    if (heldAt) { st.ballR = setBall(heldAt, null, 0, 0, cam); S.ballShadow.visible = false; bp = heldAt; }   // in a modelled fielder's mitt or hand
+    else {
+      // a modelled fielder's catch: the last frames home in on his pocket; his throw leaves from his hand
+      if (toward && toward.p) bp = { x: lerp(bp.x, toward.p.x, toward.k), y: lerp(bp.y, toward.p.y, toward.k), z: lerp(bp.z, toward.p.z, toward.k) };
+      if (from && from.p) { var r0 = play.ballAt(from.t0); bp = { x: bp.x + (from.p.x - r0.x) * from.k, y: bp.y + (from.p.y - r0.y) * from.k, z: bp.z + (from.p.z - r0.z) * from.k }; }
+      st.ballR = setBall(bp, held ? null : { x: (b2.x - bp.x) / 0.02, y: (b2.y - bp.y) / 0.02, z: (b2.z - bp.z) / 0.02 }, t * 30, 0, cam);
+      if (held && play.catchBy >= 0 && !(CR && CR.ready(BB.Bat.ORDER[play.catchBy]))) {
+        var fh = S.fielders[play.catchBy]; if (fh) { fh.handL.updateMatrixWorld(true); fh.handL.getWorldPosition(V3); S.ballG.position.copy(V3); }
+      }
     }
     st.ballPos = bp;
   }
@@ -1251,6 +1335,8 @@
       if (scene === 'title' && S.lastScene && S.lastScene !== 'title') releaseCast();
       S.prevScene = S.lastScene; S.lastScene = scene; S.sceneT0 = v.time || 0;
     }
+    // a game that started without a briefing (or a harness view): its cast is fetched now, procedural until it's in
+    if (scene !== 'title' && crew()) { crew().sync(v); S.castLive = true; }
     if (S.camTitle.view && scene !== 'title') S.camTitle.clearViewOffset();
     hideAll();
     S.bat.visible = true;

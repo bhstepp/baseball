@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Rocco QA screenshots: renders assets/rocco.glb through tools/rocco-viewer.html (three.js toon + outline preview,
+// Rocco QA screenshots: renders assets/src/rocco.glb (raw export; packed files load too) through tools/rocco-viewer.html (three.js toon + outline preview,
 // WebGL via SwiftShader) into model sheets. Output: qa/rocco/*.png (gitignored) + qa/rocco/info.json.
 //   node tools/rocco-shots.js                 every sheet
 //   node tools/rocco-shots.js turn face       only sheets whose name contains one of the words
@@ -10,7 +10,7 @@ try { pw = require('playwright'); } catch (e) { pw = require('/opt/node22/lib/no
 const path = require('path'), fs = require('fs');
 const ROOT = path.join(__dirname, '..');
 const args = process.argv.slice(2);
-let glb = path.join(ROOT, 'assets', 'rocco.glb'), out = path.join(ROOT, 'qa', 'rocco'), adhoc = null;
+let glb = path.join(ROOT, 'assets', 'src', 'rocco.glb'), out = path.join(ROOT, 'qa', 'rocco'), adhoc = null;
 const words = [];
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--glb') glb = path.resolve(args[++i]);

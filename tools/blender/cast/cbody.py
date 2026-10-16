@@ -62,7 +62,11 @@ def torso_sdf(J, bp):
         ax = nrm(kn - hj)
         thigh = SD.round_cone(hj + np.array([0, 0.02, 0.06]), kn + ax * -0.02, 0.215 * th, 0.225 * th)
         bulge = SD.ellipsoid(kn + np.array([0.0, -0.01, 0.05]), (0.235 * th, 0.235 * th, 0.17 * th))
-        cuff = SD.round_cone(kn, np.array([kn[0], kn[1], cz + 0.02]), 0.205 * th, 0.138 * b['cuff'] * th ** 0.5)
+        if b.get('trousers'):          # long trousers to the ankle (the umpire)
+            an = jl(J, 'foot', s)
+            cuff = SD.round_cone(kn, np.array([kn[0], kn[1] - 0.01, an[2] + 0.10]), 0.205 * th, 0.165 * th)
+        else:
+            cuff = SD.round_cone(kn, np.array([kn[0], kn[1], cz + 0.02]), 0.205 * th, 0.138 * b['cuff'] * th ** 0.5)
         leg = SD.smooth_union(0.06, SD.smooth_union(0.10, thigh, bulge), cuff)
         base = SD.smooth_union(0.07, base, leg)
     for s in (1, -1):
@@ -78,7 +82,11 @@ def torso_sdf(J, bp):
         end = sh + d * SLEEVE_LEN
         holes.append(SD.round_cone(end - d * 0.16, end + d * 0.2, 0.128 * b['arm_r'], 0.14 * b['arm_r']))
         kn = jl(J, 'shin', s)
-        holes.append(SD.capsule(np.array([kn[0], kn[1], cz + 0.12]), np.array([kn[0], kn[1], cz - 0.2]), 0.112 * b['cuff'] * th ** 0.5))
+        if b.get('trousers'):
+            an = jl(J, 'foot', s)
+            holes.append(SD.capsule(np.array([kn[0], kn[1] - 0.01, an[2] + 0.14]), np.array([kn[0], kn[1] - 0.01, an[2] - 0.3]), 0.13 * th))
+        else:
+            holes.append(SD.capsule(np.array([kn[0], kn[1], cz + 0.12]), np.array([kn[0], kn[1], cz - 0.2]), 0.112 * b['cuff'] * th ** 0.5))
     return SD.smooth_sub(0.025, base, SD.union(*holes))
 
 
@@ -127,25 +135,43 @@ def torso_weights(J, V, F):
     return W
 
 
+def qmesh(f, lo, hi, h, quads, seed=3):
+    """SDF -> clean quad mesh (rk_mesh.sdf_mesh's QuadriFlow path) with a fallback: when QuadriFlow rejects the
+    decimated marching-tets mesh, voxel-remesh it first (always manifold and consistently oriented)."""
+    V, T = SD.mesh_sdf_tets(f, lo, hi, h)
+    V, F = MS.keep_islands(V, T.tolist(), min_frac=0.2)
+    V, F = G.decimate(V, F, target_tris=max(quads * 12, 20000))
+    try:
+        V2, F2 = G.quadriflow(V, F, quads, seed=seed)
+    except RuntimeError:
+        V, F = G.voxel_remesh(V, F, h * 1.3)
+        V, F = G.decimate(V, F, target_tris=max(quads * 12, 20000))
+        V2, F2 = G.quadriflow(V, F, quads, seed=seed)
+    V2 = SD.project(f, V2, iters=3, max_step=h * 2)
+    return V2, F2
+
+
 def torso_part(J, bp, f, quads=1250):
     S = scales(J)
     top = J['neck'][2] + 0.4
-    lo = np.array([-1.0 * max(S['ws'], S['hw']) - 0.3, -0.95, cuff_z(J) - 0.2])
-    hi = np.array([1.0 * max(S['ws'], S['hw']) + 0.3, 0.95, top])
-    V, F = MS.sdf_mesh(f, lo, hi, 0.014 * max(S['ts'], 0.8), quads=quads, seed=3)
+    bottom = cuff_z(J) - 0.2 if not (bp or {}).get('trousers') else J['foot.L'][2] - 0.1
+    lo = np.array([-1.0 * max(S['ws'], S['hw']) - 0.45, -1.1, bottom])
+    hi = np.array([1.0 * max(S['ws'], S['hw']) + 0.45, 1.1, top])
+    V, F = qmesh(f, lo, hi, 0.014 * max(S['ts'], 0.8), quads, seed=3)
     knz = J['shin.L'][2]
     knee = lambda P: (P[:, 2] > knz - 0.20) & (P[:, 2] < knz + 0.36) & (np.abs(P[:, 0]) > 0.08)
     V, F = MS.refine_region(V, F, knee, f)
     p = Part(V, F, 'team_a', 'torso')
     # jersey (team colour) above the belt, knickers (uniform) below
     beltz = J['spine'][2] + 0.005
-    mats = ['team_a' if V[fc].mean(0)[2] > beltz else 'uniform' for fc in F]
+    shirt, pants = (bp or {}).get('shirt_mat', 'team_a'), (bp or {}).get('pants_mat', 'uniform')
+    mats = [shirt if V[fc].mean(0)[2] > beltz else pants for fc in F]
     p.mat = mats
     p.set_weights(torso_weights(J, V, F))
     return p
 
 
-def arm_part(J, s, bp):
+def arm_part(J, s, bp, lod=0):
     sd = 'L' if s > 0 else 'R'
     ar = (bp or {}).get('arm_r', 1.0)
     d = RR.ARM_DIR * np.array([s, 1, 1])
@@ -157,25 +183,32 @@ def arm_part(J, s, bp):
     path.append(wr + d * 0.04)
     u = np.linspace(0, 1, len(path))
     rad = (0.108 - 0.040 * u - 0.01 * np.sin(u * math.pi) + 0.012 * np.exp(-((u - 0.18) / 0.15) ** 2)) * ar
-    p = G.sweep(path, rad, 9, (bp or {}).get('arm_mat', 'team_a'), up=(0, 1, 0))
+    fa = (bp or {}).get('forearm', 1.0)            # Popeye forearms (the farm-strong boss)
+    if fa != 1.0:
+        rad = rad * (1 + (fa - 1) * np.exp(-((u - 0.72) / 0.16) ** 2))
+    if lod > 0:          # LOD1: every other ring, six sides
+        keep = list(range(0, len(path), 2)) + ([len(path) - 1] if (len(path) - 1) % 2 else [])
+        path = [path[i] for i in keep]
+        rad = rad[keep]
+    p = G.sweep(path, rad, 9 if lod == 0 else 6, (bp or {}).get('arm_mat', 'team_a'), up=(0, 1, 0))
     chain = [('upper_arm.' + sd, sh, el), ('forearm.' + sd, el, wr), ('hand.' + sd, wr, wr + d * 0.2)]
     W, _ = RR.chain_weights(p.V, chain, 0.21)
     p.set_weights(W)
     return p
 
 
-def sock_part(J, s):
+def sock_part(J, s, lod=0):
     """Stirrup sock re-fitted between the knicker cuff and the ankle (Rocco's design)."""
     sd = 'L' if s > 0 else 'R'
     kn, an = jl(J, 'shin', s), jl(J, 'foot', s)
     cz = cuff_z(J)
     top = np.array([kn[0], kn[1], cz + 0.10])
     bot = an + np.array([0, 0, -0.06])
-    n = 11
+    n = 11 if lod == 0 else 6
     path = [top + (bot - top) * t for t in np.linspace(0, 1, n)]
     u = np.linspace(0, 1, n)
     rad = 0.118 + 0.022 * np.exp(-((u - 0.28) / 0.22) ** 2) - 0.03 * u
-    p = G.sweep(path, rad, 12, 'team_a', up=(0, -1, 0))
+    p = G.sweep(path, rad, 12 if lod == 0 else 7, 'team_a', up=(0, -1, 0))
     axis = nrm(bot - top)
     L = np.linalg.norm(bot - top)
 
@@ -221,15 +254,21 @@ def shoes(J, s):
     return refit(PT.shoe_parts(s), src_g, dst, S['fs'])
 
 
-def gloves(J, s):
-    """Rocco's open four-finger glove re-fitted to this hand (batting / bare hand)."""
+def gloves(J, s, mat=None):
+    """Rocco's open four-finger glove re-fitted to this hand. mat: a bare hand in that material (fur / feather / skin):
+    no cuff or strap."""
     sd = 'L' if s > 0 else 'R'
     S = scales(J)
-    return refit(PT.glove_parts(s), RR.J['hand.' + sd], J['hand.' + sd], S['hs'])
+    parts = PT.glove_parts(s)
+    if mat:
+        parts = [p for p in parts if not p.name.startswith(('cuff_', 'strap_'))]
+        for p in parts:
+            p.mat = [mat] * len(p.F)
+    return refit(parts, RR.J['hand.' + sd], J['hand.' + sd], S['hs'])
 
 
-def details(J, f, bp=None):
-    """Collar and placket trim, buttons, belt and buckle, sleeve trim, knicker cuff bands."""
+def details(J, f, bp=None, lod=0):
+    """Collar and placket trim, buttons, belt and buckle, sleeve trim, knicker cuff bands (lod 1: collar, belt, bands)."""
     S = scales(J)
     neck, spine, chest = (np.asarray(J[k], float) for k in ('neck', 'spine', 'chest'))
     nr = (bp or {}).get('neck_r', 1.0)
@@ -243,6 +282,8 @@ def details(J, f, bp=None):
     ring.set_weights({'chest': np.full(ring.n, 0.7), 'neck': np.full(ring.n, 0.3)})
     parts.append(BD.orient_outward(ring))
     ztop, zbot = neck[2] + 0.05 * S['ts'], spine[2] + 0.05
+    if lod > 0:
+        return _details_lod1(J, f, bp, parts, segs)
     zs = np.linspace(ztop, zbot, 11)
     pts = BD.project_to(f, np.array([[0.0, -1.2, z] for z in zs]), 0.004)
     pl = BD.ring_sweep(pts, 0.012, 0.042, 6, False, 'uniform', normals=SD.normals(f, pts))
@@ -282,6 +323,8 @@ def details(J, f, bp=None):
         r = BD.ring_sweep(pts, 0.022, 0.03, 6, True, 'uniform', normals=[nrm(p - c) for p in pts])
         r.set_weights({'upper_arm.' + sd: np.full(r.n, 0.85), 'shoulder.' + sd: np.full(r.n, 0.15)})
         parts.append(BD.orient_outward(r))
+        if (bp or {}).get('trousers'):
+            continue
         kn = jl(J, 'shin', s)
         c = np.array([kn[0], kn[1], cz + 0.035])
         rr = 0.142 * (bp or {}).get('cuff', 1.0) * th ** 0.5
@@ -292,29 +335,43 @@ def details(J, f, bp=None):
     return parts
 
 
-def decal_parts(J, f):
-    """UV'd patches on the jersey: team letter on the chest (left side), card number on the back."""
+def _details_lod1(J, f, bp, parts, segs):
+    spine = np.asarray(J['spine'], float)
+    beltz = spine[2] + 0.005
+    loop = BD.surface_loop(f, beltz, cy=spine[1], offset=0.012, n=12, r0=1.6)
+    nrms = np.array([nrm(np.array([p[0], p[1] - spine[1], 0])) for p in loop])
+    belt = BD.ring_sweep(loop, 0.026, 0.055, 4, True, 'belt', normals=nrms)
+    belt.set_weights(BD.seg_weights(belt.V, segs, 5.0))
+    parts.append(BD.orient_outward(belt))
+    return parts
+
+
+def decal_parts(J, f, lod=0, bp=None):
+    """UV'd patches on the jersey: team letter on the chest (left side), card number on the back. Patch size and
+    position follow the chest width; every vertex is projected onto the jersey surface."""
     S = scales(J)
+    cw = (bp or {}).get('chest_w', 1.0)
     chest = np.asarray(J['chest'], float)
     segs = torso_segments(J)[:3]
 
     def patch(cx, cz, wdt, hgt, back, mat):
-        nu = nv = 4
+        nu = nv = 4 if lod == 0 else 2
         V, U, F = [], [], []
         for j in range(nv + 1):
             for i in range(nu + 1):
                 u, v = i / nu, j / nv
-                V.append([cx + (u - 0.5) * wdt * (-1 if back else 1), 1.4 if back else -1.4, cz + (v - 0.5) * hgt])
+                V.append([cx + (u - 0.5) * wdt * (-1 if back else 1), chest[1] + (1.4 if back else -1.4), cz + (v - 0.5) * hgt])
         V = np.array(V)
         d = np.array([0, -1.0, 0]) if back else np.array([0, 1.0, 0])
         for k in range(len(V)):
             p = V[k]
-            for _ in range(140):
+            for _ in range(160):
                 v = f(p[None])[0]
                 if v < 0.002:
                     break
                 p = p + d * max(v, 0.002)
             V[k] = p
+        V = SD.project(f, V, iters=4)                       # a ray that missed still lands on the surface
         V = V + SD.normals(f, V) * 0.007
         for j in range(nv):
             for i in range(nu):
@@ -331,27 +388,39 @@ def decal_parts(J, f):
             p.F = [ff[::-1] for ff in p.F]
             p.uv = [uu[::-1] for uu in p.uv]
         return p
-    a = patch(0.21 * S['ws'], chest[2] + 0.22 * S['ts'], 0.30, 0.32, False, 'decal_chest')
-    b = patch(0.0, chest[2] + 0.18 * S['ts'], 0.44, 0.46, True, 'decal_back')
+    k = min(1.0, S['ws'] * cw)
+    a = patch(0.21 * S['ws'] * cw ** 0.7, chest[2] + 0.22 * S['ts'], 0.30 * k, 0.32 * k, False, 'decal_chest')
+    b = patch(0.0, chest[2] + 0.18 * S['ts'], 0.44 * k, 0.46 * k, True, 'decal_back')
     return [a, b]
 
 
-def build_body(J, bp, hands=('glove', 'mitt'), quads=1250):
-    """Torso, arms, socks, cleats, hands and uniform details for a joint table. hands = (right, left):
-    'glove' (open four-finger glove) or 'mitt' (fielding mitt, left hand only)."""
+def hand_parts(J, s, kind, bp=None, lod=0):
+    """One hand: 'glove' (batting glove), 'bare' (bp['hand_mat']), 'mitt' (fielding mitt, left), 'catcher' (catcher's
+    mitt, left). LOD1 hands are mittens (finger bones kept, the mitten curls with the index / middle / pinky chains)."""
     import cgear as GR
-    f = torso_sdf(J, bp)
-    parts = [torso_part(J, bp, f, quads)]
+    hm = (bp or {}).get('hand_mat', 'fur')
+    hs = scales(J)['hs']
+    if kind in ('mitt', 'catcher'):
+        return [GR.mitt_part(J, hs, tris=900 if lod == 0 else 160, catcher=(kind == 'catcher'))]
+    mat = 'glove' if kind == 'glove' else hm
+    if lod > 0:
+        return [GR.mitten(J, s, mat, hs)]
+    return gloves(J, s, None if kind == 'glove' else mat)
+
+
+def build_body(J, bp, hands=('glove', 'mitt'), quads=1250, lod=0, f=None):
+    """Torso, arms, socks, cleats, hands and uniform details for a joint table. hands = (right, left), see hand_parts.
+    lod 1: a coarser torso and no small trims (buttons, placket, buckle); cbuild decimates the rest."""
+    if f is None:
+        f = torso_sdf(J, bp)
+    parts = [torso_part(J, bp, f, quads if lod == 0 else max(quads // 4, 220))]
     for s in (1, -1):
-        parts.append(arm_part(J, s, bp))
-        parts.append(sock_part(J, s))
+        parts.append(arm_part(J, s, bp, lod))
+        if not (bp or {}).get('trousers'):
+            parts.append(sock_part(J, s, lod))
         parts += shoes(J, s)
     right, left = hands
-    if right == 'glove':
-        parts += gloves(J, -1)
-    if left == 'glove':
-        parts += gloves(J, 1)
-    elif left == 'mitt':
-        parts.append(GR.mitt_part(J, scales(J)['hs']))
-    parts += details(J, f, bp)
-    return parts, decal_parts(J, f), f
+    parts += hand_parts(J, -1, right, bp, lod)
+    parts += hand_parts(J, 1, left, bp, lod)
+    parts += details(J, f, bp, lod)
+    return parts, decal_parts(J, f, lod, bp), f

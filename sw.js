@@ -1,14 +1,14 @@
-/* Halftone Hardball service worker. VERSION is filled in by tools/build.js with a hash of the built page,
+/* Screwball Slugger service worker. VERSION is filled in by tools/build.js with a hash of the built page,
    so every release gets a fresh cache. Own files: cache-first. Google Fonts: stale-while-revalidate.
    Character models (assets/*.glb, fetched by BB.Assets when a game needs them) live in their own cache that outlives
    releases: their URLs carry a content hash (?v=...), so an unchanged model is never downloaded twice; the page asks
    for a background pre-cache of the current list after it loads (message 'precache-assets'), so play works offline. */
-var VERSION = '026816877d';
+var VERSION = 'eb15de092f';
 var APP = 'halftone-app-' + VERSION;
 var FONTS = 'halftone-fonts-v1';
 var MODELS = 'halftone-assets-v1';
 var PRECACHE = ['./', 'index.html', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
-var ASSETS = ["assets/rocco_lod1.glb?v=b0286becff"];
+var ASSETS = ["assets/anim_catcher.glb?v=b57a53f68e","assets/anim_fielder.glb?v=e754fcb6d0","assets/anim_pitcher.glb?v=ba1cb420da","assets/anim_umpire.glb?v=e752d4f7c5","assets/rocco_lod1.glb?v=b0286becff"];
 
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(APP).then(function (c) { return c.addAll(PRECACHE); }).then(function () { return self.skipWaiting(); }));

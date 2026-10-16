@@ -76,29 +76,53 @@ def fit_eyes(f, x=0.18, z=4.17, axis=(0.13, -1.0, 0.02), R=0.40, W=0.128, H=0.19
 
 
 def fit_mouth(f, z0=3.70, W=0.30, curve=0.62, depth=0.56, jaw_back=0.68, **kw):
-    """MouthRig fitted to the face surface f: lip line y from the surface at the middle and the corners (calibrated on
-    Rocco: front = surface - 0.18, recede = 1.42 x the corner set-back), jaw hinge `jaw_back` behind the lips."""
-    y0 = surface_y(f, 0.0, z0)
-    yw = surface_y(f, W, z0 + curve * W * W)
-    if yw is None:
-        yw = y0 + 0.19
-    front = y0 - 0.18
-    recede = float(np.clip((yw - y0) * 1.42, 0.06, 0.45))
-    return MouthRig(z0=z0, W=W, curve=curve, front=front, recede=recede, back=front + depth, depth=depth,
-                    jaw=(0.0, front + jaw_back, z0 + 0.12), cheek=(W + 0.06, front + 0.44, z0 + 0.12), **kw)
+    """MouthRig fitted to the face surface f. front = the upper lip's most forward point (calibrated on Rocco:
+    -0.857 vs his -0.86), recede = 0.75 x how far the upper lip sets back at the corners; the teeth rows are kept at
+    least 0.05 behind the surface at their own height (snouts that overhang a recessed chin), jaw hinge `jaw_back`
+    behind the lips."""
+    def band_min(x, za, zb):
+        ys = [surface_y(f, x, zz) for zz in np.linspace(za, zb, 7)]
+        ys = [y for y in ys if y is not None]
+        return min(ys) if ys else None
+    zc = lambda x: z0 + curve * min(abs(x), W) ** 2
+    up0 = band_min(0.0, z0, z0 + 0.08)
+    upw = band_min(W, zc(W), zc(W) + 0.08)
+    if upw is None:
+        upw = up0 + 0.3
+    front = up0
+    recede = float(np.clip((upw - up0) * 0.75, 0.06, 0.45))
+    xs = np.linspace(0.0, W, 7)
+    rows = {}
+    for name, dz in (('up', 0.04), ('lo', -0.04)):
+        ys = []
+        for x in xs:
+            y = surface_y(f, x, zc(x) + dz)
+            ys.append((y if y is not None else front + 0.3) + 0.07)
+        rows[name] = (xs, np.array(ys))
+    if 'jaw_open' not in kw or kw.get('jaw_open') is None:
+        kw['jaw_open'] = 31.0 * 0.68 / max(jaw_back, 0.4)        # the same lip opening as Rocco on longer jaws
+    ks = kw.pop('key_scale', None)
+    m = MouthRig(z0=z0, W=W, curve=curve, front=front, recede=recede, back=front + depth, depth=depth,
+                 jaw=(0.0, front + jaw_back, z0 + 0.12), cheek=(W + 0.06, front + 0.44, z0 + 0.12), **kw)
+    m.rows = rows
+    m.key_scale = ks or {}
+    return m
 
 
 class Ctx:
-    """What a head module gets: the character spec, its colours, a seeded rng and the card face parameters."""
-    def __init__(self, spec, colors, rng, face=None):
+    """What a head module gets: the character spec, its colours, a seeded rng and the card face parameters.
+    acc: card accessories (+ the spec's), cap_back: cap worn backwards, cap_mats: (crown, brim, button) materials."""
+    def __init__(self, spec, colors=None, rng=None, face=None):
         self.spec = spec
-        self.colors = colors
-        self.rng = rng
-        self.face = face or {}
-        self.acc = dict((face or {}).get('acc') or {})
+        self.colors = colors or {}
+        self.rng = rng if rng is not None else np.random.default_rng(int(spec.get('seed', 1)) & 0xFFFFFFFF)
+        self.face = face or spec.get('face') or {}
+        self.acc = dict(self.face.get('acc') or {})
         self.acc.update(spec.get('accessories', {}))
         self.opts = spec.get('head', {})
         self.boss = bool(spec.get('boss'))
+        self.cap_back = bool(spec.get('cap_back', self.face.get('cap') == 'back'))
+        self.cap_mats = tuple(spec.get('cap_mats', ('cap', 'cap_brim', 'team_b')))
 
 
 class Head:
@@ -134,6 +158,9 @@ class EyeRig:
         self.socket = socket
         self.rim = rim
         self.slit = slit
+        self.lid_drop = 0.0        # degrees the resting upper lid sits lower (sleepy / mean glare)
+        self.ring_mat = None       # an inked ring round the eye opening (card style), e.g. 'mask'
+        self.ring_w = 0.022
 
     def frame(self, s=1):
         front = self.front * np.array([s, 1, 1])
@@ -202,10 +229,11 @@ class EyeRig:
             return np.array(Vn)
         import rk_head as RH
         top = ah + me
-        rest_edge = ah - math.radians(2.5)
+        rest_edge = ah - math.radians(2.5 + self.lid_drop)
         closed_edge = -ah - math.radians(3)
         nu_, nv_ = (8, 4) if LOD == 0 else (4, 2)
-        up = RH.sphere_shell_patch(piv, R, ER + 0.026, 0.018, -aw, aw, top, rest_edge, nu=nu_, nv=nv_, mat=self.lid_mat)
+        lid_mat = self.lid_mat if isinstance(self.lid_mat, str) else self.lid_mat[0 if s > 0 else 1]
+        up = RH.sphere_shell_patch(piv, R, ER + 0.026, 0.018, -aw, aw, top, rest_edge, nu=nu_, nv=nv_, mat=lid_mat)
         par = up.params
         base_pos = lid_positions(par, top, rest_edge, ER + 0.026, 0.018)
         up.V = base_pos
@@ -216,7 +244,7 @@ class EyeRig:
         out.append(up)
         bot = -ah - me
         lrest = -ah + math.radians(2)
-        lo_ = RH.sphere_shell_patch(piv, R, ER + 0.024, 0.016, -aw, aw, bot, lrest, nu=nu_, nv=2 if LOD == 0 else 1, mat=self.lid_mat)
+        lo_ = RH.sphere_shell_patch(piv, R, ER + 0.024, 0.016, -aw, aw, bot, lrest, nu=nu_, nv=2 if LOD == 0 else 1, mat=lid_mat)
         parl = lo_.params
         lb = lid_positions(parl, bot, lrest, ER + 0.024, 0.016)
         lo_.V = lb
@@ -369,6 +397,9 @@ class MouthRig:
         d = N * (0.12 * pw)[:, None]
         d[:, 0] += -sgn * 0.025 * corner * near
         ks['cheeks_puff'] = d
+        for k, sc in (getattr(self, 'key_scale', None) or {}).items():
+            if k in ks:
+                ks[k] = ks[k] * sc
         return ks
 
     def inner_parts(self):
@@ -378,12 +409,17 @@ class MouthRig:
             return parts
         W, front = self.W, self.front
 
+        rows = getattr(self, 'rows', None)
+
         def teeth_sdf(P, zoff, h):
             P = np.asarray(P, float)
             x, y, z = P[..., 0], P[..., 1], P[..., 2]
             yc = (front + 0.12) + 0.30 * (x / (W - 0.04)) ** 2
+            if rows is not None:
+                xs, ys = rows['up' if zoff > 0 else 'lo']
+                yc = np.maximum(yc, np.interp(np.abs(x), xs, ys))
             zc = self.z(x) + zoff
-            d = np.stack([np.abs(y - yc) - 0.022, np.abs(z - zc) - h, np.abs(x) - (W - 0.05)], -1)
+            d = np.stack([np.abs(y - yc) - 0.022, np.abs(z - zc) - h, np.abs(x) - (W - 0.08)], -1)
             return np.linalg.norm(np.maximum(d, 0), axis=-1) + np.minimum(d.max(-1), 0) - 0.008
         c = np.array([0, front + 0.12, self.z0])
         if self.teeth == 'rows':
@@ -402,7 +438,7 @@ class MouthRig:
                 p.sk['smirk'] = np.tile([0, -0.025, 0.003], (p.n, 1))
                 parts.append(p)
         if self.tongue:
-            tc = np.array([0, front + 0.36, self.z0 - 0.04])
+            tc = np.array([0, front + 0.42, self.z0 - 0.065])
             tg = SD.ellipsoid(tc, (min(0.14, W * 0.47), 0.16, 0.035))
             V, F = MS.sdf_mesh(tg, tc - 0.3, tc + 0.3, 0.01, tris=60)
             p = Part(V, F, 'tongue', 'tongue')
@@ -437,6 +473,10 @@ def skin(head, skin_f, regions, mouth=None, eyes=None, lo=(-1.25, -1.45, 2.6), h
     head.skin_f = f
     V, F = MS.sdf_mesh(f, np.array(lo, float), np.array(hi, float), hq(h, 1.2), tris=tq(tris, 200))
     regs = list(regions)
+    if eyes is not None and getattr(eyes, 'ring_mat', None):
+        sock = eyes.socket_sdf()
+        rw = eyes.ring_w
+        regs = [(eyes.ring_mat, lambda P, sk=sock, rw=rw: sk(P) - rw)] + regs
     if mouth is not None:
         slit = mouth.slit_sdf()
         regs = [('mouth', lambda P, sl=slit: sl(P) - 0.012)] + regs
@@ -468,7 +508,7 @@ def skin(head, skin_f, regions, mouth=None, eyes=None, lo=(-1.25, -1.45, 2.6), h
 
 
 # ------------------------------------------------------------------------------------------- brows
-def brows(head, skin_f, z=4.44, x0=0.06, x1=0.37, arch=0.07, thick=0.052, mat='fur_light', bones=True):
+def brows(head, skin_f, z=4.44, x0=0.06, x1=0.37, arch=0.07, thick=0.052, mat='fur_light', bones=True, tilt=0.0):
     """Crescent brows on the forehead with brows_up / angry / sad keys (conformed back onto the skin)."""
     out = []
     for s in (1, -1):
@@ -477,7 +517,7 @@ def brows(head, skin_f, z=4.44, x0=0.06, x1=0.37, arch=0.07, thick=0.052, mat='f
         n = 9
         for i in range(n):
             u = i / (n - 1)
-            pts.append([(x0 + (x1 - x0) * u) * s, -0.2, z + arch * math.sin(u * math.pi * 0.85) - 0.012 * u])
+            pts.append([(x0 + (x1 - x0) * u) * s, -0.2, z + arch * math.sin(u * math.pi * 0.85) - 0.012 * u - tilt * (1 - u)])
             rad.append(thick * (1 - u) ** 0.65 + 0.009)
         pts = np.array(pts)
         for k in range(len(pts)):
@@ -559,8 +599,10 @@ def horn(ctrl, r0, r1, mat='horn', name='horn', n=8, samples=18, ridges=0):
 
 
 def ear_leaf(base, upv, fwd, H, Wd, T=0.045, cup=0.10, mat_out='fur', mat_in='fur_light', rim=None, side=1, droop=0.0,
-             tris=200, name='ear', bone='ear.L', inner=True):
-    """Leaf / rounded-triangle ear (pointed, cow, horse, round when Wd ~ H). Inner bowl in mat_in; optional rim."""
+             tris=200, name='ear', bone='ear.L', inner=True, shape='tri'):
+    """Ear blade: shape 'tri' (rounded triangle: cats, foxes, horses), 'leaf' (ellipse: cattle, goats, hanging dog
+    ears), 'round' (bears, mice, otters). Cupped toward fwd (the inner bowl, mat_in); optional rim colour; droop bends
+    the blade back along its length."""
     base = np.asarray(base, float)
     upv = nrm(np.asarray(upv, float))
     fwd = nrm(np.asarray(fwd, float))
@@ -569,11 +611,17 @@ def ear_leaf(base, upv, fwd, H, Wd, T=0.045, cup=0.10, mat_out='fur', mat_in='fu
     R = np.stack([sidev, upv, fwd], 1)
 
     def tri2d(x, y):
-        k = (H - np.clip(y, 0, H)) / H
-        half = Wd * (k ** 0.62) * (1.0 + 0.25 * np.sin(np.clip(k, 0, 1) * math.pi))
-        dx = np.abs(x) - half
-        dy = np.maximum(-y, y - H * 0.93)
-        return np.maximum(dx * 0.9, dy) - 0.025 * (1 - k) ** 2
+        if shape == 'tri':
+            k = (H - np.clip(y, 0, H)) / H
+            half = Wd * (k ** 0.62) * (1.0 + 0.25 * np.sin(np.clip(k, 0, 1) * math.pi))
+            dx = np.abs(x) - half
+            dy = np.maximum(-y, y - H * 0.93)
+            return np.maximum(dx * 0.9, dy) - 0.025 * (1 - k) ** 2
+        # ellipse whose lower end is buried in the head (the base stays wide enough to attach)
+        cyy = H * 0.5 if shape == 'leaf' else H * 0.55
+        ry = H * 0.5 if shape == 'leaf' else H * 0.45
+        q = np.sqrt((x / Wd) ** 2 + ((y - cyy) / ry) ** 2)
+        return (q - 1.0) * min(Wd, ry)
 
     def loc(P):
         q = (np.asarray(P, float) - base) @ R
@@ -679,7 +727,9 @@ def eyeblack(head, skin_f, eyes, mat='mask'):
         c0 = eyes.sph(piv, R, eyes.R, 0, -math.asin(min(eyes.H / eyes.R, 0.95)) - 0.32)
         c = march_to(skin_f, c0 + np.array([0, -0.5, 0]), (0, 1, 0))
         n_ = SD.normals(skin_f, c[None])[0]
-        f = SD.ellipsoid(c, (0.10, 0.032, 0.012), R=G.frame_from(np.cross(n_, [0, 0, 1.0]), n_) if False else G.zframe(n_))
+        xt = nrm(np.cross([0, 0, 1.0], n_))              # horizontal tangent: the stripe runs across the cheek
+        yt = np.cross(n_, xt)
+        f = SD.ellipsoid(c, (0.10, 0.032, 0.012), R=np.stack([xt, yt, n_], 1))
         p = blob(f, c, 0.2, 40, mat, 'eyeblack')
         out.append(p)
     head.parts += out
@@ -716,6 +766,10 @@ def cap_parts(head, cranium, cap_c, band_front=4.645, band_slope=0.17, slots=(),
     cap_c = np.asarray(cap_c, float)
     flip = -1.0 if back else 1.0
     parts = []
+    if back:      # worn backwards: the band sits level and a little higher (the forehead and brows stay visible)
+        band_slope = 0.03
+        band_front += 0.05
+        brim_z += 0.0
 
     def band(Q):
         return (band_front - band_slope * (flip * (Q[..., 1] - cy) + band_y0)) - Q[..., 2]
@@ -775,6 +829,7 @@ def cap_parts(head, cranium, cap_c, band_front=4.645, band_slope=0.17, slots=(),
                 q = march_to(lambda P: cranium(P) - 0.10, q, (0, 1, 0))
                 Vq.append(q)
         Vq = np.array(Vq)
+        Vq = SD.project(lambda P: cranium(P) - 0.10, Vq, iters=4)
         Vq = Vq + SD.normals(cranium, Vq) * 0.004
         for j in range(nv):
             for i in range(nu):
