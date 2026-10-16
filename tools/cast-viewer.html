@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cast viewer</title>
+<style>
+  html, body { margin: 0; background: #FFF4DC; font: 600 13px/1.2 system-ui, sans-serif; color: #1B1420; }
+  #wrap { position: relative; display: inline-block; }
+  canvas { display: block; }
+  .lbl { position: absolute; padding: 2px 6px; background: rgba(255, 244, 220, 0.85); border-radius: 4px; pointer-events: none; white-space: nowrap; }
+  .lbl.under { background: rgba(255, 255, 255, 0.0); font-size: 12px; transform: translateX(-50%); text-align: center; }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="c"></canvas></div>
+<script src="../src/vendor/three.min.js"></script>
+<script src="../src/vendor/three-addons.js"></script>
+<script>
+// Cast viewer: the cast generator's glb files (tools/blender/cast) through the same toon + outline look as the Rocco
+// viewer, several characters at once (lineups, the bat and field cameras), team colours and decals applied by
+// material name like the runtime, and the shared clip libraries (assets/src/anim_*.glb) retargeted per character
+// (root / hips translation x hipHeight / refHipHeight). Driven by tools/cast-shots.js through window.cast.
+(function () {
+  const T = THREE, PI = Math.PI;
+  const CREAM = 0xFFF4DC, INK = 0x1B1420;
+  const canvas = document.getElementById('c');
+  const renderer = new T.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+  renderer.outputEncoding = T.sRGBEncoding;
+  renderer.setPixelRatio(1);
+  renderer.autoClear = false;
+  const scene = new T.Scene();
+  scene.add(new T.AmbientLight(0xffffff, 0.55));
+  const key = new T.DirectionalLight(0xfff0d8, 0.75); scene.add(key); scene.add(key.target);
+  const grad = (function () {
+    const d = new Uint8Array([120, 190, 255]);
+    const t = new T.DataTexture(d, 3, 1, T.RedFormat);
+    t.minFilter = t.magFilter = T.NearestFilter; t.generateMipmaps = false; t.needsUpdate = true; return t;
+  })();
+  const res = { value: new T.Vector2(800, 800) };
+
+  // ---------------------------------------------------------------- world: studio floor or a ball field
+  // game convention: Z up, plate at the origin, +y to the pitcher, +x toward first base
+  const world = new T.Group(); scene.add(world);
+  const studio = new T.Mesh(new T.CircleGeometry(60, 64), new T.MeshToonMaterial({ color: 0xE3B07E, gradientMap: grad }));
+  world.add(studio);
+  const field = new T.Group(); world.add(field); field.visible = false;
+  (function buildField() {
+    const toon = (c) => new T.MeshToonMaterial({ color: c, gradientMap: grad });
+    const grass = new T.Mesh(new T.CircleGeometry(420, 64), toon(0x6FAE4E)); field.add(grass);
+    const dirt = new T.Shape(); dirt.moveTo(0, -12); dirt.lineTo(80, 70); dirt.quadraticCurveTo(0, 175, -80, 70); dirt.lineTo(0, -12);
+    const inf = new T.Mesh(new T.ShapeGeometry(dirt, 24), toon(0xD9A066)); inf.position.z = 0.02; field.add(inf);
+    const grass2 = new T.Shape(); grass2.moveTo(0, 8); grass2.lineTo(55, 63); grass2.lineTo(0, 118); grass2.lineTo(-55, 63); grass2.lineTo(0, 8);
+    const ig = new T.Mesh(new T.ShapeGeometry(grass2), toon(0x78B856)); ig.position.z = 0.04; field.add(ig);
+    const mound = new T.Mesh(new T.CylinderGeometry(8, 9.5, 0.83, 32), toon(0xD9A066)); mound.rotation.x = PI / 2; mound.position.set(0, 59, 0.42); field.add(mound);
+    const rubber = new T.Mesh(new T.BoxGeometry(2, 0.5, 0.05), new T.MeshBasicMaterial({ color: 0xffffff })); rubber.position.set(0, 60.5, 0.85); field.add(rubber);
+    const hp = new T.Mesh(new T.CircleGeometry(13, 32), toon(0xD9A066)); hp.position.z = 0.03; field.add(hp);
+    const plate = new T.Mesh(new T.ShapeGeometry(new T.Shape([new T.Vector2(-0.708, 0), new T.Vector2(0.708, 0), new T.Vector2(0.708, -0.708), new T.Vector2(0, -1.416), new T.Vector2(-0.708, -0.708)])), new T.MeshBasicMaterial({ color: 0xffffff }));
+    plate.position.z = 0.05; field.add(plate);
+    const lineM = new T.MeshBasicMaterial({ color: 0xffffff });
+    [[1, 1], [-1, 1]].forEach(([sx]) => { const l = new T.Mesh(new T.PlaneGeometry(0.3, 330), lineM); l.position.set(sx * 116.7, 116.7, 0.06); l.rotation.z = -sx * PI / 4; field.add(l); });
+    [[63.6, 63.6], [0, 127.3], [-63.6, 63.6]].forEach(([x, y]) => { const b = new T.Mesh(new T.BoxGeometry(1.25, 1.25, 0.25), new T.MeshBasicMaterial({ color: 0xffffff })); b.position.set(x, y, 0.12); b.rotation.z = PI / 4; field.add(b); });
+  })();
+  const ball = new T.Mesh(new T.SphereGeometry(0.121, 20, 14), new T.MeshToonMaterial({ color: 0xffffff, gradientMap: grad })); world.add(ball); ball.visible = false;
+
+  function outlineMaterial(width) {
+    const m = new T.MeshBasicMaterial({ color: INK, side: T.BackSide });
+    m.userData.width = { value: width };
+    m.onBeforeCompile = (sh) => {
+      sh.uniforms.uWidth = m.userData.width; sh.uniforms.uRes = res;
+      sh.vertexShader = 'uniform float uWidth; uniform vec2 uRes;\n' + sh.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
+        vec4 nc = projectionMatrix * modelViewMatrix * vec4(objectNormal, 0.0);
+        vec2 dir = length(nc.xy) > 1e-5 ? normalize(nc.xy) : vec2(0.0);
+        gl_Position.xy += dir * uWidth * gl_Position.w * 2.0 / uRes;
+        gl_Position.z += 0.0004 * gl_Position.w;`);
+    };
+    return m;
+  }
+  function decalTexture(text, color) {
+    const c = document.createElement('canvas'); c.width = c.height = 256;
+    const x = c.getContext('2d');
+    const size = text.length > 1 ? 170 : 220;
+    x.font = `900 ${size}px "Arial Black", Impact, sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineJoin = 'round';
+    x.lineWidth = 22; x.strokeStyle = '#FFF6E6'; x.strokeText(text, 128, 140);
+    x.fillStyle = color; x.fillText(text, 128, 140);
+    const t = new T.CanvasTexture(c); t.encoding = T.sRGBEncoding; t.flipY = false; return t;
+  }
+
+  // ---------------------------------------------------------------- models
+  const M = {};          // id -> model
+  const LIBS = {};       // lib name -> { clips: {name: AnimationClip}, refHip }
+  let TEAM = { team_a: '#2E5AAC', team_b: '#D9483B', cap: '#2E5AAC', cap_brim: '#2E5AAC', letter: 'H', letterColor: '#2E5AAC' };
+  const TEAM_MATS = ['team_a', 'team_b', 'cap', 'cap_brim'];
+
+  function adopt(id, gltf) {
+    const sc = gltf.scene;
+    const md = { id, gltf, root: new T.Group(), up: new T.Group(), meshes: [], heads: [], outlines: [], mixer: null, clips: {}, bones: {}, rest: [], extras: {} };
+    md.up.rotation.x = PI / 2; md.root.add(md.up); world.add(md.root);
+    md.extras = (gltf.parser && gltf.parser.json.scenes && gltf.parser.json.scenes[0].extras) || sc.userData || {};
+    sc.traverse((o) => { if (o.isMesh) md.meshes.push(o); });
+    md.meshes.forEach((o) => {
+      const src = o.material, name = src.name;
+      let mat;
+      if (name === 'decal_chest' || name === 'decal_back') {
+        mat = new T.MeshToonMaterial({ gradientMap: grad, transparent: true, alphaTest: 0.4, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+      } else {
+        mat = new T.MeshToonMaterial({ color: src.color.clone(), gradientMap: grad });
+      }
+      mat.name = name; mat.userData.base = src.color.clone(); o.material = mat;
+      o.frustumCulled = false;
+      if (o.morphTargetDictionary && Object.keys(o.morphTargetDictionary).length) md.heads.push(o);
+      if (!/^decal/.test(name) && o.isSkinnedMesh) {
+        const ol = new T.SkinnedMesh(o.geometry, outlineMaterial(name === 'pupil' || name === 'eye_white' ? 1.2 : 2.0));
+        ol.bind(o.skeleton, o.bindMatrix); ol.frustumCulled = false;
+        if (o.morphTargetInfluences) { ol.morphTargetInfluences = o.morphTargetInfluences; ol.morphTargetDictionary = o.morphTargetDictionary; }
+        o.add(ol); md.outlines.push(ol);
+      }
+    });
+    sc.traverse((o) => { md.rest.push([o, o.position.clone(), o.quaternion.clone(), o.scale.clone()]); if (o.isBone || o.type === 'Bone' || o.type === 'Object3D') { md.bones[o.name] = o; if (o.userData && o.userData.name) md.bones[o.userData.name] = o; } });
+    md.up.add(sc);
+    md.mixer = new T.AnimationMixer(sc);
+    gltf.animations.forEach((a) => { md.clips[a.name] = a; });
+    M[id] = md;
+    applyTeam(md);
+    return md;
+  }
+  function applyTeam(md, team) {
+    const tm = Object.assign({}, TEAM, team || md.team || {});
+    md.meshes.forEach((o) => {
+      const n = o.material.name;
+      if (TEAM_MATS.includes(n) && tm[n]) o.material.color.set(tm[n]).convertSRGBToLinear();
+      if (n === 'decal_chest') { o.material.map = decalTexture(tm.letter || 'H', tm.letterColor || tm.team_a); o.material.needsUpdate = true; }
+      if (n === 'decal_back') { o.material.map = decalTexture(String(md.extras.number != null ? md.extras.number : 0), tm.letterColor || tm.team_a); o.material.needsUpdate = true; }
+    });
+  }
+  function restPose(md) { md.rest.forEach(([o, p, q, s]) => { o.position.copy(p); o.quaternion.copy(q); o.scale.copy(s); }); }
+  function setShapes(md, sk) {
+    md.heads.forEach((m) => { const d = m.morphTargetDictionary; m.morphTargetInfluences.fill(0); for (const k in (sk || {})) if (d[k] != null) m.morphTargetInfluences[d[k]] = sk[k]; });
+  }
+  // a library clip retargeted to this character: root / hips translation scaled by hipHeight / refHipHeight
+  function clipFor(md, name) {
+    if (md.clips[name]) return md.clips[name];
+    for (const ln in LIBS) {
+      const L = LIBS[ln], c = L.clips[name];
+      if (!c) continue;
+      const k = (md.extras.hipHeight || L.refHip) / L.refHip;
+      const tracks = c.tracks.filter((t) => !/morphTargetInfluences/.test(t.name)).map((t) => {
+        const tt = t.clone();
+        if (/^(root|hips)\.position$/.test(tt.name)) for (let i = 0; i < tt.values.length; i++) tt.values[i] *= k;
+        return tt;
+      });
+      md.clips[name] = new T.AnimationClip(name, c.duration, tracks);
+      return md.clips[name];
+    }
+    return null;
+  }
+  function pose(md, clip, t, sk) {
+    md.mixer.stopAllAction(); restPose(md);
+    const c = clip ? clipFor(md, clip) : null;
+    if (c) { const a = md.mixer.clipAction(c); a.reset(); a.setLoop(T.LoopOnce); a.clampWhenFinished = true; a.play(); a.time = Math.min(t || 0, c.duration); md.mixer.update(0); }
+    setShapes(md, sk || {});
+    md.root.updateMatrixWorld(true);
+  }
+  function boneWorld(md, name) { const b = md.bones[name] || md.bones[name.replace(/\./g, '')]; if (!b) return null; md.root.updateMatrixWorld(true); const v = new T.Vector3(); b.getWorldPosition(v); return v; }
+
+  // ---------------------------------------------------------------- cameras
+  function orbitCam(az, el, dist, target, fov, yaw) {
+    const c = new T.PerspectiveCamera(fov || 26, 1, 0.1, 3000); c.up.set(0, 0, 1);
+    const tg = new T.Vector3().fromArray(target || [0, 0, 2.5]);
+    const a = (yaw || 0) - PI / 2 + az * PI / 180, e = el * PI / 180;
+    c.position.set(tg.x + Math.cos(a) * Math.cos(e) * dist, tg.y + Math.sin(a) * Math.cos(e) * dist, tg.z + Math.sin(e) * dist);
+    c.lookAt(tg); return c;
+  }
+  // the game's bat camera for a 390 x 844 portrait screen (35-scene.js layoutBat, 'tall' framing)
+  function batCam(W, H) {
+    const pos = [-0.6, -28, 9.6], aim = [0, 0, 2.5], at = [0.63, 0.655], ppf = Math.min(0.140 * W, 0.072 * H);
+    const d = Math.hypot(pos[0] - aim[0], pos[1] - aim[1], pos[2] - aim[2]);
+    const c = new T.PerspectiveCamera(2 * Math.atan(H / 2 / (ppf * d)) * 180 / PI, W / H, 1, 12000); c.up.set(0, 0, 1);
+    c.position.fromArray(pos); c.lookAt(aim[0], aim[1], aim[2]);
+    c.setViewOffset(W, H, (0.5 - at[0]) * W, (0.5 - at[1]) * H, W, H); c.updateProjectionMatrix(); return c;
+  }
+  function makeCam(view, W, H, cellActors) {
+    let c;
+    if (view && view.game === 'bat') return batCam(W, H);
+    if (view && view.cam) { c = new T.PerspectiveCamera(view.fov || 30, W / H, 0.1, 5000); c.up.set(0, 0, 1); c.position.fromArray(view.cam); c.lookAt(new T.Vector3().fromArray(view.look)); }
+    else {
+      const v = view || {};
+      let tg = v.target, yaw = 0;
+      if (v.targetActor) {
+        const md = M[v.targetActor.id];
+        if (md) {
+          yaw = md.root.rotation.z;
+          const bn = v.targetActor.bone || 'head';
+          let b = null;
+          if (bn === 'eyes') { const l = boneWorld(md, 'eye.L'), r = boneWorld(md, 'eye.R'); if (l && r) b = l.add(r).multiplyScalar(0.5); }
+          else b = boneWorld(md, bn);
+          const o = v.targetActor.off || [0, 0, 0];
+          if (b) tg = [b.x + o[0], b.y + o[1], b.z + o[2]];
+        }
+      }
+      c = orbitCam(v.az || 0, v.el != null ? v.el : 6, v.dist || 17, tg, v.fov, yaw);
+    }
+    c.aspect = W / H; c.updateProjectionMatrix(); return c;
+  }
+
+  // ---------------------------------------------------------------- sheets
+  const wrap = document.getElementById('wrap');
+  function clearLabels() { wrap.querySelectorAll('.lbl').forEach((e) => e.remove()); }
+  function label(x, y, text, cls) { const d = document.createElement('div'); d.className = 'lbl' + (cls ? ' ' + cls : ''); d.style.left = x + 'px'; d.style.top = y + 'px'; d.textContent = text; wrap.appendChild(d); }
+  // spec: { cols, cellW, cellH, field, cells: [{ label, view, actors: [{ id, x, y, z, yaw, scale, clip, t, sk, hide, team, name }], ball, field, studio }] }
+  function sheet(spec) {
+    const cols = spec.cols || 4, cw = spec.cellW || 300, ch = spec.cellH || 400, n = spec.cells.length, rows = Math.ceil(n / cols);
+    renderer.setSize(cols * cw, rows * ch, false); canvas.style.width = cols * cw + 'px'; canvas.style.height = rows * ch + 'px';
+    res.value.set(cw, ch);
+    clearLabels();
+    renderer.setScissorTest(true);
+    renderer.setClearColor(spec.bg != null ? spec.bg : CREAM, 1);
+    renderer.setViewport(0, 0, cols * cw, rows * ch); renderer.setScissor(0, 0, cols * cw, rows * ch); renderer.clear();
+    const out = [];
+    spec.cells.forEach((cell, i) => {
+      Object.values(M).forEach((md) => { md.root.visible = false; });
+      const fieldOn = cell.field != null ? cell.field : spec.field;
+      field.visible = !!fieldOn; studio.visible = !fieldOn && cell.studio !== false && spec.studio !== false;
+      const info = { actors: {} };
+      (cell.actors || []).forEach((a) => {
+        const md = M[a.id]; if (!md) return;
+        md.root.visible = true;
+        md.root.position.set(a.x || 0, a.y || 0, a.z || 0); md.root.rotation.z = a.yaw || 0; md.root.scale.setScalar(a.scale || 1);
+        if (a.mirror) md.root.scale.x *= -1;      // left-handers: mirrored like the runtime does
+        const hide = a.hide || cell.hide || spec.hide || [];
+        md.meshes.forEach((m) => { m.visible = !hide.includes(m.material.name); });
+        if (a.team || cell.team || spec.team) applyTeam(md, Object.assign({}, spec.team || {}, cell.team || {}, a.team || {}));
+        pose(md, a.clip, a.t, a.sk);
+        const ai = {};
+        ['head', 'hips', 'grip.R', 'mitt', 'hand.R'].forEach((b) => { const v = boneWorld(md, b); if (v) ai[b] = [v.x, v.y, v.z].map((k) => +k.toFixed(3)); });
+        info.actors[a.id] = ai;
+      });
+      if (cell.ball) { ball.visible = true; ball.position.fromArray(cell.ball); } else ball.visible = false;
+      const cx = (i % cols) * cw, cy = Math.floor(i / cols) * ch;
+      const cam = makeCam(cell.view || spec.view, cw, ch, cell.actors);
+      key.position.copy(cam.position).add(new T.Vector3(4, -3, 10)); key.target.position.copy(cam.position).add(cam.getWorldDirection(new T.Vector3()).multiplyScalar(20));
+      renderer.setViewport(cx, rows * ch - cy - ch, cw, ch); renderer.setScissor(cx, rows * ch - cy - ch, cw, ch);
+      if (cell.bg != null) renderer.setClearColor(cell.bg, 1);
+      renderer.clear(); renderer.render(scene, cam);
+      renderer.setClearColor(spec.bg != null ? spec.bg : CREAM, 1);
+      if (cell.label) label(cx + 4, cy + 4, cell.label);
+      // labels under actors (lineups)
+      (cell.actors || []).forEach((a) => {
+        if (!a.name) return;
+        const v = new T.Vector3(a.x || 0, a.y || 0, -0.3).project(cam);
+        label(cx + (v.x + 1) / 2 * cw, cy + (1 - v.y) / 2 * ch, a.name, 'under');
+      });
+      out.push(info);
+    });
+    renderer.setScissorTest(false);
+    return out;
+  }
+
+  function parse(buf) {
+    return T.MeshoptDecoder.ready.then(() => new Promise((ok, err) => {
+      new T.GLTFLoader().setMeshoptDecoder(T.MeshoptDecoder).parse(buf, '', ok, err);
+    }));
+  }
+  window.cast = {
+    load(id, buf, team) {
+      return parse(buf).then((g) => {
+        const md = adopt(id, g); if (team) { md.team = team; applyTeam(md); }
+        let tris = 0; const mats = new Set();
+        md.meshes.forEach((m) => { const gg = m.geometry; tris += (gg.index ? gg.index.count : gg.attributes.position.count) / 3; mats.add(m.material.name); });
+        const h = md.heads[0];
+        return { id, extras: md.extras, tris, bones: new Set(Object.values(md.bones).filter((o) => o.isBone)).size, morphs: h ? Object.keys(h.morphTargetDictionary) : [], materials: [...mats].sort(), clips: Object.keys(md.clips) };
+      });
+    },
+    loadLib(name, buf, refHip) {
+      return parse(buf).then((g) => { const L = LIBS[name] = { clips: {}, refHip: refHip || 1.7 }; g.animations.forEach((a) => { L.clips[a.name] = a; }); return Object.keys(L.clips).map((k) => [k, +L.clips[k].duration.toFixed(3)]); });
+    },
+    setTeam(t) { TEAM = Object.assign({}, TEAM, t); Object.values(M).forEach((md) => applyTeam(md)); },
+    sheet, M, LIBS,
+    bone(id, name) { const md = M[id]; const v = md && boneWorld(md, name); return v ? [v.x, v.y, v.z] : null; },
+  };
+})();
+</script>
+</body>
+</html>

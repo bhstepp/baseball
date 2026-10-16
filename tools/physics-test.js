@@ -35,7 +35,7 @@ check(seq(7) !== seq(8), 'different seed -> different sequence');
     const p = BB.Pitch.make(P, { balls: 0, strikes: 0 }, r);
     const end = BB.Pitch.pos(p, p.T), s0 = BB.Pitch.pos(p, 0);
     check(Math.abs(end.x - p.plate.x) < 1e-6 && Math.abs(end.z - p.plate.z) < 1e-6 && Math.abs(end.y) < 1e-6, t + ' crosses plate');
-    check(Math.abs(s0.y - K.RELEASE_Y) < 1e-6 && Math.sign(s0.x) === (hand === 'R' ? -1 : 1), t + ' release side');
+    check(Math.abs(s0.y - p.release.y) < 1e-6 && Math.abs(p.release.y - K.RELEASE_Y) < 0.6 && Math.sign(s0.x) === (hand === 'R' ? -1 : 1), t + ' release side');
     const m = BB.Pitch.pos(p, p.T + 0.5);
     check(Math.abs(m.y + 3) < 1e-6 && m.z > 0, t + ' in mitt');
     check(BB.Pitch.isStrike(p) === p.strike, t + ' strike flag');

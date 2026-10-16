@@ -1,3 +1,8 @@
 node_modules/
 dist/
 qa/
+__pycache__/
+*.pyc
+# raw Blender exports are rebuilt from tools/blender; only packed assets/*.glb are committed
+assets/src/*.glb
+assets/ref_body.glb

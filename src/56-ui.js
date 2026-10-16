@@ -255,7 +255,18 @@
       if (!inGameFlag) setInks(name === 'brief' && data && data.ink ? data.ink : menuInk());
       startMenuMusic();
     }
+    if (name === 'brief') prefetchCast(data || {});
     return el;
+  }
+  // While the briefing is up, fetch and parse the models the game will need (BB.Game.start does it too, as a fallback).
+  function prefetchCast(data) {
+    try {
+      var c = data.cfg || {}, C = BB.Content || {};
+      var park = C.getPark ? C.getPark(c.park) : null;
+      var pitcher = C.getPitcher ? C.getPitcher(c.pitcher || (data.mode === 'derby' ? C.DERBY_PITCHER : null)) : null;
+      var p = BB.Render && BB.Render.prepare && BB.Render.prepare(park, null, { pitcher: pitcher, mode: data.mode });
+      if (p && p.catch) p.catch(function () {});
+    } catch (e) { /* prefetch is best effort */ }
   }
   function hideAll() {
     clearTimers();

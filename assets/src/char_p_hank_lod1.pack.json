@@ -1,0 +1,21 @@
+{
+ "source": "654e5cd49ce438a229a780db469790c383aea732",
+ "flags": "-cc -kn -km -ke -kv -vtf -af 0",
+ "tool": "gltfpack@0.24.0",
+ "lod1": null,
+ "output": "f4ea33870fb2b861bad50578a19e3bac2c841ff3",
+ "bytes": 65004,
+ "gzip": 31158,
+ "rawBytes": 191448,
+ "rawGzip": 84891,
+ "stats": {
+  "tris": 3388,
+  "rawTris": 3388,
+  "bones": 56,
+  "materials": 23,
+  "clips": 0,
+  "maxBoneErr": 0,
+  "maxGeomErr": 0
+ },
+ "at": "2026-10-16T15:29:08.465Z"
+}

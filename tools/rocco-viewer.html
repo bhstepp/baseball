@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rocco viewer</title>
+<style>
+  html, body { margin: 0; background: #FFF4DC; font: 600 13px/1.2 system-ui, sans-serif; color: #1B1420; }
+  #wrap { position: relative; display: inline-block; }
+  canvas { display: block; }
+  .lbl { position: absolute; padding: 2px 6px; background: rgba(255, 244, 220, 0.85); border-radius: 4px; pointer-events: none; }
+  #ui { position: fixed; right: 8px; top: 8px; background: #fff8ea; border: 2px solid #1B1420; border-radius: 8px; padding: 8px; display: none; }
+  body.interactive #ui { display: block; }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="c"></canvas></div>
+<div id="ui">
+  <div><input type="file" id="file" accept=".glb"></div>
+  <div><select id="clip"></select> <input type="range" id="time" min="0" max="1" step="0.001" value="0" style="width:160px"></div>
+  <div><select id="view"></select> <label><input type="checkbox" id="play" checked> play</label></div>
+</div>
+<script src="../src/vendor/three.min.js"></script>
+<script src="../src/vendor/three-addons.js"></script>
+<script>
+// Rocco viewer: MeshToonMaterial (3-step gradient) + inverted-hull outlines on the skinned glb, cream background,
+// ground plane, model-sheet cameras and the game's bat camera. Driven interactively (open the file in a browser with
+// ?glb=../assets/src/rocco.glb (raw) or a packed ../assets/rocco.glb, or pick a file) or by tools/rocco-shots.js through window.viewer.
+(function () {
+  const T = THREE, PI = Math.PI;
+  const CREAM = 0xFFF4DC, INK = 0x1B1420;
+  const canvas = document.getElementById('c');
+  const renderer = new T.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+  renderer.outputEncoding = T.sRGBEncoding;
+  renderer.setPixelRatio(1);
+  renderer.autoClear = false;
+  const scene = new T.Scene();
+  const amb = new T.AmbientLight(0xffffff, 0.55); scene.add(amb);
+  const key = new T.DirectionalLight(0xfff0d8, 0.75); scene.add(key); scene.add(key.target);
+  const grad = (function () {
+    const d = new Uint8Array([120, 190, 255]);
+    const t = new T.DataTexture(d, 3, 1, T.RedFormat);
+    t.minFilter = t.magFilter = T.NearestFilter; t.generateMipmaps = false; t.needsUpdate = true; return t;
+  })();
+
+  // world (game convention: Z up, +y to the pitcher, +x to first base, plate at the origin)
+  const world = new T.Group(); scene.add(world);
+  const ground = new T.Mesh(new T.CircleGeometry(9, 48), new T.MeshToonMaterial({ color: 0xE3B07E, gradientMap: grad }));
+  world.add(ground);
+  const plate = new T.Mesh(new T.ShapeGeometry(new T.Shape([new T.Vector2(-0.708, 0), new T.Vector2(0.708, 0), new T.Vector2(0.708, -0.708), new T.Vector2(0, -1.416), new T.Vector2(-0.708, -0.708)])), new T.MeshBasicMaterial({ color: 0xffffff }));
+  plate.position.z = 0.01; world.add(plate);
+  const ball = new T.Mesh(new T.SphereGeometry(0.121, 20, 14), new T.MeshToonMaterial({ color: 0xffffff, gradientMap: grad })); world.add(ball); ball.visible = false;
+  const shadow = new T.Mesh(new T.CircleGeometry(1, 32), new T.MeshBasicMaterial({ color: INK, transparent: true, opacity: 0.18, depthWrite: false }));
+  shadow.position.z = 0.012; world.add(shadow);
+
+  // Rocco placement: model (glTF Y-up, faces +Z) -> up (rotation.x = PI/2) -> root (yaw, position)
+  const R = { root: new T.Group(), up: new T.Group(), gltf: null, mixer: null, clips: {}, heads: [], rest: [], meshes: [], outlines: [] };
+  R.up.rotation.x = PI / 2; R.root.add(R.up); world.add(R.root);
+
+  function outlineMaterial(width) {
+    const m = new T.MeshBasicMaterial({ color: INK, side: T.BackSide });
+    m.userData.width = { value: width };
+    m.onBeforeCompile = (sh) => {
+      sh.uniforms.uWidth = m.userData.width; sh.uniforms.uRes = viewer._res;
+      sh.vertexShader = 'uniform float uWidth; uniform vec2 uRes;\n' + sh.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
+        vec4 nc = projectionMatrix * modelViewMatrix * vec4(objectNormal, 0.0);
+        vec2 dir = length(nc.xy) > 1e-5 ? normalize(nc.xy) : vec2(0.0);
+        gl_Position.xy += dir * uWidth * gl_Position.w * 2.0 / uRes;
+        gl_Position.z += 0.0004 * gl_Position.w;`);
+    };
+    return m;
+  }
+
+  function decalTexture(text, color) {
+    const c = document.createElement('canvas'); c.width = c.height = 256;
+    const x = c.getContext('2d');
+    x.font = '900 220px "Arial Black", Impact, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineJoin = 'round';
+    x.lineWidth = 22; x.strokeStyle = '#FFF6E6'; x.strokeText(text, 128, 140);
+    x.fillStyle = color; x.fillText(text, 128, 140);
+    const t = new T.CanvasTexture(c); t.encoding = T.sRGBEncoding; t.flipY = false; return t;
+  }
+
+  function adopt(gltf) {
+    if (R.gltf) { R.up.remove(R.gltf.scene); }
+    R.gltf = gltf; R.heads = []; R.meshes = []; R.outlines = [];
+    const sc = gltf.scene;
+    sc.traverse((o) => {
+      if (o.isMesh) R.meshes.push(o);
+    });
+    R.meshes.forEach((o) => {
+      const src = o.material, name = src.name;
+      let mat;
+      if (name === 'decal_chest' || name === 'decal_back') {
+        mat = new T.MeshToonMaterial({ map: decalTexture(name === 'decal_chest' ? 'R' : '7', '#2E5AAC'), gradientMap: grad, transparent: true, alphaTest: 0.4, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+      } else {
+        mat = new T.MeshToonMaterial({ color: src.color.clone(), gradientMap: grad });
+      }
+      mat.name = name; o.material = mat;
+      o.frustumCulled = false;
+      if (o.morphTargetDictionary && Object.keys(o.morphTargetDictionary).length) R.heads.push(o);
+      if (!/^decal/.test(name) && o.isSkinnedMesh) {
+        const ol = new T.SkinnedMesh(o.geometry, outlineMaterial(name === 'pupil' || name === 'eye_white' ? 1.2 : 2.0));
+        ol.bind(o.skeleton, o.bindMatrix); ol.frustumCulled = false;
+        if (o.morphTargetInfluences) { ol.morphTargetInfluences = o.morphTargetInfluences; ol.morphTargetDictionary = o.morphTargetDictionary; }
+        o.add(ol); R.outlines.push(ol);
+      }
+    });
+    R.rest = []; sc.traverse((o) => { R.rest.push([o, o.position.clone(), o.quaternion.clone(), o.scale.clone()]); });
+    R.up.add(sc);
+    R.mixer = new T.AnimationMixer(sc);
+    R.clips = {}; gltf.animations.forEach((a) => { R.clips[a.name] = a; });
+    // GLTFLoader strips dots from node names (hand.R -> handR) and keeps the original in userData.name
+    R.bones = {}; sc.traverse((o) => { if (o.isBone || o.type === 'Bone' || o.type === 'Object3D') { R.bones[o.name] = o; if (o.userData && o.userData.name) R.bones[o.userData.name] = o; } });
+    return Object.keys(R.clips);
+  }
+
+  function restPose() { R.rest.forEach(([o, p, q, s]) => { o.position.copy(p); o.quaternion.copy(q); o.scale.copy(s); }); }
+  function setShapes(sk) {
+    R.heads.forEach((m) => { const d = m.morphTargetDictionary; m.morphTargetInfluences.fill(0); for (const k in (sk || {})) if (d[k] != null) m.morphTargetInfluences[d[k]] = sk[k]; });
+  }
+  function pose(clip, t, sk) {
+    if (!R.mixer) return;
+    R.mixer.stopAllAction(); restPose();
+    if (clip && R.clips[clip]) {
+      const a = R.mixer.clipAction(R.clips[clip]); a.reset(); a.setLoop(T.LoopOnce); a.clampWhenFinished = true; a.play(); a.time = Math.min(t, R.clips[clip].duration); R.mixer.update(0);
+    } else setShapes({});
+    if (sk) setShapes(sk);
+    R.root.updateMatrixWorld(true);
+  }
+  function boneWorld(name) { const b = R.bones[name]; if (!b) return null; R.root.updateMatrixWorld(true); const v = new T.Vector3(); b.getWorldPosition(v); return v; }
+
+  // ---------------------------------------------------------------- cameras
+  // model-sheet views orbit the character (his front faces world +x after placement)
+  function sheetCam(az, el, dist, target, fov) {
+    const c = new T.PerspectiveCamera(fov || 26, 1, 0.1, 500); c.up.set(0, 0, 1);
+    const tg = new T.Vector3().fromArray(target || [R.root.position.x, R.root.position.y, 2.5]);
+    const yaw = R.root.rotation.z; // he faces world (sin yaw, -cos yaw): glTF +Z -> -Y, then the yaw about Z
+    const a = yaw - PI / 2 + az * PI / 180, e = el * PI / 180;
+    c.position.set(tg.x + Math.cos(a) * Math.cos(e) * dist, tg.y + Math.sin(a) * Math.cos(e) * dist, tg.z + Math.sin(e) * dist);
+    c.lookAt(tg); return c;
+  }
+  const VIEWS = {
+    front: [0, 6, 17], q34: [38, 8, 17], left: [90, 4, 17], back: [180, 6, 17], q34back: [-142, 8, 17], right: [-90, 4, 17],
+    q34r: [-38, 8, 17], top: [0, 70, 17],
+  };
+  function gameCam(aspect) {
+    const c = new T.PerspectiveCamera(38 * (aspect > 0.62 ? 0.9 : 1), aspect, 1, 12000); c.up.set(0, 0, 1);
+    c.position.set(-0.9, -18, 8.0); c.lookAt(0.2, 30, -1.6); return c;
+  }
+  function makeCam(view, aspect) {
+    let c;
+    if (view && view.game) c = gameCam(aspect);
+    else if (view && view.cam) { c = new T.PerspectiveCamera(view.fov || 30, aspect, 0.1, 2000); c.up.set(0, 0, 1); c.position.fromArray(view.cam); c.lookAt(new T.Vector3().fromArray(view.look)); }
+    else {
+      const v = typeof view === 'string' ? { name: view } : (view || { name: 'q34' });
+      const p = VIEWS[v.name] || VIEWS.q34;
+      let tg = v.target;
+      if (v.targetBone) {    // aim at a bone of the posed character (+ optional world offset)
+        const b = boneWorld(v.targetBone), o = v.toff || [0, 0, 0];
+        if (b) tg = [b.x + o[0], b.y + o[1], b.z + o[2]];
+      }
+      c = sheetCam(v.az != null ? v.az : p[0], v.el != null ? v.el : p[1], v.dist || p[2], tg, v.fov);
+    }
+    c.aspect = aspect; c.updateProjectionMatrix(); return c;
+  }
+
+  function placeKey(cam) { key.position.copy(cam.position).add(new T.Vector3(4, -3, 10)); key.target.position.set(R.root.position.x, R.root.position.y, 2); }
+
+  // ---------------------------------------------------------------- sheets
+  const wrap = document.getElementById('wrap');
+  function clearLabels() { wrap.querySelectorAll('.lbl').forEach((e) => e.remove()); }
+  function label(x, y, text) { const d = document.createElement('div'); d.className = 'lbl'; d.style.left = x + 'px'; d.style.top = y + 'px'; d.textContent = text; wrap.appendChild(d); }
+  // spec: { cols, cellW, cellH, cells: [{ clip, t, view, sk, label, place: {x,y,yaw,size}, ball: [x,y,z], plate, ground }] }
+  function sheet(spec) {
+    const cols = spec.cols || 4, cw = spec.cellW || 300, ch = spec.cellH || 400, n = spec.cells.length, rows = Math.ceil(n / cols);
+    renderer.setSize(cols * cw, rows * ch, false); canvas.style.width = cols * cw + 'px'; canvas.style.height = rows * ch + 'px';
+    viewer._res.value.set(cw, ch);
+    clearLabels();
+    renderer.setScissorTest(true);
+    renderer.setClearColor(CREAM, 1);
+    renderer.setViewport(0, 0, cols * cw, rows * ch); renderer.setScissor(0, 0, cols * cw, rows * ch); renderer.clear();
+    const out = [];
+    spec.cells.forEach((cell, i) => {
+      const hide = cell.hide || spec.hide || [];
+      R.meshes.forEach((m) => { m.visible = !hide.includes(m.material.name); });
+      const cx = (i % cols) * cw, cy = Math.floor(i / cols) * ch;
+      const pl = cell.place || spec.place || { x: 0, y: 0, yaw: 0 };
+      R.root.position.set(pl.x || 0, pl.y || 0, 0); R.root.rotation.z = pl.yaw || 0; R.root.scale.setScalar(pl.size || 1);
+      plate.visible = !!(cell.plate || spec.plate); ground.visible = cell.ground !== false && spec.ground !== false;
+      shadow.position.set(R.root.position.x, R.root.position.y, 0.012); shadow.scale.set(1.3, 1.0, 1);
+      if (cell.ball) { ball.visible = true; ball.position.fromArray(cell.ball); } else ball.visible = false;
+      const trails = [];
+      if (cell.trail && cell.clip) {   // motion trails: sampled world paths of bones (spacing shows as dot gaps)
+        const tr = cell.trail, cols = [0xD9483B, 0x2E5AAC, 0x2F7A4A, 0x8A5A3C];
+        (tr.bones || ['bat_tip']).forEach((bn, bi) => {
+          const pts = [];
+          for (let k = 0; k <= (tr.n || 40); k++) {
+            const tt = (tr.from || 0) + ((tr.to != null ? tr.to : R.clips[cell.clip].duration) - (tr.from || 0)) * k / (tr.n || 40);
+            pose(cell.clip, tt); const v = boneWorld(bn); if (v) pts.push(v.clone());
+          }
+          const g = new T.BufferGeometry().setFromPoints(pts);
+          const line = new T.Line(g, new T.LineBasicMaterial({ color: cols[bi % 4], depthTest: false }));
+          const dots = new T.Points(g, new T.PointsMaterial({ color: cols[bi % 4], size: 5, sizeAttenuation: false, depthTest: false }));
+          line.renderOrder = dots.renderOrder = 10;
+          scene.add(line); scene.add(dots); trails.push(line, dots);
+        });
+      }
+      pose(cell.clip, cell.t || 0, cell.sk);
+      const cam = makeCam(cell.view || spec.view, cw / ch); placeKey(cam);
+      if (cell.bg != null) { renderer.setClearColor(cell.bg, 1); }
+      renderer.setViewport(cx, rows * ch - cy - ch, cw, ch); renderer.setScissor(cx, rows * ch - cy - ch, cw, ch);
+      renderer.clear(); renderer.render(scene, cam);
+      renderer.setClearColor(CREAM, 1);
+      trails.forEach((o) => { scene.remove(o); o.geometry.dispose(); });
+      if (cell.label) label(cx + 4, cy + 4, cell.label);
+      const info = {};
+      ['bat_sweet', 'bat_tip', 'head', 'hand.L', 'hand.R', 'foot.L', 'foot.R'].forEach((b) => { const v = boneWorld(b); if (v) info[b] = [v.x, v.y, v.z].map((k) => +k.toFixed(4)); });
+      out.push(info);
+    });
+    renderer.setScissorTest(false);
+    return out;
+  }
+
+  function snapshot(clip, t) {
+    pose(clip, t);
+    const out = {};
+    R.gltf.scene.traverse((o) => { if (o.isBone) { const p = new T.Vector3(), q = new T.Quaternion(); o.getWorldPosition(p); o.getWorldQuaternion(q); out[(o.userData && o.userData.name) || o.name] = [p, q]; } });
+    const sk = {}; R.heads.forEach((m) => { for (const k in m.morphTargetDictionary) sk[k] = m.morphTargetInfluences[m.morphTargetDictionary[k]]; });
+    return { bones: out, sk };
+  }
+  function compare(a, ta, b, tb, skip) {
+    const A = snapshot(a, ta), B = snapshot(b, tb);
+    let worstA = 0, worstP = 0, wa = '', wp = '';
+    for (const k in A.bones) {
+      if (skip && skip.some((s) => k.startsWith(s))) continue;
+      const [pa, qa0] = A.bones[k], [pb, qb0] = B.bones[k];
+      const qa = qa0.clone().normalize(), qb = qb0.clone().normalize();
+      const ang = 2 * Math.acos(Math.min(1, Math.abs(qa.dot(qb)))) * 180 / Math.PI, d = pa.distanceTo(pb);
+      if (ang > worstA) { worstA = ang; wa = k; } if (d > worstP) { worstP = d; wp = k; }
+    }
+    let sk = 0; for (const k in A.sk) sk = Math.max(sk, Math.abs(A.sk[k] - B.sk[k]));
+    return { deg: +worstA.toFixed(2), boneDeg: wa, ft: +worstP.toFixed(3), bonePos: wp, face: +sk.toFixed(3) };
+  }
+  const viewer = window.viewer = {
+    compare, snapshot,
+    _res: { value: new T.Vector2(800, 800) },
+    load(buf) {
+      // packed files (tools/pack-assets.js: meshopt) need the decoder; raw exports load either way
+      return T.MeshoptDecoder.ready.then(() => new Promise((ok, err) => {
+        new T.GLTFLoader().setMeshoptDecoder(T.MeshoptDecoder).parse(buf, '', (g) => { const names = adopt(g); ok(names); }, err);
+      }));
+    },
+    sheet, pose, boneWorld, R,
+    info() {
+      const out = { meshes: [], bones: new Set(Object.values(R.bones).filter((o) => o.isBone)).size, clips: {} };
+      let tris = 0;
+      R.meshes.forEach((m) => { const g = m.geometry, t = (g.index ? g.index.count : g.attributes.position.count) / 3; tris += t; out.meshes.push([m.name, m.material.name, t, g.attributes.position.count, m.isSkinnedMesh]); });
+      out.tris = tris;
+      for (const k in R.clips) out.clips[k] = +R.clips[k].duration.toFixed(3);
+      const h = R.heads[0]; out.morphs = h ? Object.keys(h.morphTargetDictionary) : [];
+      return out;
+    },
+  };
+
+  // ---------------------------------------------------------------- interactive mode
+  const q = new URLSearchParams(location.search);
+  if (!q.has('harness')) {
+    document.body.classList.add('interactive');
+    const selC = document.getElementById('clip'), selV = document.getElementById('view'), tm = document.getElementById('time'), play = document.getElementById('play');
+    Object.keys(VIEWS).concat(['game']).forEach((v) => { const o = document.createElement('option'); o.textContent = v; selV.appendChild(o); });
+    selV.value = 'q34';
+    function fill(names) { selC.innerHTML = '<option value="">(rest)</option>' + names.map((n) => `<option>${n}</option>`).join(''); }
+    function loadBuf(b) { viewer.load(b).then(fill); }
+    document.getElementById('file').onchange = (e) => { const f = e.target.files[0]; if (f) f.arrayBuffer().then(loadBuf); };
+    fetch(q.get('glb') || '../assets/src/rocco.glb').then((r) => r.arrayBuffer()).then(loadBuf).catch(() => {});
+    let t0 = performance.now();
+    function loop() {
+      requestAnimationFrame(loop);
+      if (!R.gltf) return;
+      const clip = selC.value, dur = clip && R.clips[clip] ? R.clips[clip].duration : 1;
+      if (play.checked) tm.value = (((performance.now() - t0) / 1000) % dur) / dur;
+      const W = innerWidth, H = innerHeight;
+      const v = selV.value === 'game' ? { game: true } : selV.value;
+      sheet({ cols: 1, cellW: W, cellH: H, plate: true, place: selV.value === 'game' ? { x: -2.4, y: 0, yaw: PI / 2 } : { x: 0, y: 0, yaw: 0 }, cells: [{ clip, t: tm.value * dur, view: v }] });
+    }
+    loop();
+  }
+})();
+</script>
+</body>
+</html>

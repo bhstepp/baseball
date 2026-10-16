@@ -13,7 +13,7 @@ BB.K = {
   ZONE: { xMax: 0.83, zMin: 1.55, zMax: 3.45 },  // rule-book zone; a pitch is a strike if the ball touches it
   BALL_R: 0.121,
   RUBBER_Y: 60.5,
-  RELEASE_Y: 54.5,
+  RELEASE_Y: 57.4,         // typical release distance from the plate (per windup style in BB.Pitch.releasePoint)
   BATTER_X: -2.6,          // the hero is a right-handed hitter, standing on the third-base side of the plate
   BASES: [ { x: 0, y: 0 }, { x: 63.64, y: 63.64 }, { x: 0, y: 127.28 }, { x: -63.64, y: 63.64 } ], // home, 1B, 2B, 3B
   FOUL_DEG: 45,            // spray angle of the foul lines; spray is 0 at dead centre, negative toward left field
@@ -58,6 +58,15 @@ BB.INKSETS = [ // colour schemes ("Uniforms"): a = primary, b = accent, c = high
 BB.FONTS = {
   display: '"Luckiest Guy", "Arial Black", "Helvetica Neue", sans-serif', // bulgy cartoon lettering
   body: '"Fredoka", ui-rounded, "SF Pro Rounded", system-ui, sans-serif', // friendly rounded body text
+};
+
+// ---- binary assets inlined by tools/build.js (window.BB_ASSETS = { name: base64 }). Returns an ArrayBuffer or null.
+BB.assetBuffer = function (name) {
+  var b64 = typeof window !== 'undefined' && window.BB_ASSETS && window.BB_ASSETS[name];
+  if (!b64) return null;
+  var bin = atob(b64), n = bin.length, bytes = new Uint8Array(n);
+  for (var i = 0; i < n; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes.buffer;
 };
 
 // ---- utilities

@@ -1,0 +1,3966 @@
+{
+ "generated": "tools/cast-data.js",
+ "teams": [
+  {
+   "idx": 0,
+   "id": "p_haybale",
+   "name": "Haybale Junction Hayseeds",
+   "short": "HAY",
+   "inkset": "classic",
+   "mascot": "Hayseeds",
+   "town": "Haybale Junction"
+  },
+  {
+   "idx": 1,
+   "id": "p_bandbox",
+   "name": "Ironbridge Rivets",
+   "short": "IRO",
+   "inkset": "grape",
+   "mascot": "Rivets",
+   "town": "Ironbridge"
+  },
+  {
+   "idx": 2,
+   "id": "p_loonlake",
+   "name": "Loon Lake Loons",
+   "short": "LOO",
+   "inkset": "lawn",
+   "mascot": "Loons",
+   "town": "Loon Lake"
+  },
+  {
+   "idx": 3,
+   "id": "p_harbor",
+   "name": "Gull Point Gulls",
+   "short": "GUL",
+   "inkset": "harbor",
+   "mascot": "Gulls",
+   "town": "Gull Point"
+  },
+  {
+   "idx": 4,
+   "id": "p_desert",
+   "name": "Dry Wash Coyotes",
+   "short": "DRY",
+   "inkset": "dusk",
+   "mascot": "Coyotes",
+   "town": "Dry Wash"
+  },
+  {
+   "idx": 5,
+   "id": "p_cathedral",
+   "name": "Capitol City Copperheads",
+   "short": "CAP",
+   "inkset": "ledger",
+   "mascot": "Copperheads",
+   "town": "Capitol City"
+  }
+ ],
+ "cards": [
+  {
+   "id": "c1-01",
+   "no": 1,
+   "name": "Hubie Mudsmith",
+   "nick": null,
+   "pos": "P",
+   "number": 42,
+   "seed": 171715631,
+   "species": "goat",
+   "rarity": "common",
+   "teamIdx": 0,
+   "team": "Haybale Junction Hayseeds",
+   "flavor": "Has a 12-step plan to steal home.",
+   "face": {
+    "pal": [
+     "#F2EAD8",
+     "#FFF8EC",
+     "#C9A88A"
+    ],
+    "eyes": "wide",
+    "brow": "up",
+    "mouth": "open",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "freckles": 1
+    },
+    "tilt": -0.009446877697482705
+   }
+  },
+  {
+   "id": "c1-02",
+   "no": 2,
+   "name": "Elmer Wimstead",
+   "nick": null,
+   "pos": "P",
+   "number": 69,
+   "seed": 188493250,
+   "species": "hen",
+   "rarity": "common",
+   "teamIdx": 0,
+   "team": "Haybale Junction Hayseeds",
+   "flavor": "Breakfast: pancakes and pine tar.",
+   "face": {
+    "pal": [
+     "#C8783E",
+     "#E8B488",
+     "#F2B632"
+    ],
+    "eyes": "wink",
+    "brow": "up",
+    "mouth": "smirk",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "eyeblack": 1
+    },
+    "tilt": -0.010016450230032205
+   }
+  },
+  {
+   "id": "c1-03",
+   "no": 3,
+   "name": "Hubie Bramkins",
+   "nick": null,
+   "pos": "P",
+   "number": 50,
+   "seed": 205270869,
+   "species": "cow",
+   "rarity": "foil",
+   "teamIdx": 0,
+   "team": "Haybale Junction Hayseeds",
+   "flavor": "Signs autographs in pencil, just in case.",
+   "face": {
+    "pal": [
+     "#B8763E",
+     "#F2C4AE",
+     "#F6F1E8"
+    ],
+    "eyes": "wide",
+    "brow": "cocky",
+    "mouth": "grin",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {
+     "freckles": 1
+    },
+    "tilt": 0.02645828252658248
+   }
+  },
+  {
+   "id": "c1-04",
+   "no": 4,
+   "name": "Eddie Grubows",
+   "nick": null,
+   "pos": "C",
+   "number": 51,
+   "seed": 87827536,
+   "species": "dog",
+   "rarity": "common",
+   "teamIdx": 0,
+   "team": "Haybale Junction Hayseeds",
+   "flavor": "Warms up by arguing with the umpire.",
+   "face": {
+    "pal": [
+     "#F2EADC",
+     "#FFFFFF",
+     "#8A5A36"
+    ],
+    "eyes": "wide",
+    "brow": "worry",
+    "mouth": "smile",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {
+     "shades": 1,
+     "freckles": 1
+    },
+    "tilt": -0.05062233304604888
+   }
+  },
+  {
+   "id": "c1-05",
+   "no": 5,
+   "name": "Chick Crumsmith",
+   "nick": null,
+   "pos": "1B",
+   "number": 11,
+   "seed": 104605155,
+   "species": "horse",
+   "rarity": "foil",
+   "teamIdx": 0,
+   "team": "Haybale Junction Hayseeds",
+   "flavor": "Batted .400 in his dreams, .260 awake.",
+   "face": {
+    "pal": [
+     "#9A5B34",
+     "#D9A07A",
+     "#3A2620"
+    ],
+    "eyes": "happy",
+    "brow": "up",
+    "mouth": "smile",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "eyeblack": 1
+    },
+    "tilt": 0.04161838872358203
+   }
+  },
+  {
+   "id": "c1-06",
+   "no": 6,
+   "name": "Dizzy Pickby",
+   "nick": null,
+   "pos": "2B",
+   "number": 66,
+   "seed": 121382774,
+   "species": "rooster",
+   "rarity": "rare",
+   "teamIdx": 0,
+   "team": "Haybale Junction Hayseeds",
+   "flavor": "Eats sunflower seeds, shells and all.",
+   "face": {
+    "pal": [
+     "#F6F1E6",
+     "#F2B632",
+     "#F2B632"
+    ],
+    "eyes": "wink",
+    "brow": "up",
+    "mouth": "grin",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "eyeblack": 1
+    },
+    "tilt": -0.05468093848787248
+   }
+  },
+  {
+   "id": "c1-07",
+   "no": 7,
+   "name": "Otis McQuillham",
+   "nick": "Boom-Boom",
+   "pos": "SS",
+   "number": 61,
+   "seed": 138160393,
+   "species": "ox",
+   "rarity": "rare",
+   "teamIdx": 0,
+   "team": "Haybale Junction Hayseeds",
+   "flavor": "Keeps a lucky pickle in his back pocket.",
+   "face": {
+    "pal": [
+     "#5E4A44",
+     "#D9A99A",
+     "#3A2C28"
+    ],
+    "eyes": "wide",
+    "brow": "worry",
+    "mouth": "open",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {},
+    "tilt": -0.022010114095173776
+   }
+  },
+  {
+   "id": "c1-08",
+   "no": 8,
+   "name": "Pee Wee Bramner",
+   "nick": null,
+   "pos": "3B",
+   "number": 21,
+   "seed": 289158964,
+   "species": "sheep",
+   "rarity": "common",
+   "teamIdx": 0,
+   "team": "Haybale Junction Hayseeds",
+   "flavor": "Signs autographs in pencil, just in case.",
+   "face": {
+    "pal": [
+     "#F2E6D4",
+     "#FFFDF6",
+     "#E8A9A0"
+    ],
+    "eyes": "wink",
+    "brow": "up",
+    "mouth": "gum",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {
+     "gum": 1
+    },
+    "tilt": -0.033925880030728876
+   }
+  },
+  {
+   "id": "c1-09",
+   "no": 9,
+   "name": "Ferris McBramstrom",
+   "nick": null,
+   "pos": "LF",
+   "number": 43,
+   "seed": 305936583,
+   "species": "goat",
+   "rarity": "common",
+   "teamIdx": 0,
+   "team": "Haybale Junction Hayseeds",
+   "flavor": "Taught the bat boy everything he knows.",
+   "face": {
+    "pal": [
+     "#F2EAD8",
+     "#FFF8EC",
+     "#C9A88A"
+    ],
+    "eyes": "wide",
+    "brow": "worry",
+    "mouth": "grin",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "stalk": 1
+    },
+    "tilt": -0.016794199333526192
+   }
+  },
+  {
+   "id": "c1-10",
+   "no": 10,
+   "name": "Hap Plumberry",
+   "nick": "Hot Corner",
+   "pos": "CF",
+   "number": 25,
+   "seed": 255750821,
+   "species": "cow",
+   "rarity": "common",
+   "teamIdx": 0,
+   "team": "Haybale Junction Hayseeds",
+   "flavor": "Drawn slightly off-model since birth.",
+   "face": {
+    "pal": [
+     "#B8763E",
+     "#F2C4AE",
+     "#F6F1E8"
+    ],
+    "eyes": "wink",
+    "brow": "worry",
+    "mouth": "grin",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {
+     "shades": 1
+    },
+    "tilt": 0.08751320491544902
+   }
+  },
+  {
+   "id": "c1-11",
+   "no": 11,
+   "name": "Hap Pothollow",
+   "nick": null,
+   "pos": "RF",
+   "number": 4,
+   "seed": 238973202,
+   "species": "goat",
+   "rarity": "common",
+   "teamIdx": 0,
+   "team": "Haybale Junction Hayseeds",
+   "flavor": "His glove is older than the ballpark.",
+   "face": {
+    "pal": [
+     "#F2EAD8",
+     "#FFF8EC",
+     "#C9A88A"
+    ],
+    "eyes": "wink",
+    "brow": "up",
+    "mouth": "grin",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {},
+    "tilt": 0.06717535183299332
+   }
+  },
+  {
+   "id": "c1-12",
+   "no": 12,
+   "name": "Benny Grubby",
+   "nick": null,
+   "pos": "DH",
+   "number": 32,
+   "seed": 222195583,
+   "species": "rooster",
+   "rarity": "rare",
+   "teamIdx": 0,
+   "team": "Haybale Junction Hayseeds",
+   "flavor": "Ran through a wall. The wall apologized.",
+   "face": {
+    "pal": [
+     "#F6F1E6",
+     "#F2B632",
+     "#F2B632"
+    ],
+    "eyes": "wide",
+    "brow": "angry",
+    "mouth": "open",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {},
+    "tilt": -0.02053874860983342
+   }
+  },
+  {
+   "id": "c2-01",
+   "no": 13,
+   "name": "Bix Thimstead",
+   "nick": "Flapjack",
+   "pos": "P",
+   "number": 55,
+   "seed": 1235524124,
+   "species": "mouse",
+   "rarity": "common",
+   "teamIdx": 1,
+   "team": "Ironbridge Rivets",
+   "flavor": "Bunts for fun. Nobody knows why.",
+   "face": {
+    "pal": [
+     "#A8A2AA",
+     "#E8E2E6",
+     "#F29E9E"
+    ],
+    "eyes": "happy",
+    "brow": "up",
+    "mouth": "grin",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {
+     "shades": 1,
+     "freckles": 1
+    },
+    "tilt": 0.029666082342155276
+   }
+  },
+  {
+   "id": "c2-02",
+   "no": 14,
+   "name": "Buck McZubhollow",
+   "nick": null,
+   "pos": "P",
+   "number": 26,
+   "seed": 1285856981,
+   "species": "crow",
+   "rarity": "rare",
+   "teamIdx": 1,
+   "team": "Ironbridge Rivets",
+   "flavor": "Has a 12-step plan to steal home.",
+   "face": {
+    "pal": [
+     "#3A3646",
+     "#5A566A",
+     "#4A4656"
+    ],
+    "eyes": "wide",
+    "brow": "cocky",
+    "mouth": "grin",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "eyeblack": 1
+    },
+    "tilt": 0.026351592424325644
+   }
+  },
+  {
+   "id": "c2-03",
+   "no": 15,
+   "name": "Boots McWobham",
+   "nick": null,
+   "pos": "P",
+   "number": 54,
+   "seed": 1269079362,
+   "species": "pigeon",
+   "rarity": "rare",
+   "teamIdx": 1,
+   "team": "Ironbridge Rivets",
+   "flavor": "Warms up by arguing with the umpire.",
+   "face": {
+    "pal": [
+     "#9AA2B4",
+     "#7FBFA0",
+     "#5A5466"
+    ],
+    "eyes": "wide",
+    "brow": "cocky",
+    "mouth": "smirk",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "freckles": 1
+    },
+    "tilt": 0.08105910326354206
+   }
+  },
+  {
+   "id": "c2-04",
+   "no": 16,
+   "name": "Sal Bramner",
+   "nick": null,
+   "pos": "C",
+   "number": 24,
+   "seed": 1185191267,
+   "species": "bulldog",
+   "rarity": "common",
+   "teamIdx": 1,
+   "team": "Ironbridge Rivets",
+   "flavor": "Keeps a lucky pickle in his back pocket.",
+   "face": {
+    "pal": [
+     "#C9A27A",
+     "#F2E3CC",
+     "#6A4A34"
+    ],
+    "eyes": "wide",
+    "brow": "angry",
+    "mouth": "tongue",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {},
+    "tilt": 0.08305436430964619
+   }
+  },
+  {
+   "id": "c2-05",
+   "no": 17,
+   "name": "Moose Kettleett",
+   "nick": null,
+   "pos": "1B",
+   "number": 68,
+   "seed": 1168413648,
+   "species": "possum",
+   "rarity": "rare",
+   "teamIdx": 1,
+   "team": "Ironbridge Rivets",
+   "flavor": "Drawn slightly off-model since birth.",
+   "face": {
+    "pal": [
+     "#9A96A0",
+     "#F6F2EC",
+     "#2E2A34"
+    ],
+    "eyes": "wink",
+    "brow": "worry",
+    "mouth": "grin",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "stalk": 1
+    },
+    "tilt": 0.059708401076495644
+   }
+  },
+  {
+   "id": "c2-06",
+   "no": 18,
+   "name": "Vern Halby",
+   "nick": null,
+   "pos": "2B",
+   "number": 41,
+   "seed": 1218746505,
+   "species": "cat",
+   "rarity": "common",
+   "teamIdx": 1,
+   "team": "Ironbridge Rivets",
+   "flavor": "Has a 12-step plan to steal home.",
+   "face": {
+    "pal": [
+     "#9A9AA8",
+     "#F2EEE8",
+     "#5E5E6E"
+    ],
+    "eyes": "wide",
+    "brow": "up",
+    "mouth": "grin",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {
+     "gap": 1
+    },
+    "tilt": -0.02871596373617649
+   }
+  },
+  {
+   "id": "c2-07",
+   "no": 19,
+   "name": "Abner Rookwick",
+   "nick": null,
+   "pos": "SS",
+   "number": 8,
+   "seed": 1201968886,
+   "species": "rat",
+   "rarity": "common",
+   "teamIdx": 1,
+   "team": "Ironbridge Rivets",
+   "flavor": "Hums the organ tune between pitches.",
+   "face": {
+    "pal": [
+     "#7A6A5E",
+     "#B8A898",
+     "#F29E9E"
+    ],
+    "eyes": "happy",
+    "brow": "flat",
+    "mouth": "smirk",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {},
+    "tilt": -0.05849764995742589
+   }
+  },
+  {
+   "id": "c2-08",
+   "no": 20,
+   "name": "Sal Wimett",
+   "nick": null,
+   "pos": "3B",
+   "number": 60,
+   "seed": 1386522695,
+   "species": "bulldog",
+   "rarity": "common",
+   "teamIdx": 1,
+   "team": "Ironbridge Rivets",
+   "flavor": "Wears the same cap since Little League.",
+   "face": {
+    "pal": [
+     "#E8DCCB",
+     "#FFFFFF",
+     "#9A7A5E"
+    ],
+    "eyes": "wide",
+    "brow": "worry",
+    "mouth": "smile",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {},
+    "tilt": 0.044121041446924206
+   }
+  },
+  {
+   "id": "c2-09",
+   "no": 21,
+   "name": "Hubie Mudner",
+   "nick": null,
+   "pos": "LF",
+   "number": 64,
+   "seed": 1369745076,
+   "species": "possum",
+   "rarity": "common",
+   "teamIdx": 1,
+   "team": "Ironbridge Rivets",
+   "flavor": "Owns a parakeet that calls balls and strikes.",
+   "face": {
+    "pal": [
+     "#9A96A0",
+     "#F6F2EC",
+     "#2E2A34"
+    ],
+    "eyes": "wide",
+    "brow": "worry",
+    "mouth": "tongue",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "bandaid": 1
+    },
+    "tilt": 0.08092767070513218
+   }
+  },
+  {
+   "id": "c2-10",
+   "no": 22,
+   "name": "Abner Wimins",
+   "nick": null,
+   "pos": "CF",
+   "number": 16,
+   "seed": 3298920998,
+   "species": "possum",
+   "rarity": "common",
+   "teamIdx": 1,
+   "team": "Ironbridge Rivets",
+   "flavor": "Collects autographed peanut shells.",
+   "face": {
+    "pal": [
+     "#9A96A0",
+     "#F6F2EC",
+     "#2E2A34"
+    ],
+    "eyes": "wide",
+    "brow": "up",
+    "mouth": "open",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "shades": 1
+    },
+    "tilt": -0.0033909784303978083
+   }
+  },
+  {
+   "id": "c2-11",
+   "no": 23,
+   "name": "Moose Buntham",
+   "nick": null,
+   "pos": "RF",
+   "number": 31,
+   "seed": 3315698617,
+   "species": "possum",
+   "rarity": "foil",
+   "teamIdx": 1,
+   "team": "Ironbridge Rivets",
+   "flavor": "Breakfast: pancakes and pine tar.",
+   "face": {
+    "pal": [
+     "#9A96A0",
+     "#F6F2EC",
+     "#2E2A34"
+    ],
+    "eyes": "wink",
+    "brow": "angry",
+    "mouth": "open",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "stalk": 1,
+     "freckles": 1
+    },
+    "tilt": 0.025300665674731136
+   }
+  },
+  {
+   "id": "c2-12",
+   "no": 24,
+   "name": "Tad Fitzman",
+   "nick": "Pickles",
+   "pos": "DH",
+   "number": 11,
+   "seed": 3265365760,
+   "species": "crow",
+   "rarity": "foil",
+   "teamIdx": 1,
+   "team": "Ironbridge Rivets",
+   "flavor": "Batted .400 in his dreams, .260 awake.",
+   "face": {
+    "pal": [
+     "#3A3646",
+     "#5A566A",
+     "#4A4656"
+    ],
+    "eyes": "wide",
+    "brow": "up",
+    "mouth": "smile",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {
+     "eyeblack": 1
+    },
+    "tilt": 0.026145621151663363
+   }
+  },
+  {
+   "id": "c3-01",
+   "no": 25,
+   "name": "Gus Crumham",
+   "nick": null,
+   "pos": "P",
+   "number": 4,
+   "seed": 3187859101,
+   "species": "loon",
+   "rarity": "rare",
+   "teamIdx": 2,
+   "team": "Loon Lake Loons",
+   "flavor": "Owns a parakeet that calls balls and strikes.",
+   "face": {
+    "pal": [
+     "#2E3440",
+     "#F6F2EC",
+     "#3A3E4A"
+    ],
+    "eyes": "wide",
+    "brow": "cocky",
+    "mouth": "gum",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "gum": 1,
+     "freckles": 1
+    },
+    "tilt": -0.03724938556551933
+   }
+  },
+  {
+   "id": "c3-02",
+   "no": 26,
+   "name": "Dizzy Dillfield",
+   "nick": "Big Train",
+   "pos": "P",
+   "number": 51,
+   "seed": 3137526244,
+   "species": "fox",
+   "rarity": "common",
+   "teamIdx": 2,
+   "team": "Loon Lake Loons",
+   "flavor": "Batted .400 in his dreams, .260 awake.",
+   "face": {
+    "pal": [
+     "#E07A36",
+     "#FFF4E4",
+     "#3A2A2A"
+    ],
+    "eyes": "wide",
+    "brow": "up",
+    "mouth": "grin",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "gap": 1
+    },
+    "tilt": 0.03373491525650024
+   }
+  },
+  {
+   "id": "c3-03",
+   "no": 27,
+   "name": "Pee Wee Dillby",
+   "nick": null,
+   "pos": "P",
+   "number": 34,
+   "seed": 3154303863,
+   "species": "skunk",
+   "rarity": "common",
+   "teamIdx": 2,
+   "team": "Loon Lake Loons",
+   "flavor": "Led the league in borrowed hot dogs.",
+   "face": {
+    "pal": [
+     "#2E2A36",
+     "#F6F2EC",
+     "#F29E9E"
+    ],
+    "eyes": "half",
+    "brow": "angry",
+    "mouth": "grin",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {
+     "gap": 1
+    },
+    "tilt": -0.053304159636609255
+   }
+  },
+  {
+   "id": "c3-04",
+   "no": 28,
+   "name": "Vern Dillberry",
+   "nick": "Biscuit",
+   "pos": "C",
+   "number": 44,
+   "seed": 3103971006,
+   "species": "deer",
+   "rarity": "foil",
+   "teamIdx": 2,
+   "team": "Loon Lake Loons",
+   "flavor": "Measures home runs in hot-dog lengths.",
+   "face": {
+    "pal": [
+     "#C08050",
+     "#F6E2C8",
+     "#6A3E22"
+    ],
+    "eyes": "wide",
+    "brow": "worry",
+    "mouth": "gum",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "gum": 1
+    },
+    "tilt": 0.05158079805783927
+   }
+  },
+  {
+   "id": "c3-05",
+   "no": 29,
+   "name": "Ollie Thimhollow",
+   "nick": null,
+   "pos": "1B",
+   "number": 63,
+   "seed": 3120748625,
+   "species": "squirrel",
+   "rarity": "common",
+   "teamIdx": 2,
+   "team": "Loon Lake Loons",
+   "flavor": "Hit one so far it got its own zip code.",
+   "face": {
+    "pal": [
+     "#C8693A",
+     "#F6DCC0",
+     "#8A3E1E"
+    ],
+    "eyes": "wide",
+    "brow": "flat",
+    "mouth": "gum",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "gum": 1,
+     "freckles": 1
+    },
+    "tilt": 0.024757442995905876
+   }
+  },
+  {
+   "id": "c3-06",
+   "no": 30,
+   "name": "Virgil McTibman",
+   "nick": null,
+   "pos": "2B",
+   "number": 62,
+   "seed": 3070415768,
+   "species": "moose",
+   "rarity": "foil",
+   "teamIdx": 2,
+   "team": "Loon Lake Loons",
+   "flavor": "Grew up shagging flies in a cornfield.",
+   "face": {
+    "pal": [
+     "#6A4A36",
+     "#9A7458",
+     "#3A2A20"
+    ],
+    "eyes": "wide",
+    "brow": "worry",
+    "mouth": "smirk",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {},
+    "tilt": 0.07040551888290793
+   }
+  },
+  {
+   "id": "c3-07",
+   "no": 31,
+   "name": "Dutch Halberry",
+   "nick": null,
+   "pos": "SS",
+   "number": 29,
+   "seed": 3087193387,
+   "species": "bear",
+   "rarity": "common",
+   "teamIdx": 2,
+   "team": "Loon Lake Loons",
+   "flavor": "Hit for the cycle. On a unicycle.",
+   "face": {
+    "pal": [
+     "#4A3A34",
+     "#B89A80",
+     "#2A2020"
+    ],
+    "eyes": "wide",
+    "brow": "worry",
+    "mouth": "open",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {},
+    "tilt": 0.08267986288759857
+   }
+  },
+  {
+   "id": "c3-08",
+   "no": 32,
+   "name": "Gus Potman",
+   "nick": "The Hatchet",
+   "pos": "3B",
+   "number": 66,
+   "seed": 3036860530,
+   "species": "beaver",
+   "rarity": "common",
+   "teamIdx": 2,
+   "team": "Loon Lake Loons",
+   "flavor": "Grew up shagging flies in a cornfield.",
+   "face": {
+    "pal": [
+     "#9A6440",
+     "#D9A578",
+     "#5A3A24"
+    ],
+    "eyes": "wink",
+    "brow": "up",
+    "mouth": "smile",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {},
+    "tilt": 0.04041230158880353
+   }
+  },
+  {
+   "id": "c3-09",
+   "no": 33,
+   "name": "Rube Rookhollow",
+   "nick": null,
+   "pos": "LF",
+   "number": 68,
+   "seed": 3053638149,
+   "species": "squirrel",
+   "rarity": "rare",
+   "teamIdx": 2,
+   "team": "Loon Lake Loons",
+   "flavor": "Rounds third like he's late for supper.",
+   "face": {
+    "pal": [
+     "#8A8A96",
+     "#EDE8E2",
+     "#5A5A66"
+    ],
+    "eyes": "wide",
+    "brow": "flat",
+    "mouth": "smile",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {
+     "bandaid": 1,
+     "freckles": 1
+    },
+    "tilt": 0.015989865995943545
+   }
+  },
+  {
+   "id": "c3-10",
+   "no": 34,
+   "name": "Skeeter Halberry",
+   "nick": null,
+   "pos": "CF",
+   "number": 46,
+   "seed": 587578419,
+   "species": "deer",
+   "rarity": "common",
+   "teamIdx": 2,
+   "team": "Loon Lake Loons",
+   "flavor": "Never met a fastball he didn't like.",
+   "face": {
+    "pal": [
+     "#C08050",
+     "#F6E2C8",
+     "#6A3E22"
+    ],
+    "eyes": "happy",
+    "brow": "up",
+    "mouth": "tongue",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {
+     "shades": 1,
+     "freckles": 1
+    },
+    "tilt": -0.0376858033100143
+   }
+  },
+  {
+   "id": "c3-11",
+   "no": 35,
+   "name": "Rollie Crumner",
+   "nick": "Tater",
+   "pos": "RF",
+   "number": 30,
+   "seed": 570800800,
+   "species": "skunk",
+   "rarity": "rare",
+   "teamIdx": 2,
+   "team": "Loon Lake Loons",
+   "flavor": "Signs autographs in pencil, just in case.",
+   "face": {
+    "pal": [
+     "#2E2A36",
+     "#F6F2EC",
+     "#F29E9E"
+    ],
+    "eyes": "wide",
+    "brow": "cocky",
+    "mouth": "tongue",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {},
+    "tilt": 0.04740008077584207
+   }
+  },
+  {
+   "id": "c3-12",
+   "no": 36,
+   "name": "Benny Dillman",
+   "nick": null,
+   "pos": "DH",
+   "number": 17,
+   "seed": 621133657,
+   "species": "deer",
+   "rarity": "common",
+   "teamIdx": 2,
+   "team": "Loon Lake Loons",
+   "flavor": "Keeps a lucky pickle in his back pocket.",
+   "face": {
+    "pal": [
+     "#C08050",
+     "#F6E2C8",
+     "#6A3E22"
+    ],
+    "eyes": "wide",
+    "brow": "worry",
+    "mouth": "gum",
+    "cap": "back",
+    "blush": true,
+    "acc": {
+     "gum": 1
+    },
+    "tilt": 0.020286556505598127
+   }
+  },
+  {
+   "id": "c4-01",
+   "no": 37,
+   "name": "Pee Wee Dunkberry",
+   "nick": null,
+   "pos": "P",
+   "number": 17,
+   "seed": 1688850338,
+   "species": "pelican",
+   "rarity": "foil",
+   "teamIdx": 3,
+   "team": "Gull Point Gulls",
+   "flavor": "Thinks the infield fly rule is a conspiracy.",
+   "face": {
+    "pal": [
+     "#F6F2EC",
+     "#F2E2C8",
+     "#F2A23A"
+    ],
+    "eyes": "half",
+    "brow": "flat",
+    "mouth": "grin",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {
+     "freckles": 1
+    },
+    "tilt": -0.08192194165661931
+   }
+  },
+  {
+   "id": "c4-02",
+   "no": 38,
+   "name": "Ike Wobman",
+   "nick": null,
+   "pos": "P",
+   "number": 31,
+   "seed": 1672072719,
+   "species": "seal",
+   "rarity": "rare",
+   "teamIdx": 3,
+   "team": "Gull Point Gulls",
+   "flavor": "Has never once worn matching socks.",
+   "face": {
+    "pal": [
+     "#8E96A6",
+     "#C8D0DA",
+     "#3A3A48"
+    ],
+    "eyes": "wide",
+    "brow": "flat",
+    "mouth": "tongue",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "bandaid": 1,
+     "freckles": 1
+    },
+    "tilt": -0.04595517737790942
+   }
+  },
+  {
+   "id": "c4-03",
+   "no": 39,
+   "name": "Rube Barnham",
+   "nick": "Pickles",
+   "pos": "P",
+   "number": 9,
+   "seed": 1655295100,
+   "species": "puffin",
+   "rarity": "foil",
+   "teamIdx": 3,
+   "team": "Gull Point Gulls",
+   "flavor": "Grew up shagging flies in a cornfield.",
+   "face": {
+    "pal": [
+     "#2E2A36",
+     "#FFFDF6",
+     "#EE7A35"
+    ],
+    "eyes": "wide",
+    "brow": "cocky",
+    "mouth": "gum",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {
+     "gum": 1,
+     "freckles": 1
+    },
+    "tilt": 0.08344855712726712
+   }
+  },
+  {
+   "id": "c4-04",
+   "no": 40,
+   "name": "Buck Barnski",
+   "nick": null,
+   "pos": "C",
+   "number": 6,
+   "seed": 1638517481,
+   "species": "otter",
+   "rarity": "common",
+   "teamIdx": 3,
+   "team": "Gull Point Gulls",
+   "flavor": "Has never once worn matching socks.",
+   "face": {
+    "pal": [
+     "#8A5A3A",
+     "#E2C2A0",
+     "#4A2E20"
+    ],
+    "eyes": "half",
+    "brow": "cocky",
+    "mouth": "smile",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {},
+    "tilt": -0.07208372643683106
+   }
+  },
+  {
+   "id": "c4-05",
+   "no": 41,
+   "name": "Elmer Halfield",
+   "nick": null,
+   "pos": "1B",
+   "number": 68,
+   "seed": 1621739862,
+   "species": "gull",
+   "rarity": "rare",
+   "teamIdx": 3,
+   "team": "Gull Point Gulls",
+   "flavor": "Led the league in borrowed hot dogs.",
+   "face": {
+    "pal": [
+     "#FFFDF6",
+     "#B8C2CE",
+     "#F2B632"
+    ],
+    "eyes": "happy",
+    "brow": "worry",
+    "mouth": "tongue",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {},
+    "tilt": -0.05183545196894556
+   }
+  },
+  {
+   "id": "c4-06",
+   "no": 42,
+   "name": "Vern Sprockwick",
+   "nick": null,
+   "pos": "2B",
+   "number": 15,
+   "seed": 1604962243,
+   "species": "walrus",
+   "rarity": "common",
+   "teamIdx": 3,
+   "team": "Gull Point Gulls",
+   "flavor": "Thinks the infield fly rule is a conspiracy.",
+   "face": {
+    "pal": [
+     "#B98A6E",
+     "#D9B49A",
+     "#6A4A3A"
+    ],
+    "eyes": "wink",
+    "brow": "worry",
+    "mouth": "grin",
+    "cap": "back",
+    "blush": true,
+    "acc": {
+     "gap": 1
+    },
+    "tilt": 0.04709226351231337
+   }
+  },
+  {
+   "id": "c4-07",
+   "no": 43,
+   "name": "Skeeter Larkner",
+   "nick": null,
+   "pos": "SS",
+   "number": 38,
+   "seed": 1588184624,
+   "species": "walrus",
+   "rarity": "common",
+   "teamIdx": 3,
+   "team": "Gull Point Gulls",
+   "flavor": "Signs autographs in pencil, just in case.",
+   "face": {
+    "pal": [
+     "#B98A6E",
+     "#D9B49A",
+     "#6A4A3A"
+    ],
+    "eyes": "wide",
+    "brow": "up",
+    "mouth": "smirk",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "eyeblack": 1
+    },
+    "tilt": -0.08532448212616145
+   }
+  },
+  {
+   "id": "c4-08",
+   "no": 44,
+   "name": "Arlo Nibins",
+   "nick": null,
+   "pos": "3B",
+   "number": 65,
+   "seed": 1839848909,
+   "species": "puffin",
+   "rarity": "common",
+   "teamIdx": 3,
+   "team": "Gull Point Gulls",
+   "flavor": "Breakfast: pancakes and pine tar.",
+   "face": {
+    "pal": [
+     "#2E2A36",
+     "#FFFDF6",
+     "#EE7A35"
+    ],
+    "eyes": "happy",
+    "brow": "angry",
+    "mouth": "gum",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "gum": 1
+    },
+    "tilt": -0.04822195672430098
+   }
+  },
+  {
+   "id": "c4-09",
+   "no": 45,
+   "name": "Mort Dillham",
+   "nick": null,
+   "pos": "LF",
+   "number": 34,
+   "seed": 1823071290,
+   "species": "otter",
+   "rarity": "common",
+   "teamIdx": 3,
+   "team": "Gull Point Gulls",
+   "flavor": "Throws a pitch the scouts call \"the rumor\".",
+   "face": {
+    "pal": [
+     "#8A5A3A",
+     "#E2C2A0",
+     "#4A2E20"
+    ],
+    "eyes": "wink",
+    "brow": "up",
+    "mouth": "grin",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "stalk": 1
+    },
+    "tilt": 0.07512526609003543
+   }
+  },
+  {
+   "id": "c4-10",
+   "no": 46,
+   "name": "Chick Hobett",
+   "nick": null,
+   "pos": "CF",
+   "number": 56,
+   "seed": 1604815148,
+   "species": "seal",
+   "rarity": "rare",
+   "teamIdx": 3,
+   "team": "Gull Point Gulls",
+   "flavor": "Hit one so far it got its own zip code.",
+   "face": {
+    "pal": [
+     "#8E96A6",
+     "#C8D0DA",
+     "#3A3A48"
+    ],
+    "eyes": "wink",
+    "brow": "worry",
+    "mouth": "grin",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {
+     "bandaid": 1
+    },
+    "tilt": -0.04017099858261645
+   }
+  },
+  {
+   "id": "c4-11",
+   "no": 47,
+   "name": "Nap McBuntins",
+   "nick": null,
+   "pos": "RF",
+   "number": 51,
+   "seed": 1621592767,
+   "species": "gull",
+   "rarity": "common",
+   "teamIdx": 3,
+   "team": "Gull Point Gulls",
+   "flavor": "Throws a pitch the scouts call \"the rumor\".",
+   "face": {
+    "pal": [
+     "#FFFDF6",
+     "#B8C2CE",
+     "#F2B632"
+    ],
+    "eyes": "wide",
+    "brow": "up",
+    "mouth": "tongue",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "freckles": 1
+    },
+    "tilt": -0.03140100709162652
+   }
+  },
+  {
+   "id": "c4-12",
+   "no": 48,
+   "name": "Augie Thimstead",
+   "nick": "The Count",
+   "pos": "DH",
+   "number": 13,
+   "seed": 1638370386,
+   "species": "pelican",
+   "rarity": "common",
+   "teamIdx": 3,
+   "team": "Gull Point Gulls",
+   "flavor": "Taught the bat boy everything he knows.",
+   "face": {
+    "pal": [
+     "#F6F2EC",
+     "#F2E2C8",
+     "#F2A23A"
+    ],
+    "eyes": "wide",
+    "brow": "up",
+    "mouth": "tongue",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "bandaid": 1
+    },
+    "tilt": -0.002492956705391407
+   }
+  },
+  {
+   "id": "c5-01",
+   "no": 49,
+   "name": "Iggy Pudworth",
+   "nick": "Specs",
+   "pos": "P",
+   "number": 40,
+   "seed": 678779115,
+   "species": "tortoise",
+   "rarity": "foil",
+   "teamIdx": 4,
+   "team": "Dry Wash Coyotes",
+   "flavor": "Batted .400 in his dreams, .260 awake.",
+   "face": {
+    "pal": [
+     "#8DAA5E",
+     "#C9D89A",
+     "#5E6E3A"
+    ],
+    "eyes": "wide",
+    "brow": "cocky",
+    "mouth": "grin",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "freckles": 1
+    },
+    "tilt": -0.012057869033887982
+   }
+  },
+  {
+   "id": "c5-02",
+   "no": 50,
+   "name": "Arlo McFitzley",
+   "nick": null,
+   "pos": "P",
+   "number": 53,
+   "seed": 695556734,
+   "species": "vulture",
+   "rarity": "common",
+   "teamIdx": 4,
+   "team": "Dry Wash Coyotes",
+   "flavor": "Swears the moon is a changeup.",
+   "face": {
+    "pal": [
+     "#F2A4A0",
+     "#3A3440",
+     "#E8D8B8"
+    ],
+    "eyes": "wide",
+    "brow": "worry",
+    "mouth": "tongue",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "eyeblack": 1
+    },
+    "tilt": 0.008850636673159896
+   }
+  },
+  {
+   "id": "c5-03",
+   "no": 51,
+   "name": "Wally Picksmith",
+   "nick": null,
+   "pos": "P",
+   "number": 56,
+   "seed": 712334353,
+   "species": "bighorn",
+   "rarity": "rare",
+   "teamIdx": 4,
+   "team": "Dry Wash Coyotes",
+   "flavor": "Grew up shagging flies in a cornfield.",
+   "face": {
+    "pal": [
+     "#B8946A",
+     "#F2E2C8",
+     "#7A5A3A"
+    ],
+    "eyes": "half",
+    "brow": "flat",
+    "mouth": "smile",
+    "cap": "back",
+    "blush": false,
+    "acc": {},
+    "tilt": 0.07965423522982747
+   }
+  },
+  {
+   "id": "c5-04",
+   "no": 52,
+   "name": "Spud Halows",
+   "nick": "Big Train",
+   "pos": "C",
+   "number": 66,
+   "seed": 729111972,
+   "species": "fennec",
+   "rarity": "common",
+   "teamIdx": 4,
+   "team": "Dry Wash Coyotes",
+   "flavor": "Drinks coffee out of his glove.",
+   "face": {
+    "pal": [
+     "#E8C48A",
+     "#FFF4E4",
+     "#3A2A2A"
+    ],
+    "eyes": "wide",
+    "brow": "angry",
+    "mouth": "smile",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {},
+    "tilt": -0.05358884565532207
+   }
+  },
+  {
+   "id": "c5-05",
+   "no": 53,
+   "name": "Mort Bramfield",
+   "nick": "Smudge",
+   "pos": "1B",
+   "number": 24,
+   "seed": 745889591,
+   "species": "badger",
+   "rarity": "common",
+   "teamIdx": 4,
+   "team": "Dry Wash Coyotes",
+   "flavor": "Ran through a wall. The wall apologized.",
+   "face": {
+    "pal": [
+     "#8E8A92",
+     "#F6F2EC",
+     "#2E2A34"
+    ],
+    "eyes": "wide",
+    "brow": "up",
+    "mouth": "grin",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {},
+    "tilt": -0.03336210576351732
+   }
+  },
+  {
+   "id": "c5-06",
+   "no": 54,
+   "name": "Moose Bramworth",
+   "nick": null,
+   "pos": "2B",
+   "number": 55,
+   "seed": 762667210,
+   "species": "lizard",
+   "rarity": "rare",
+   "teamIdx": 4,
+   "team": "Dry Wash Coyotes",
+   "flavor": "Has never once worn matching socks.",
+   "face": {
+    "pal": [
+     "#6DBB4A",
+     "#C9E89A",
+     "#2E5E2A"
+    ],
+    "eyes": "happy",
+    "brow": "flat",
+    "mouth": "smile",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {
+     "bandaid": 1,
+     "freckles": 1
+    },
+    "tilt": 0.06735973991453648
+   }
+  },
+  {
+   "id": "c5-07",
+   "no": 55,
+   "name": "Cotton Crumstrom",
+   "nick": null,
+   "pos": "SS",
+   "number": 38,
+   "seed": 779444829,
+   "species": "armadillo",
+   "rarity": "rare",
+   "teamIdx": 4,
+   "team": "Dry Wash Coyotes",
+   "flavor": "Can hear a slider coming.",
+   "face": {
+    "pal": [
+     "#C9A88E",
+     "#E8D2BE",
+     "#8A6A56"
+    ],
+    "eyes": "wide",
+    "brow": "flat",
+    "mouth": "open",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {},
+    "tilt": 0.001722904765047133
+   }
+  },
+  {
+   "id": "c5-08",
+   "no": 56,
+   "name": "Vern Mudhollow",
+   "nick": "Lefty Jr.",
+   "pos": "3B",
+   "number": 18,
+   "seed": 527780544,
+   "species": "badger",
+   "rarity": "common",
+   "teamIdx": 4,
+   "team": "Dry Wash Coyotes",
+   "flavor": "Throws a pitch the scouts call \"the rumor\".",
+   "face": {
+    "pal": [
+     "#8E8A92",
+     "#F6F2EC",
+     "#2E2A34"
+    ],
+    "eyes": "wide",
+    "brow": "up",
+    "mouth": "gum",
+    "cap": "back",
+    "blush": false,
+    "acc": {
+     "gum": 1
+    },
+    "tilt": 0.08247831537388264
+   }
+  },
+  {
+   "id": "c5-09",
+   "no": 57,
+   "name": "Tad Quillworth",
+   "nick": "Specs",
+   "pos": "LF",
+   "number": 29,
+   "seed": 544558163,
+   "species": "lizard",
+   "rarity": "common",
+   "teamIdx": 4,
+   "team": "Dry Wash Coyotes",
+   "flavor": "Tips his cap to pigeons.",
+   "face": {
+    "pal": [
+     "#E07A3A",
+     "#F6C89A",
+     "#3A2A2A"
+    ],
+    "eyes": "wide",
+    "brow": "worry",
+    "mouth": "smile",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {},
+    "tilt": -0.0009042080724611878
+   }
+  },
+  {
+   "id": "c5-10",
+   "no": 58,
+   "name": "Dewey Wexwick",
+   "nick": "Biscuit",
+   "pos": "CF",
+   "number": 3,
+   "seed": 2910349537,
+   "species": "armadillo",
+   "rarity": "foil",
+   "teamIdx": 4,
+   "team": "Dry Wash Coyotes",
+   "flavor": "Thinks the infield fly rule is a conspiracy.",
+   "face": {
+    "pal": [
+     "#C9A88E",
+     "#E8D2BE",
+     "#8A6A56"
+    ],
+    "eyes": "wide",
+    "brow": "worry",
+    "mouth": "gum",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "gum": 1
+    },
+    "tilt": -0.07650102712679654
+   }
+  },
+  {
+   "id": "c5-11",
+   "no": 59,
+   "name": "Gus Barnman",
+   "nick": null,
+   "pos": "RF",
+   "number": 28,
+   "seed": 2893571918,
+   "species": "tortoise",
+   "rarity": "common",
+   "teamIdx": 4,
+   "team": "Dry Wash Coyotes",
+   "flavor": "Never met a fastball he didn't like.",
+   "face": {
+    "pal": [
+     "#8DAA5E",
+     "#C9D89A",
+     "#5E6E3A"
+    ],
+    "eyes": "wide",
+    "brow": "up",
+    "mouth": "smirk",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {
+     "bandaid": 1
+    },
+    "tilt": 0.0069179537007585164
+   }
+  },
+  {
+   "id": "c5-12",
+   "no": 60,
+   "name": "Spud Cobman",
+   "nick": null,
+   "pos": "DH",
+   "number": 4,
+   "seed": 2876794299,
+   "species": "tortoise",
+   "rarity": "common",
+   "teamIdx": 4,
+   "team": "Dry Wash Coyotes",
+   "flavor": "Taught the bat boy everything he knows.",
+   "face": {
+    "pal": [
+     "#8DAA5E",
+     "#C9D89A",
+     "#5E6E3A"
+    ],
+    "eyes": "happy",
+    "brow": "up",
+    "mouth": "grin",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {},
+    "tilt": -0.03253617674577981
+   }
+  },
+  {
+   "id": "c6-01",
+   "no": 61,
+   "name": "Vern McMudham",
+   "nick": "Hot Corner",
+   "pos": "P",
+   "number": 68,
+   "seed": 89337656,
+   "species": "flamingo",
+   "rarity": "common",
+   "teamIdx": 5,
+   "team": "Capitol City Copperheads",
+   "flavor": "Signs autographs in pencil, just in case.",
+   "face": {
+    "pal": [
+     "#F29EA0",
+     "#FFD6D0",
+     "#2E2A36"
+    ],
+    "eyes": "wide",
+    "brow": "cocky",
+    "mouth": "grin",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {},
+    "tilt": -0.0065471330238506195
+   }
+  },
+  {
+   "id": "c6-02",
+   "no": 62,
+   "name": "Benny Halwick",
+   "nick": null,
+   "pos": "P",
+   "number": 57,
+   "seed": 139670513,
+   "species": "swan",
+   "rarity": "common",
+   "teamIdx": 5,
+   "team": "Capitol City Copperheads",
+   "flavor": "Throws a pitch the scouts call \"the rumor\".",
+   "face": {
+    "pal": [
+     "#FFFDF6",
+     "#F2EEE6",
+     "#EE7A35"
+    ],
+    "eyes": "wide",
+    "brow": "cocky",
+    "mouth": "grin",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "bandaid": 1
+    },
+    "tilt": 0.08257962249219417
+   }
+  },
+  {
+   "id": "c6-03",
+   "no": 63,
+   "name": "Clem Wobstead",
+   "nick": null,
+   "pos": "P",
+   "number": 9,
+   "seed": 122892894,
+   "species": "peacock",
+   "rarity": "common",
+   "teamIdx": 5,
+   "team": "Capitol City Copperheads",
+   "flavor": "Rounds third like he's late for supper.",
+   "face": {
+    "pal": [
+     "#2E6FB8",
+     "#FFFDF6",
+     "#C9A86A"
+    ],
+    "eyes": "wink",
+    "brow": "up",
+    "mouth": "smile",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "eyeblack": 1,
+     "freckles": 1
+    },
+    "tilt": -0.04612542548216879
+   }
+  },
+  {
+   "id": "c6-04",
+   "no": 64,
+   "name": "Hoyt McCobski",
+   "nick": null,
+   "pos": "C",
+   "number": 29,
+   "seed": 173225751,
+   "species": "parrot",
+   "rarity": "common",
+   "teamIdx": 5,
+   "team": "Capitol City Copperheads",
+   "flavor": "Once hit a triple off a bunt.",
+   "face": {
+    "pal": [
+     "#D9483B",
+     "#FFFDF6",
+     "#F2B632"
+    ],
+    "eyes": "wide",
+    "brow": "up",
+    "mouth": "smirk",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {},
+    "tilt": 0.05028355667833238
+   }
+  },
+  {
+   "id": "c6-05",
+   "no": 65,
+   "name": "Red Kettlener",
+   "nick": null,
+   "pos": "1B",
+   "number": 1,
+   "seed": 156448132,
+   "species": "heron",
+   "rarity": "common",
+   "teamIdx": 5,
+   "team": "Capitol City Copperheads",
+   "flavor": "Can hear a slider coming.",
+   "face": {
+    "pal": [
+     "#9AA6B8",
+     "#FFFDF6",
+     "#F2B632"
+    ],
+    "eyes": "wide",
+    "brow": "angry",
+    "mouth": "grin",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {
+     "eyeblack": 1
+    },
+    "tilt": -0.032406913172453644
+   }
+  },
+  {
+   "id": "c6-06",
+   "no": 66,
+   "name": "Rube Tumbleworth",
+   "nick": null,
+   "pos": "2B",
+   "number": 21,
+   "seed": 206780989,
+   "species": "owl",
+   "rarity": "rare",
+   "teamIdx": 5,
+   "team": "Capitol City Copperheads",
+   "flavor": "Tips his cap to pigeons.",
+   "face": {
+    "pal": [
+     "#9A6A44",
+     "#E8CFA8",
+     "#F2B632"
+    ],
+    "eyes": "wide",
+    "brow": "flat",
+    "mouth": "smile",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "eyeblack": 1
+    },
+    "tilt": 0.0238154572667554
+   }
+  },
+  {
+   "id": "c6-07",
+   "no": 67,
+   "name": "Tad Halski",
+   "nick": null,
+   "pos": "SS",
+   "number": 3,
+   "seed": 190003370,
+   "species": "goose",
+   "rarity": "common",
+   "teamIdx": 5,
+   "team": "Capitol City Copperheads",
+   "flavor": "Thinks the infield fly rule is a conspiracy.",
+   "face": {
+    "pal": [
+     "#9A9690",
+     "#F6F2EC",
+     "#3A3640"
+    ],
+    "eyes": "half",
+    "brow": "worry",
+    "mouth": "open",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "freckles": 1
+    },
+    "tilt": 0.07789440365508199
+   }
+  },
+  {
+   "id": "c6-08",
+   "no": 68,
+   "name": "Zeke Cobett",
+   "nick": "Flapjack",
+   "pos": "3B",
+   "number": 49,
+   "seed": 4266861619,
+   "species": "flamingo",
+   "rarity": "common",
+   "teamIdx": 5,
+   "team": "Capitol City Copperheads",
+   "flavor": "Can read a curveball's mind.",
+   "face": {
+    "pal": [
+     "#F29EA0",
+     "#FFD6D0",
+     "#2E2A36"
+    ],
+    "eyes": "happy",
+    "brow": "worry",
+    "mouth": "tongue",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "eyeblack": 1
+    },
+    "tilt": -0.015020000212825834
+   }
+  },
+  {
+   "id": "c6-09",
+   "no": 69,
+   "name": "Nap Plumson",
+   "nick": "Popcorn",
+   "pos": "LF",
+   "number": 2,
+   "seed": 4250084000,
+   "species": "parrot",
+   "rarity": "rare",
+   "teamIdx": 5,
+   "team": "Capitol City Copperheads",
+   "flavor": "Drinks coffee out of his glove.",
+   "face": {
+    "pal": [
+     "#D9483B",
+     "#FFFDF6",
+     "#F2B632"
+    ],
+    "eyes": "wide",
+    "brow": "cocky",
+    "mouth": "tongue",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {},
+    "tilt": 0.000736666820012033
+   }
+  },
+  {
+   "id": "c6-10",
+   "no": 70,
+   "name": "Pops McGrubson",
+   "nick": null,
+   "pos": "CF",
+   "number": 17,
+   "seed": 5302466,
+   "species": "goose",
+   "rarity": "foil",
+   "teamIdx": 5,
+   "team": "Capitol City Copperheads",
+   "flavor": "Bunts for fun. Nobody knows why.",
+   "face": {
+    "pal": [
+     "#9A9690",
+     "#F6F2EC",
+     "#3A3640"
+    ],
+    "eyes": "half",
+    "brow": "worry",
+    "mouth": "smirk",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {
+     "bandaid": 1,
+     "freckles": 1
+    },
+    "tilt": -0.08042376019991934
+   }
+  },
+  {
+   "id": "c6-11",
+   "no": 71,
+   "name": "Skeeter Barnham",
+   "nick": null,
+   "pos": "RF",
+   "number": 24,
+   "seed": 22080085,
+   "species": "flamingo",
+   "rarity": "rare",
+   "teamIdx": 5,
+   "team": "Capitol City Copperheads",
+   "flavor": "Hums the organ tune between pitches.",
+   "face": {
+    "pal": [
+     "#F29EA0",
+     "#FFD6D0",
+     "#2E2A36"
+    ],
+    "eyes": "wide",
+    "brow": "up",
+    "mouth": "tongue",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "bandaid": 1
+    },
+    "tilt": 0.07270611694548279
+   }
+  },
+  {
+   "id": "c6-12",
+   "no": 72,
+   "name": "Smoky Brambottom",
+   "nick": null,
+   "pos": "DH",
+   "number": 26,
+   "seed": 4266714524,
+   "species": "owl",
+   "rarity": "foil",
+   "teamIdx": 5,
+   "team": "Capitol City Copperheads",
+   "flavor": "Wears the same cap since Little League.",
+   "face": {
+    "pal": [
+     "#9A6A44",
+     "#E8CFA8",
+     "#F2B632"
+    ],
+    "eyes": "wide",
+    "brow": "worry",
+    "mouth": "tongue",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "bandaid": 1
+    },
+    "tilt": 0.0349896735465154
+   }
+  }
+ ],
+ "pitchers": [
+  {
+   "id": "p_hank",
+   "name": "Hank Hollister",
+   "nick": "Pops",
+   "hand": "R",
+   "team": "Hayseeds",
+   "boss": false,
+   "look": {
+    "build": "stout",
+    "hair": "mustache",
+    "windup": "classic",
+    "number": 44
+   },
+   "bio": "Throws strikes, tells long stories, owns the feed store.",
+   "species": "goat",
+   "seed": 3263916444,
+   "face": {
+    "pal": [
+     "#F2EAD8",
+     "#FFF8EC",
+     "#C9A88A"
+    ],
+    "eyes": "wide",
+    "brow": "up",
+    "mouth": "tongue",
+    "cap": "back",
+    "blush": true,
+    "acc": {
+     "bandaid": 1
+    },
+    "tilt": 0.03729933303315192
+   }
+  },
+  {
+   "id": "p_dottie",
+   "name": "Dottie Fairweather",
+   "nick": "Sunshine",
+   "hand": "L",
+   "team": "Hayseeds",
+   "boss": false,
+   "look": {
+    "build": "lanky",
+    "hair": "none",
+    "windup": "highkick",
+    "number": 9
+   },
+   "bio": "Learned to pitch by plunking apples off the silo roof.",
+   "species": "hen",
+   "seed": 1909999071,
+   "face": {
+    "pal": [
+     "#C8783E",
+     "#E8B488",
+     "#F2B632"
+    ],
+    "eyes": "happy",
+    "brow": "up",
+    "mouth": "grin",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {},
+    "tilt": -0.06572952173184603
+   }
+  },
+  {
+   "id": "p_clem",
+   "name": "Clem Bixby",
+   "nick": "The Mailman",
+   "hand": "R",
+   "team": "Hayseeds",
+   "boss": false,
+   "look": {
+    "build": "tall",
+    "hair": "sideburns",
+    "windup": "classic",
+    "number": 21
+   },
+   "bio": "Always delivers. Usually right down Main Street.",
+   "species": "dog",
+   "seed": 2297904569,
+   "face": {
+    "pal": [
+     "#C98E52",
+     "#F5E3C8",
+     "#7A4E2A"
+    ],
+    "eyes": "wide",
+    "brow": "flat",
+    "mouth": "open",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "freckles": 1
+    },
+    "tilt": 0.01743648877367377
+   }
+  },
+  {
+   "id": "p_ox",
+   "name": "Earl Oxley",
+   "nick": "The Ox",
+   "hand": "R",
+   "team": "Hayseeds",
+   "boss": true,
+   "look": {
+    "build": "stout",
+    "hair": "beard",
+    "windup": "classic",
+    "number": 1
+   },
+   "bio": "Farm-strong and grumpy about it. Holds the county record for strikeouts and blue ribbons.",
+   "species": "ox",
+   "seed": 4045303183,
+   "face": {
+    "pal": [
+     "#B8763E",
+     "#F0CDA6",
+     "#7A4A22"
+    ],
+    "eyes": "wide",
+    "brow": "flat",
+    "mouth": "open",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "bandaid": 1
+    },
+    "tilt": 0.014634435893967747
+   }
+  },
+  {
+   "id": "p_vinnie",
+   "name": "Vinnie Castellano",
+   "nick": "Two-Bit",
+   "hand": "R",
+   "team": "Rivets",
+   "boss": false,
+   "look": {
+    "build": "tall",
+    "hair": "mustache",
+    "windup": "sidearm",
+    "number": 25
+   },
+   "bio": "Will flip you a quarter for every swing and miss. Never runs out of quarters.",
+   "species": "rat",
+   "seed": 1224415967,
+   "face": {
+    "pal": [
+     "#8E8A92",
+     "#C8C2C6",
+     "#F29E9E"
+    ],
+    "eyes": "wide",
+    "brow": "up",
+    "mouth": "tongue",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "bandaid": 1,
+     "freckles": 1
+    },
+    "tilt": -0.08790679683443159
+   }
+  },
+  {
+   "id": "p_rosalind",
+   "name": "Rosalind Park",
+   "nick": "Rooftop",
+   "hand": "L",
+   "team": "Rivets",
+   "boss": false,
+   "look": {
+    "build": "lanky",
+    "hair": "none",
+    "windup": "highkick",
+    "number": 6
+   },
+   "bio": "Grew up throwing at a fire escape six floors up. Rarely misses a rung.",
+   "species": "pigeon",
+   "seed": 3674450318,
+   "face": {
+    "pal": [
+     "#9AA2B4",
+     "#7FBFA0",
+     "#5A5466"
+    ],
+    "eyes": "happy",
+    "brow": "flat",
+    "mouth": "gum",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "gum": 1
+    },
+    "tilt": -0.07335503458511083
+   }
+  },
+  {
+   "id": "p_marty",
+   "name": "Marty Pinwheel",
+   "nick": "Subway",
+   "hand": "R",
+   "team": "Rivets",
+   "boss": false,
+   "look": {
+    "build": "lanky",
+    "hair": "sideburns",
+    "windup": "submarine",
+    "number": 33
+   },
+   "bio": "Throws from the third rail. The ball rises like a train out of a tunnel.",
+   "species": "cat",
+   "seed": 2657483743,
+   "face": {
+    "pal": [
+     "#9A9AA8",
+     "#F2EEE8",
+     "#5E5E6E"
+    ],
+    "eyes": "wink",
+    "brow": "up",
+    "mouth": "smirk",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {
+     "bandaid": 1
+    },
+    "tilt": 0.0004073414672166109
+   }
+  },
+  {
+   "id": "p_landlord",
+   "name": "Lou Brodsky",
+   "nick": "The Landlord",
+   "hand": "R",
+   "team": "Rivets",
+   "boss": true,
+   "look": {
+    "build": "stout",
+    "hair": "mustache",
+    "windup": "classic",
+    "number": 13
+   },
+   "bio": "Collects rent on the inside corner, first of every month and every at-bat.",
+   "species": "bulldog",
+   "seed": 1688577866,
+   "face": {
+    "pal": [
+     "#E8DCCB",
+     "#FFFFFF",
+     "#9A7A5E"
+    ],
+    "eyes": "wink",
+    "brow": "up",
+    "mouth": "smile",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "eyeblack": 1,
+     "freckles": 1
+    },
+    "tilt": 0.012907064873725175
+   }
+  },
+  {
+   "id": "p_ellis",
+   "name": "Ellis Thornbury",
+   "nick": "Woodsmoke",
+   "hand": "R",
+   "team": "Loons",
+   "boss": false,
+   "look": {
+    "build": "tall",
+    "hair": "beard",
+    "windup": "classic",
+    "number": 38
+   },
+   "bio": "Splits his own firewood. Would like to split your bat too.",
+   "species": "moose",
+   "seed": 3000692787,
+   "face": {
+    "pal": [
+     "#6A4A36",
+     "#9A7458",
+     "#3A2A20"
+    ],
+    "eyes": "wide",
+    "brow": "up",
+    "mouth": "open",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {},
+    "tilt": -0.040253294161520896
+   }
+  },
+  {
+   "id": "p_june",
+   "name": "June Larkspur",
+   "nick": "The Loon",
+   "hand": "L",
+   "team": "Loons",
+   "boss": false,
+   "look": {
+    "build": "lanky",
+    "hair": "none",
+    "windup": "classic",
+    "number": 2
+   },
+   "bio": "Her knuckleball flutters like a moth around a porch light.",
+   "species": "loon",
+   "seed": 15439784,
+   "face": {
+    "pal": [
+     "#2E3440",
+     "#F6F2EC",
+     "#3A3E4A"
+    ],
+    "eyes": "wide",
+    "brow": "worry",
+    "mouth": "grin",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "bandaid": 1
+    },
+    "tilt": -0.041059265993535515
+   }
+  },
+  {
+   "id": "p_otis",
+   "name": "Otis Fernsby",
+   "nick": "Canoe",
+   "hand": "R",
+   "team": "Loons",
+   "boss": false,
+   "look": {
+    "build": "stout",
+    "hair": "sideburns",
+    "windup": "sidearm",
+    "number": 17
+   },
+   "bio": "Paddles to the park every morning. Arm like an outboard motor.",
+   "species": "beaver",
+   "seed": 1862557599,
+   "face": {
+    "pal": [
+     "#9A6440",
+     "#D9A578",
+     "#5A3A24"
+    ],
+    "eyes": "wide",
+    "brow": "angry",
+    "mouth": "tongue",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {
+     "freckles": 1
+    },
+    "tilt": 0.016276154592633246
+   }
+  },
+  {
+   "id": "p_sasquatch",
+   "name": "Gus Haldane",
+   "nick": "Sasquatch",
+   "hand": "R",
+   "team": "Loons",
+   "boss": true,
+   "look": {
+    "build": "tall",
+    "hair": "beard",
+    "windup": "highkick",
+    "number": 0
+   },
+   "bio": "Seven feet of flannel. Nobody has ever gotten a clear look at him, or his curveball.",
+   "species": "bear",
+   "seed": 1282270809,
+   "face": {
+    "pal": [
+     "#7A5034",
+     "#D9A97A",
+     "#4A2E1E"
+    ],
+    "eyes": "wide",
+    "brow": "up",
+    "mouth": "open",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "eyeblack": 1
+    },
+    "tilt": -0.05167974097654223
+   }
+  },
+  {
+   "id": "p_pearl",
+   "name": "Pearl Marlowe",
+   "nick": "Foghorn",
+   "hand": "R",
+   "team": "Gulls",
+   "boss": false,
+   "look": {
+    "build": "stout",
+    "hair": "none",
+    "windup": "classic",
+    "number": 11
+   },
+   "bio": "You hear her before you see the pitch. Mostly you just hear her.",
+   "species": "walrus",
+   "seed": 427307900,
+   "face": {
+    "pal": [
+     "#B98A6E",
+     "#D9B49A",
+     "#6A4A3A"
+    ],
+    "eyes": "half",
+    "brow": "worry",
+    "mouth": "tongue",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {},
+    "tilt": 0.03191027757246047
+   }
+  },
+  {
+   "id": "p_nils",
+   "name": "Nils Brightwater",
+   "nick": "Barnacle",
+   "hand": "L",
+   "team": "Gulls",
+   "boss": false,
+   "look": {
+    "build": "tall",
+    "hair": "beard",
+    "windup": "classic",
+    "number": 47
+   },
+   "bio": "Sticks to the corners and will not be scraped off.",
+   "species": "pelican",
+   "seed": 3916563876,
+   "face": {
+    "pal": [
+     "#F6F2EC",
+     "#F2E2C8",
+     "#F2A23A"
+    ],
+    "eyes": "happy",
+    "brow": "worry",
+    "mouth": "smirk",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {},
+    "tilt": 0.07927292481064796
+   }
+  },
+  {
+   "id": "p_sully",
+   "name": "Sully Tidewell",
+   "nick": "Low Tide",
+   "hand": "R",
+   "team": "Gulls",
+   "boss": false,
+   "look": {
+    "build": "lanky",
+    "hair": "mustache",
+    "windup": "submarine",
+    "number": 29
+   },
+   "bio": "Knuckles nearly scrape the mound. The sinker goes out with the tide.",
+   "species": "seal",
+   "seed": 2263722975,
+   "face": {
+    "pal": [
+     "#B8A898",
+     "#E8DCCF",
+     "#4A3E36"
+    ],
+    "eyes": "wide",
+    "brow": "up",
+    "mouth": "smirk",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {
+     "bandaid": 1
+    },
+    "tilt": 0.013990261782892048
+   }
+  },
+  {
+   "id": "p_admiral",
+   "name": "Winifred Gale",
+   "nick": "The Admiral",
+   "hand": "R",
+   "team": "Gulls",
+   "boss": true,
+   "look": {
+    "build": "tall",
+    "hair": "none",
+    "windup": "highkick",
+    "number": 8
+   },
+   "bio": "Commands the strike zone like a flagship. Salutes after every strikeout.",
+   "species": "gull",
+   "seed": 3389649278,
+   "face": {
+    "pal": [
+     "#FFFDF6",
+     "#B8C2CE",
+     "#F2B632"
+    ],
+    "eyes": "happy",
+    "brow": "up",
+    "mouth": "grin",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {
+     "eyeblack": 1,
+     "freckles": 1
+    },
+    "tilt": -0.05405667177401483
+   }
+  },
+  {
+   "id": "p_rio",
+   "name": "Rio Calloway",
+   "nick": "Dust Devil",
+   "hand": "R",
+   "team": "Coyotes",
+   "boss": false,
+   "look": {
+    "build": "lanky",
+    "hair": "sideburns",
+    "windup": "sidearm",
+    "number": 14
+   },
+   "bio": "Spins like a whirlwind on the mound. So does the slider.",
+   "species": "armadillo",
+   "seed": 1030001878,
+   "face": {
+    "pal": [
+     "#C9A88E",
+     "#E8D2BE",
+     "#8A6A56"
+    ],
+    "eyes": "wide",
+    "brow": "cocky",
+    "mouth": "gum",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "gum": 1
+    },
+    "tilt": 0.04188126972410828
+   }
+  },
+  {
+   "id": "p_tess",
+   "name": "Tess Rattigan",
+   "nick": "Tumbleweed",
+   "hand": "L",
+   "team": "Coyotes",
+   "boss": false,
+   "look": {
+    "build": "lanky",
+    "hair": "none",
+    "windup": "classic",
+    "number": 31
+   },
+   "bio": "Drifts in from nowhere, throws something weird, drifts back out.",
+   "species": "tortoise",
+   "seed": 1940583457,
+   "face": {
+    "pal": [
+     "#8DAA5E",
+     "#C9D89A",
+     "#5E6E3A"
+    ],
+    "eyes": "wide",
+    "brow": "flat",
+    "mouth": "open",
+    "cap": "back",
+    "blush": true,
+    "acc": {
+     "eyeblack": 1
+    },
+    "tilt": -0.06617198701947927
+   }
+  },
+  {
+   "id": "p_cosmo",
+   "name": "Cosmo Starling",
+   "nick": "Night Owl",
+   "hand": "R",
+   "team": "Coyotes",
+   "boss": false,
+   "look": {
+    "build": "tall",
+    "hair": "mustache",
+    "windup": "highkick",
+    "number": 77
+   },
+   "bio": "Only pitches after sundown. Claims the moon gives him an extra two miles an hour.",
+   "species": "possum",
+   "seed": 3238761615,
+   "face": {
+    "pal": [
+     "#9A96A0",
+     "#F6F2EC",
+     "#2E2A34"
+    ],
+    "eyes": "happy",
+    "brow": "up",
+    "mouth": "tongue",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {
+     "bandaid": 1,
+     "freckles": 1
+    },
+    "tilt": -0.009126526387408376
+   }
+  },
+  {
+   "id": "p_mirage",
+   "name": "Dez Montoya",
+   "nick": "The Mirage",
+   "hand": "L",
+   "team": "Coyotes",
+   "boss": true,
+   "look": {
+    "build": "lanky",
+    "hair": "beard",
+    "windup": "sidearm",
+    "number": 7
+   },
+   "bio": "Now you see it. Now you are walking back to the dugout.",
+   "species": "lizard",
+   "seed": 3873651507,
+   "face": {
+    "pal": [
+     "#E07A3A",
+     "#F6C89A",
+     "#3A2A2A"
+    ],
+    "eyes": "wide",
+    "brow": "cocky",
+    "mouth": "tongue",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {
+     "shades": 1
+    },
+    "tilt": 0.002754128761589527
+   }
+  },
+  {
+   "id": "p_organist",
+   "name": "Augustus Fairchild",
+   "nick": "The Organist",
+   "hand": "R",
+   "team": "Copperheads",
+   "boss": false,
+   "look": {
+    "build": "tall",
+    "hair": "mustache",
+    "windup": "classic",
+    "number": 19
+   },
+   "bio": "Plays the stadium organ between starts. Changes keys mid-at-bat.",
+   "species": "flamingo",
+   "seed": 2971235383,
+   "face": {
+    "pal": [
+     "#F29EA0",
+     "#FFD6D0",
+     "#2E2A36"
+    ],
+    "eyes": "wide",
+    "brow": "up",
+    "mouth": "grin",
+    "cap": "back",
+    "blush": true,
+    "acc": {},
+    "tilt": -0.008831951189786195
+   }
+  },
+  {
+   "id": "p_belle",
+   "name": "Belle Harrow",
+   "nick": "Gargoyle",
+   "hand": "L",
+   "team": "Copperheads",
+   "boss": false,
+   "look": {
+    "build": "stout",
+    "hair": "none",
+    "windup": "classic",
+    "number": 66
+   },
+   "bio": "Perches on the mound without blinking. The cutter bites stone.",
+   "species": "owl",
+   "seed": 3138288196,
+   "face": {
+    "pal": [
+     "#B8B2AA",
+     "#F2EEE6",
+     "#F2B632"
+    ],
+    "eyes": "wide",
+    "brow": "up",
+    "mouth": "smile",
+    "cap": "back",
+    "blush": true,
+    "acc": {},
+    "tilt": 0.08046947145368903
+   }
+  },
+  {
+   "id": "p_thunder",
+   "name": "Rex Underwood",
+   "nick": "Old Thunder",
+   "hand": "R",
+   "team": "Copperheads",
+   "boss": false,
+   "look": {
+    "build": "stout",
+    "hair": "beard",
+    "windup": "highkick",
+    "number": 52
+   },
+   "bio": "Two pitches, both loud. Catchers ice their hands for a week.",
+   "species": "bison",
+   "seed": 3027404106,
+   "face": {
+    "pal": [
+     "#6A4632",
+     "#A87A5A",
+     "#3A2618"
+    ],
+    "eyes": "wide",
+    "brow": "flat",
+    "mouth": "open",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "freckles": 1
+    },
+    "tilt": -0.030145602975971995
+   }
+  },
+  {
+   "id": "p_halo",
+   "name": "Cornelius Vane",
+   "nick": "Halo",
+   "hand": "R",
+   "team": "Copperheads",
+   "boss": true,
+   "look": {
+    "build": "tall",
+    "hair": "none",
+    "windup": "highkick",
+    "number": 10
+   },
+   "bio": "The last ace of the old cathedral. Has never thrown the same pitch twice in a row. Probably.",
+   "species": "peacock",
+   "seed": 2660216350,
+   "face": {
+    "pal": [
+     "#2E6FB8",
+     "#FFFDF6",
+     "#C9A86A"
+    ],
+    "eyes": "half",
+    "brow": "flat",
+    "mouth": "grin",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "freckles": 1
+    },
+    "tilt": -0.0629003217536956
+   }
+  },
+  {
+   "id": "p_bpbob",
+   "name": "Bobby Lobbs",
+   "nick": "Batting Practice Bob",
+   "hand": "R",
+   "team": "Barnstormers",
+   "boss": false,
+   "look": {
+    "build": "stout",
+    "hair": "mustache",
+    "windup": "classic",
+    "number": 99
+   },
+   "bio": "Has thrown four million meatballs and loved every one. Gets a little competitive after a few dingers.",
+   "species": "badger",
+   "seed": 679409725,
+   "face": {
+    "pal": [
+     "#8E8A92",
+     "#F6F2EC",
+     "#2E2A34"
+    ],
+    "eyes": "wide",
+    "brow": "up",
+    "mouth": "grin",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {},
+    "tilt": 0.025363940368406473
+   }
+  },
+  {
+   "id": "p_mabel",
+   "name": "Mabel Quigley",
+   "nick": "Grandma Gas",
+   "hand": "R",
+   "team": "Barnstormers",
+   "boss": false,
+   "look": {
+    "build": "stout",
+    "hair": "none",
+    "windup": "classic",
+    "number": 72
+   },
+   "bio": "Seventy-two years young. Still brings the cookies and the high cheese.",
+   "species": "goose",
+   "seed": 1602792953,
+   "face": {
+    "pal": [
+     "#9A9690",
+     "#F6F2EC",
+     "#3A3640"
+    ],
+    "eyes": "wink",
+    "brow": "up",
+    "mouth": "tongue",
+    "cap": "fwd",
+    "blush": true,
+    "acc": {
+     "eyeblack": 1
+    },
+    "tilt": -0.04940878559835255
+   }
+  },
+  {
+   "id": "p_ike",
+   "name": "Ike Penny",
+   "nick": "The Paperboy",
+   "hand": "L",
+   "team": "Barnstormers",
+   "boss": false,
+   "look": {
+    "build": "lanky",
+    "hair": "none",
+    "windup": "sidearm",
+    "number": 5
+   },
+   "bio": "Delivers to every corner of the zone before breakfast.",
+   "species": "squirrel",
+   "seed": 4216285391,
+   "face": {
+    "pal": [
+     "#8A8A96",
+     "#EDE8E2",
+     "#5A5A66"
+    ],
+    "eyes": "wide",
+    "brow": "flat",
+    "mouth": "smile",
+    "cap": "fwd",
+    "blush": false,
+    "acc": {
+     "bandaid": 1
+    },
+    "tilt": 0.030884845219552516
+   }
+  }
+ ],
+ "species": {
+  "raccoon": {
+   "fam": "m",
+   "name": "Raccoon",
+   "ear": "point",
+   "earH": 8,
+   "earIn": 1,
+   "snout": "muzzle",
+   "nose": "ink",
+   "mark": "mask",
+   "whisk": 1,
+   "w": 1.06,
+   "pal": [
+    [
+     "#8F8B9E",
+     "#F4EEE2",
+     "#4A4256"
+    ]
+   ]
+  },
+  "ox": {
+   "fam": "m",
+   "name": "Ox",
+   "ear": "cow",
+   "horn": "ox",
+   "snout": "wide",
+   "nose": "nostrils",
+   "tuft": "hair",
+   "w": 1.18,
+   "pal": [
+    [
+     "#8A5A3C",
+     "#E9B99A",
+     "#5A3826"
+    ],
+    [
+     "#B8763E",
+     "#F0CDA6",
+     "#7A4A22"
+    ],
+    [
+     "#5E4A44",
+     "#D9A99A",
+     "#3A2C28"
+    ]
+   ]
+  },
+  "bison": {
+   "fam": "m",
+   "name": "Bison",
+   "ear": "cow",
+   "horn": "ox",
+   "snout": "wide",
+   "nose": "nostrils",
+   "tuft": "mane",
+   "beard": 1,
+   "w": 1.2,
+   "pal": [
+    [
+     "#6A4632",
+     "#A87A5A",
+     "#3A2618"
+    ]
+   ]
+  },
+  "goat": {
+   "fam": "m",
+   "name": "Goat",
+   "ear": "cow",
+   "horn": "goat",
+   "snout": "muzzle",
+   "nose": "nostrils",
+   "beard": 1,
+   "w": 0.92,
+   "h": 1.06,
+   "pal": [
+    [
+     "#F2EAD8",
+     "#FFF8EC",
+     "#C9A88A"
+    ],
+    [
+     "#A9927A",
+     "#E8DCCB",
+     "#6E5A48"
+    ],
+    [
+     "#6A5E58",
+     "#BFB2A6",
+     "#3E3632"
+    ]
+   ]
+  },
+  "bighorn": {
+   "fam": "m",
+   "name": "Bighorn",
+   "ear": "cow",
+   "horn": "curl",
+   "snout": "muzzle",
+   "nose": "nostrils",
+   "w": 0.95,
+   "pal": [
+    [
+     "#B8946A",
+     "#F2E2C8",
+     "#7A5A3A"
+    ]
+   ]
+  },
+  "sheep": {
+   "fam": "m",
+   "name": "Sheep",
+   "ear": "cow",
+   "snout": "muzzle",
+   "nose": "nostrils",
+   "tuft": "wool",
+   "pal": [
+    [
+     "#4A3E48",
+     "#F7F1E6",
+     "#E8A9A0"
+    ],
+    [
+     "#F2E6D4",
+     "#FFFDF6",
+     "#E8A9A0"
+    ]
+   ]
+  },
+  "cow": {
+   "fam": "m",
+   "name": "Cow",
+   "ear": "cow",
+   "horn": "nub",
+   "snout": "wide",
+   "nose": "nostrils",
+   "mark": "spots",
+   "w": 1.1,
+   "pal": [
+    [
+     "#F6F1E8",
+     "#F2B4B0",
+     "#2E2730"
+    ],
+    [
+     "#B8763E",
+     "#F2C4AE",
+     "#F6F1E8"
+    ]
+   ]
+  },
+  "horse": {
+   "fam": "m",
+   "name": "Horse",
+   "ear": "point",
+   "snout": "wide",
+   "nose": "nostrils",
+   "mark": "blaze",
+   "tuft": "mane",
+   "w": 0.92,
+   "h": 1.1,
+   "pal": [
+    [
+     "#9A5B34",
+     "#D9A07A",
+     "#3A2620"
+    ],
+    [
+     "#5C3E30",
+     "#B08870",
+     "#22181A"
+    ],
+    [
+     "#E2D2B8",
+     "#F2E6D2",
+     "#8A6A4E"
+    ]
+   ]
+  },
+  "dog": {
+   "fam": "m",
+   "name": "Hound",
+   "ear": "flop",
+   "snout": "long",
+   "nose": "big",
+   "mark": "patch",
+   "pal": [
+    [
+     "#C98E52",
+     "#F5E3C8",
+     "#7A4E2A"
+    ],
+    [
+     "#F2EADC",
+     "#FFFFFF",
+     "#8A5A36"
+    ],
+    [
+     "#6E5A4A",
+     "#D9C6AE",
+     "#2E2420"
+    ]
+   ]
+  },
+  "bulldog": {
+   "fam": "m",
+   "name": "Bulldog",
+   "ear": "rose",
+   "snout": "wide",
+   "nose": "big",
+   "tooth": "under",
+   "w": 1.22,
+   "h": 0.94,
+   "pal": [
+    [
+     "#C9A27A",
+     "#F2E3CC",
+     "#6A4A34"
+    ],
+    [
+     "#E8DCCB",
+     "#FFFFFF",
+     "#9A7A5E"
+    ]
+   ]
+  },
+  "rat": {
+   "fam": "m",
+   "name": "Rat",
+   "ear": "mouse",
+   "earIn": 1,
+   "snout": "long",
+   "nose": "pink",
+   "tooth": "buck",
+   "whisk": 1,
+   "w": 0.95,
+   "pal": [
+    [
+     "#8E8A92",
+     "#C8C2C6",
+     "#F29E9E"
+    ],
+    [
+     "#7A6A5E",
+     "#B8A898",
+     "#F29E9E"
+    ]
+   ]
+  },
+  "mouse": {
+   "fam": "m",
+   "name": "Mouse",
+   "ear": "mouse",
+   "earIn": 1,
+   "earBig": 1,
+   "snout": "long",
+   "nose": "pink",
+   "tooth": "buck",
+   "whisk": 1,
+   "w": 0.9,
+   "pal": [
+    [
+     "#B8946A",
+     "#F2E2C8",
+     "#F29E9E"
+    ],
+    [
+     "#A8A2AA",
+     "#E8E2E6",
+     "#F29E9E"
+    ]
+   ]
+  },
+  "cat": {
+   "fam": "m",
+   "name": "Alley Cat",
+   "ear": "point",
+   "earIn": 1,
+   "snout": "flat",
+   "nose": "pink",
+   "whisk": 1,
+   "mark": "tabby",
+   "pal": [
+    [
+     "#E89B4A",
+     "#FBE6CC",
+     "#B8622A"
+    ],
+    [
+     "#3A3340",
+     "#F2EEE8",
+     "#6A5E70"
+    ],
+    [
+     "#9A9AA8",
+     "#F2EEE8",
+     "#5E5E6E"
+    ]
+   ]
+  },
+  "possum": {
+   "fam": "m",
+   "name": "Possum",
+   "ear": "round",
+   "earDark": 1,
+   "snout": "long",
+   "nose": "pink",
+   "whisk": 1,
+   "mark": "face",
+   "pal": [
+    [
+     "#9A96A0",
+     "#F6F2EC",
+     "#2E2A34"
+    ]
+   ]
+  },
+  "moose": {
+   "fam": "m",
+   "name": "Moose",
+   "ear": "cow",
+   "horn": "antler",
+   "snout": "wide",
+   "nose": "nostrils",
+   "w": 1.08,
+   "h": 1.12,
+   "pal": [
+    [
+     "#6A4A36",
+     "#9A7458",
+     "#3A2A20"
+    ]
+   ]
+  },
+  "beaver": {
+   "fam": "m",
+   "name": "Beaver",
+   "ear": "tiny",
+   "snout": "muzzle",
+   "nose": "ink",
+   "tooth": "buck",
+   "whisk": 1,
+   "w": 1.08,
+   "pal": [
+    [
+     "#9A6440",
+     "#D9A578",
+     "#5A3A24"
+    ]
+   ]
+  },
+  "bear": {
+   "fam": "m",
+   "name": "Bear",
+   "ear": "round",
+   "earIn": 1,
+   "snout": "muzzle",
+   "nose": "big",
+   "w": 1.12,
+   "pal": [
+    [
+     "#7A5034",
+     "#D9A97A",
+     "#4A2E1E"
+    ],
+    [
+     "#4A3A34",
+     "#B89A80",
+     "#2A2020"
+    ],
+    [
+     "#D98A4A",
+     "#F6D8B0",
+     "#8A4A22"
+    ]
+   ]
+  },
+  "fox": {
+   "fam": "m",
+   "name": "Fox",
+   "ear": "big",
+   "earIn": 1,
+   "snout": "long",
+   "nose": "ink",
+   "mark": "cheeks",
+   "pal": [
+    [
+     "#E07A36",
+     "#FFF4E4",
+     "#3A2A2A"
+    ]
+   ]
+  },
+  "fennec": {
+   "fam": "m",
+   "name": "Fennec",
+   "ear": "huge",
+   "earIn": 1,
+   "snout": "long",
+   "nose": "ink",
+   "mark": "cheeks",
+   "w": 0.92,
+   "pal": [
+    [
+     "#E8C48A",
+     "#FFF4E4",
+     "#3A2A2A"
+    ]
+   ]
+  },
+  "deer": {
+   "fam": "m",
+   "name": "Deer",
+   "ear": "side",
+   "earIn": 1,
+   "horn": "nub",
+   "snout": "muzzle",
+   "nose": "ink",
+   "mark": "freck",
+   "w": 0.94,
+   "h": 1.06,
+   "pal": [
+    [
+     "#C08050",
+     "#F6E2C8",
+     "#6A3E22"
+    ]
+   ]
+  },
+  "squirrel": {
+   "fam": "m",
+   "name": "Squirrel",
+   "ear": "tuft",
+   "snout": "muzzle",
+   "nose": "ink",
+   "tooth": "buck",
+   "tail": 1,
+   "pal": [
+    [
+     "#C8693A",
+     "#F6DCC0",
+     "#8A3E1E"
+    ],
+    [
+     "#8A8A96",
+     "#EDE8E2",
+     "#5A5A66"
+    ]
+   ]
+  },
+  "skunk": {
+   "fam": "m",
+   "name": "Skunk",
+   "ear": "round",
+   "snout": "muzzle",
+   "nose": "pink",
+   "mark": "stripe",
+   "pal": [
+    [
+     "#2E2A36",
+     "#F6F2EC",
+     "#F29E9E"
+    ]
+   ]
+  },
+  "otter": {
+   "fam": "m",
+   "name": "Otter",
+   "ear": "tiny",
+   "snout": "flat",
+   "nose": "ink",
+   "whisk": 1,
+   "w": 1.06,
+   "pal": [
+    [
+     "#8A5A3A",
+     "#E2C2A0",
+     "#4A2E20"
+    ]
+   ]
+  },
+  "seal": {
+   "fam": "m",
+   "name": "Seal",
+   "ear": "none",
+   "snout": "flat",
+   "nose": "ink",
+   "whisk": 1,
+   "w": 1.04,
+   "pal": [
+    [
+     "#8E96A6",
+     "#C8D0DA",
+     "#3A3A48"
+    ],
+    [
+     "#B8A898",
+     "#E8DCCF",
+     "#4A3E36"
+    ]
+   ]
+  },
+  "walrus": {
+   "fam": "m",
+   "name": "Walrus",
+   "ear": "none",
+   "snout": "flat",
+   "nose": "ink",
+   "stache": 1,
+   "tooth": "tusk",
+   "whisk": 1,
+   "w": 1.22,
+   "pal": [
+    [
+     "#B98A6E",
+     "#D9B49A",
+     "#6A4A3A"
+    ]
+   ]
+  },
+  "badger": {
+   "fam": "m",
+   "name": "Badger",
+   "ear": "round",
+   "snout": "long",
+   "nose": "ink",
+   "mark": "badger",
+   "w": 1.08,
+   "pal": [
+    [
+     "#8E8A92",
+     "#F6F2EC",
+     "#2E2A34"
+    ]
+   ]
+  },
+  "armadillo": {
+   "fam": "m",
+   "name": "Armadillo",
+   "ear": "point",
+   "earIn": 1,
+   "snout": "long",
+   "nose": "pink",
+   "mark": "plates",
+   "pal": [
+    [
+     "#C9A88E",
+     "#E8D2BE",
+     "#8A6A56"
+    ]
+   ]
+  },
+  "tortoise": {
+   "fam": "r",
+   "name": "Tortoise",
+   "ear": "none",
+   "snout": "none",
+   "nose": "holes",
+   "shell": 1,
+   "w": 1.02,
+   "h": 0.96,
+   "pal": [
+    [
+     "#8DAA5E",
+     "#C9D89A",
+     "#5E6E3A"
+    ]
+   ]
+  },
+  "lizard": {
+   "fam": "r",
+   "name": "Gila Lizard",
+   "ear": "none",
+   "snout": "none",
+   "nose": "holes",
+   "mark": "blotch",
+   "slit": 1,
+   "w": 1.14,
+   "h": 0.9,
+   "pal": [
+    [
+     "#E07A3A",
+     "#F6C89A",
+     "#3A2A2A"
+    ],
+    [
+     "#6DBB4A",
+     "#C9E89A",
+     "#2E5E2A"
+    ]
+   ]
+  },
+  "hen": {
+   "fam": "b",
+   "name": "Hen",
+   "beak": "cone",
+   "tuft": "comb",
+   "wattle": 1,
+   "pal": [
+    [
+     "#F6F1E6",
+     "#FFFFFF",
+     "#F2B632"
+    ],
+    [
+     "#C8783E",
+     "#E8B488",
+     "#F2B632"
+    ]
+   ]
+  },
+  "rooster": {
+   "fam": "b",
+   "name": "Rooster",
+   "beak": "cone",
+   "tuft": "bigcomb",
+   "wattle": 1,
+   "pal": [
+    [
+     "#D9603A",
+     "#F2B632",
+     "#F2B632"
+    ],
+    [
+     "#F6F1E6",
+     "#F2B632",
+     "#F2B632"
+    ]
+   ]
+  },
+  "pigeon": {
+   "fam": "b",
+   "name": "Pigeon",
+   "beak": "small",
+   "mark": "neck",
+   "pal": [
+    [
+     "#9AA2B4",
+     "#7FBFA0",
+     "#5A5466"
+    ]
+   ]
+  },
+  "crow": {
+   "fam": "b",
+   "name": "Crow",
+   "beak": "cone",
+   "w": 0.98,
+   "pal": [
+    [
+     "#3A3646",
+     "#5A566A",
+     "#4A4656"
+    ]
+   ]
+  },
+  "loon": {
+   "fam": "b",
+   "name": "Loon",
+   "beak": "long",
+   "mark": "band",
+   "red": 1,
+   "pal": [
+    [
+     "#2E3440",
+     "#F6F2EC",
+     "#3A3E4A"
+    ]
+   ]
+  },
+  "gull": {
+   "fam": "b",
+   "name": "Gull",
+   "beak": "long",
+   "beakDot": 1,
+   "pal": [
+    [
+     "#FFFDF6",
+     "#B8C2CE",
+     "#F2B632"
+    ]
+   ]
+  },
+  "pelican": {
+   "fam": "b",
+   "name": "Pelican",
+   "beak": "pouch",
+   "tuft": "crest",
+   "pal": [
+    [
+     "#F6F2EC",
+     "#F2E2C8",
+     "#F2A23A"
+    ]
+   ]
+  },
+  "puffin": {
+   "fam": "b",
+   "name": "Puffin",
+   "beak": "big",
+   "mark": "face",
+   "pal": [
+    [
+     "#2E2A36",
+     "#FFFDF6",
+     "#EE7A35"
+    ]
+   ]
+  },
+  "owl": {
+   "fam": "b",
+   "name": "Owl",
+   "ear": "tufts",
+   "beak": "hook",
+   "mark": "disc",
+   "bigEye": 1,
+   "w": 1.1,
+   "pal": [
+    [
+     "#9A6A44",
+     "#E8CFA8",
+     "#F2B632"
+    ],
+    [
+     "#B8B2AA",
+     "#F2EEE6",
+     "#F2B632"
+    ],
+    [
+     "#6A4A36",
+     "#D9B48A",
+     "#E8A23A"
+    ]
+   ]
+  },
+  "peacock": {
+   "fam": "b",
+   "name": "Peacock",
+   "beak": "cone",
+   "tuft": "fan",
+   "mark": "eyepatch",
+   "pal": [
+    [
+     "#2E6FB8",
+     "#FFFDF6",
+     "#C9A86A"
+    ]
+   ]
+  },
+  "flamingo": {
+   "fam": "b",
+   "name": "Flamingo",
+   "beak": "bent",
+   "pal": [
+    [
+     "#F29EA0",
+     "#FFD6D0",
+     "#2E2A36"
+    ]
+   ]
+  },
+  "swan": {
+   "fam": "b",
+   "name": "Swan",
+   "beak": "knob",
+   "pal": [
+    [
+     "#FFFDF6",
+     "#F2EEE6",
+     "#EE7A35"
+    ]
+   ]
+  },
+  "parrot": {
+   "fam": "b",
+   "name": "Parrot",
+   "beak": "hookbig",
+   "mark": "face",
+   "pal": [
+    [
+     "#4AAA4A",
+     "#FFFDF6",
+     "#F2B632"
+    ],
+    [
+     "#D9483B",
+     "#FFFDF6",
+     "#F2B632"
+    ],
+    [
+     "#2E8FD0",
+     "#F6F2EC",
+     "#3A3A48"
+    ]
+   ]
+  },
+  "heron": {
+   "fam": "b",
+   "name": "Heron",
+   "beak": "long",
+   "tuft": "plume",
+   "pal": [
+    [
+     "#9AA6B8",
+     "#FFFDF6",
+     "#F2B632"
+    ]
+   ]
+  },
+  "goose": {
+   "fam": "b",
+   "name": "Goose",
+   "beak": "cone",
+   "beakCol": "#EE7A35",
+   "pal": [
+    [
+     "#F6F2EC",
+     "#FFFFFF",
+     "#EE7A35"
+    ],
+    [
+     "#9A9690",
+     "#F6F2EC",
+     "#3A3640"
+    ]
+   ]
+  },
+  "vulture": {
+   "fam": "b",
+   "name": "Vulture",
+   "beak": "hook",
+   "mark": "bald",
+   "ruff": 1,
+   "pal": [
+    [
+     "#F2A4A0",
+     "#3A3440",
+     "#E8D8B8"
+    ]
+   ]
+  }
+ },
+ "inksets": {
+  "classic": {
+   "id": "classic",
+   "name": "Home Whites",
+   "a": "#2E5AAC",
+   "b": "#D9483B",
+   "c": "#F2B632",
+   "paper": "#FFF4DC"
+  },
+  "dusk": {
+   "id": "dusk",
+   "name": "Twi-Night",
+   "a": "#2B2F5E",
+   "b": "#F28C38",
+   "c": "#F2B632",
+   "paper": "#FBEBD3"
+  },
+  "lawn": {
+   "id": "lawn",
+   "name": "Bleacher Lawn",
+   "a": "#3E8E3A",
+   "b": "#D9483B",
+   "c": "#F2B632",
+   "paper": "#FFF4DC"
+  },
+  "grape": {
+   "id": "grape",
+   "name": "Grape Soda",
+   "a": "#6B4C9A",
+   "b": "#F28C38",
+   "c": "#F2D74B",
+   "paper": "#FBEFE0"
+  },
+  "harbor": {
+   "id": "harbor",
+   "name": "Harbor Fog",
+   "a": "#1F7A80",
+   "b": "#E0604F",
+   "c": "#F2C14E",
+   "paper": "#F6F0E2"
+  },
+  "ledger": {
+   "id": "ledger",
+   "name": "Old Timers",
+   "a": "#1B1420",
+   "b": "#C0392B",
+   "c": "#E8B84A",
+   "paper": "#F7EDD8"
+  }
+ }
+}

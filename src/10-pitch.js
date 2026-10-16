@@ -24,12 +24,16 @@
   // Slowed-for-playability flight time: 95 mph -> 0.70 s, 80 -> 0.85 s, 55 -> 1.30 s.
   function flightTime(mph) { return 0.70 * Math.pow(95 / Math.max(40, mph), 1.13); }
 
-  // Release point by hand and windup (RH pitcher's arm is on the catcher's LEFT, -x).
-  var LOOK = { classic: [1.75, 6.0], highkick: [1.55, 6.35], sidearm: [2.75, 4.7], submarine: [2.35, 2.6] };
+  // Release point by hand and windup (RH pitcher's arm is on the catcher's LEFT, -x): [side offset, height, distance
+  // from the plate]. Cartoon scale: these are where the modelled pitchers' throwing hand lets go of the ball (the
+  // windup clips' grip.R at their 1.15 s release marker, assets/anim_pitcher.json) for a pitcher drawn 1.1x the
+  // reference build, standing on the rubber (mound top 0.83 ft). Flight times come from mph alone, so moving the
+  // release point changes the pitch's path, not its timing.
+  var LOOK = { classic: [1.42, 4.91, 57.42], highkick: [1.15, 5.19, 57.42], sidearm: [2.16, 3.85, 57.79], submarine: [1.84, 2.21, 57.23] };
   function release(p) {
     var look = (p && p.look) || {}, r = LOOK[look.windup] || LOOK.classic, side = p && p.hand === 'L' ? 1 : -1;
-    var z = r[1] + (look.build === 'tall' ? 0.3 : look.build === 'stout' ? -0.2 : look.build === 'lanky' ? 0.15 : 0);
-    return { x: side * r[0], y: K.RELEASE_Y, z: z };
+    var z = r[1] + (look.build === 'tall' ? 0.25 : look.build === 'stout' ? -0.15 : look.build === 'lanky' ? 0.12 : 0);
+    return { x: side * r[0], y: r[2], z: z };
   }
 
   function zoneProb(ctx, control) {
@@ -114,10 +118,10 @@
         x += env * (p._wob[0].a * Math.sin(6.283 * p._wob[0].f * s + p._wob[0].ph) + 0.5 * p._wob[1].a * Math.sin(6.283 * p._wob[1].f * 2 * s + p._wob[1].ph));
         z += env * (p._wob[2].a * Math.sin(6.283 * p._wob[2].f * s + p._wob[2].ph) + 0.5 * p._wob[3].a * Math.sin(6.283 * p._wob[3].f * 2 * s + p._wob[3].ph));
       }
-      return { x: x, y: K.RELEASE_Y * (1 - (s * (1 + YD) - YD * s * s)), z: z };
+      return { x: x, y: (r.y || K.RELEASE_Y) * (1 - (s * (1 + YD) - YD * s * s)), z: z };
     }
     // past the plate: carry on along the final direction to the catcher's mitt (y = -3), then stay there
-    var vy = K.RELEASE_Y * (1 - YD) / T;                         // ft/s along -y at the plate
+    var vy = (r.y || K.RELEASE_Y) * (1 - YD) / T;                // ft/s along -y at the plate
     var dxs = (pl.x - b.x - r.x) + b.x * p._p, dzs = (pl.z - b.z - r.z) + b.z * p._p - 4 * p._arc;
     var d = Math.min(3, vy * (t - T)), k = d / (vy * T);
     return { x: pl.x + dxs * k, y: -d, z: Math.max(0.4, pl.z + dzs * k) };

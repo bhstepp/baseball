@@ -27,19 +27,19 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Pack models
+        # compresses raw models (assets/src, or models exported in place) with gltfpack and checks them; models that
+        # are already packed are skipped. If it fails, the build ships what is in assets/ as it is.
+        run: node tools/pack-assets.js || echo "pack-assets failed; shipping the models as they are"
       - name: Build
+        # writes dist/site: index.html, sw.js, manifest, icons and assets/*.glb (models fetched on demand)
         run: node tools/build.js
-      - name: Assemble site
-        run: |
-          mkdir -p _site/icons
-          cp index.html sw.js manifest.webmanifest _site/
-          cp icons/*.png _site/icons/
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload
         uses: actions/upload-pages-artifact@v3
         with:
-          path: _site
+          path: dist/site
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
