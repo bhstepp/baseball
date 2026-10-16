@@ -109,7 +109,8 @@
     R.up.add(sc);
     R.mixer = new T.AnimationMixer(sc);
     R.clips = {}; gltf.animations.forEach((a) => { R.clips[a.name] = a; });
-    R.bones = {}; sc.traverse((o) => { if (o.isBone || o.type === 'Bone' || o.type === 'Object3D') R.bones[o.name] = o; });
+    // GLTFLoader strips dots from node names (hand.R -> handR) and keeps the original in userData.name
+    R.bones = {}; sc.traverse((o) => { if (o.isBone || o.type === 'Bone' || o.type === 'Object3D') { R.bones[o.name] = o; if (o.userData && o.userData.name) R.bones[o.userData.name] = o; } });
     return Object.keys(R.clips);
   }
 
@@ -214,7 +215,27 @@
     return out;
   }
 
+  function snapshot(clip, t) {
+    pose(clip, t);
+    const out = {};
+    R.gltf.scene.traverse((o) => { if (o.isBone) { const p = new T.Vector3(), q = new T.Quaternion(); o.getWorldPosition(p); o.getWorldQuaternion(q); out[(o.userData && o.userData.name) || o.name] = [p, q]; } });
+    const sk = {}; R.heads.forEach((m) => { for (const k in m.morphTargetDictionary) sk[k] = m.morphTargetInfluences[m.morphTargetDictionary[k]]; });
+    return { bones: out, sk };
+  }
+  function compare(a, ta, b, tb, skip) {
+    const A = snapshot(a, ta), B = snapshot(b, tb);
+    let worstA = 0, worstP = 0, wa = '', wp = '';
+    for (const k in A.bones) {
+      if (skip && skip.some((s) => k.startsWith(s))) continue;
+      const [pa, qa] = A.bones[k], [pb, qb] = B.bones[k];
+      const ang = 2 * Math.acos(Math.min(1, Math.abs(qa.dot(qb)))) * 180 / Math.PI, d = pa.distanceTo(pb);
+      if (ang > worstA) { worstA = ang; wa = k; } if (d > worstP) { worstP = d; wp = k; }
+    }
+    let sk = 0; for (const k in A.sk) sk = Math.max(sk, Math.abs(A.sk[k] - B.sk[k]));
+    return { deg: +worstA.toFixed(2), boneDeg: wa, ft: +worstP.toFixed(3), bonePos: wp, face: +sk.toFixed(3) };
+  }
   const viewer = window.viewer = {
+    compare, snapshot,
     _res: { value: new T.Vector2(800, 800) },
     load(buf) {
       return new Promise((ok, err) => { new T.GLTFLoader().parse(buf, '', (g) => { const names = adopt(g); ok(names); }, err); });

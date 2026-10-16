@@ -125,6 +125,26 @@ function sheets() {
     await el.screenshot({ path: path.join(out, name + '.png') });
     console.log('wrote', path.join(out, name + '.png'));
   }
+  if (words.includes('check')) {
+    const D = (c) => info.clips[c];
+    const checks = [
+      ['loop stance', 'stance', 0, 'stance', D('stance')], ['loop coil_hold', 'coil_hold', 0, 'coil_hold', D('coil_hold')],
+      ['loop dizzy', 'dizzy', 0, 'dizzy', D('dizzy')], ['loop watch', 'watch', 0, 'watch', D('watch')],
+      ['loop run', 'run', 0, 'run', D('run')], ['loop trot', 'trot', 0, 'trot', D('trot')],
+      ['stance->stride', 'stance', D('stance'), 'stride', 0], ['stance->power_load', 'stance', 0, 'power_load', 0],
+      ['stride->swing_mid', 'stride', D('stride'), 'swing_mid', 0], ['stride->swing_high', 'stride', D('stride'), 'swing_high', 0],
+      ['stride->swing_low', 'stride', D('stride'), 'swing_low', 0], ['stride->whiff', 'stride', D('stride'), 'whiff', 0],
+      ['stride->take', 'stride', D('stride'), 'take', 0], ['power_load->coil_hold', 'power_load', D('power_load'), 'coil_hold', 0],
+      ['whiff->dizzy', 'whiff', D('whiff'), 'dizzy', 0], ['swing_mid->watch', 'swing_mid', D('swing_mid'), 'watch', 0],
+      ['watch->bat_flip', 'watch', 0, 'bat_flip', 0], ['take->stance', 'take', D('take'), 'stance', 0],
+      ['strike_react->stance', 'strike_react', D('strike_react'), 'stance', 0],
+    ];
+    for (const [name, a, ta, b, tb] of checks) {
+      const r = await page.evaluate(([a, ta, b, tb]) => window.viewer.compare(a, ta, b, tb, ['tail', 'ear', 'cap']), [a, ta, b, tb]);
+      const r2 = await page.evaluate(([a, ta, b, tb]) => window.viewer.compare(a, ta, b, tb), [a, ta, b, tb]);
+      console.log(name.padEnd(24), 'body', JSON.stringify(r), ' incl. tail/ears/cap', r2.deg + 'deg', r2.boneDeg);
+    }
+  }
   if (all.sheets.game) {
     ['swing_high', 'swing_mid', 'swing_low'].forEach((c, i) => console.log('contact', c, 'bat_sweet world', JSON.stringify(all.sheets.game[2 + i].bat_sweet)));
   }
