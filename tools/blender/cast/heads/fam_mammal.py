@@ -226,6 +226,47 @@ def region_muzzle(scale=1.06, dz=0.0):
     return make
 
 
+def region_face_front(back=-0.02, top=None, neck_z=3.45):
+    """The whole front of the face (forehead, eyes, cheeks, muzzle) in a light colour, the back of the head and the
+    nape in the main coat (possums, some cats). back: how far behind the cranium centre the boundary sits."""
+    def make(geo):
+        cy = geo.P['cran']['c'][1]
+
+        def f(P):
+            P = np.asarray(P, float)
+            s_, z = cyl(P, cy)
+            a = np.abs(s_)
+            d = (P[..., 1] - cy) - back - 0.18 * np.clip((a - 0.55) / 0.4, 0, 1)
+            d = np.maximum(d, neck_z - z)
+            if top is not None:
+                d = np.maximum(d, z - top)
+            return d
+        return f
+    return make
+
+
+def region_eye_patches(r=(0.20, 0.30, 0.18), dz=0.0, sides=(1, -1)):
+    """Dark patches round the eyes (possums, raccoon-ish masks, pandas)."""
+    def make(geo):
+        e = geo.P['eye']
+        terms = [SD.ellipsoid((s * e['x'], -0.45, e['z'] + dz), r) for s in sides]
+        return SD.union(*terms) if len(terms) > 1 else terms[0]
+    return make
+
+
+def region_stripe(width=0.09, z_bot=3.95, back=0.9, width_back=0.16):
+    """A light stripe from the bridge of the nose over the top of the head to the nape (skunks)."""
+    def make(geo):
+        def f(P):
+            P = np.asarray(P, float)
+            x, y, z = P[..., 0], P[..., 1], P[..., 2]
+            t = np.clip((y + 0.6) / (back + 0.6), 0, 1)
+            w = width + (width_back - width) * t
+            return np.maximum(np.abs(x) - w, z_bot - z)
+        return f
+    return make
+
+
 def region_blaze(z_top=4.75, z_bot=3.85, w_top=0.07, w_bot=0.13):
     """A white stripe down the middle of the face (horses)."""
     def make(geo):
@@ -274,7 +315,7 @@ def region_spots(rng, n=4, zone=((-0.6, 0.6), (-0.4, 0.5), (3.95, 4.7)), size=(0
 
 
 # ------------------------------------------------------------------------------------------- face extras
-def whiskers(ctx, head, geo, n=3, length=0.42, mat='fur_dark', droop=0.05, spread=0.06, root=None):
+def whiskers(ctx, head, geo, n=3, length=0.42, mat='fur_dark', droop=0.05, spread=0.06, root=None, radius=0.011):
     """Thin whisker strands from the sides of the muzzle."""
     m = geo.mouth
     out = []
@@ -289,7 +330,7 @@ def whiskers(ctx, head, geo, n=3, length=0.42, mat='fur_dark', droop=0.05, sprea
                 a = np.asarray(root, float) * np.array([s, 1, 1]) + np.array([0, 0, (i - (n - 1) / 2) * spread])
             d = nrm(np.array([s * 1.0, -0.15, 0.15 * (1 - i) - droop]))
             pts = [a - d * 0.02, a + d * length * 0.5 + np.array([0, 0, -droop * 0.3]), a + d * length + np.array([0, 0, -droop])]
-            out.append(K.tube(K.curve_pts(pts, 3), np.linspace(0.011, 0.004, 7), 4, mat, 'whisker'))
+            out.append(K.tube(K.curve_pts(pts, 3), np.linspace(radius, radius * 0.36, 7), 4, mat, 'whisker'))
     head.parts += out
     return out
 
@@ -323,6 +364,16 @@ def bandaid(ctx, head, geo, at=None, mat='accessory_a', ang=0.5):
     R = rot @ R
     g = SD.box(c, (0.13, 0.05, 0.012), R=R, rnd=0.01) if hasattr(SD, 'box') else SD.ellipsoid(c, (0.13, 0.05, 0.012), R=R)
     p = K.blob(g, c, 0.2, 40, mat, 'bandaid', h=0.006)
+    head.parts.append(p)
+    return p
+
+
+def toothpick(ctx, head, geo, corner, mat='accessory_a', length=0.30):
+    """A toothpick jutting out of the mouth corner (on the jaw), tilted up and out."""
+    a = np.asarray(corner, float) + np.array([0.02, 0.06, 0.0])
+    d = nrm(np.array([-0.85, -0.45, 0.22]))
+    pts = [a - d * 0.06, a + d * length * 0.5, a + d * length]
+    p = K.tube(pts, np.array([0.012, 0.011, 0.006]), 5, mat, 'toothpick', bone='jaw')
     head.parts.append(p)
     return p
 
@@ -600,6 +651,8 @@ def accessories(ctx, head, geo):
             K.gum_bubble(head, np.array([0.0, m.front + 0.12, m.z0]), r=0.12)
         if acc.get('stalk'):
             K.stalk(head, corner, side=-1, mat='accessory_a')
+        if acc.get('toothpick'):
+            toothpick(ctx, head, geo, corner)
         hair = acc.get('hair')
         if hair == 'mustache':
             mustache(ctx, head, geo, mat=acc.get('hair_mat', 'fur_dark'))

@@ -129,10 +129,21 @@ BB.Crew = (function () {
     var key = keyOf(park, pitcher);
     if (CUR && CUR.key === key) return CUR.promise;
     var prev = CUR, R = roster(park, pitcher);
+    // members the previous game already has (same character, same file, same colours: e.g. the briefing prepared the
+    // park's team before the game named its pitcher) carry over instead of loading again
+    if (prev && !prev.released) R.list.forEach(function (M, k) {
+      var O = prev.members[M.role];
+      if (O && O.actor && !O.actor.disposed && O.id === M.id && O.files[0] === M.files[0] && O.state !== 'failed' && JSON.stringify(O.colors) === JSON.stringify(M.colors) &&
+        JSON.stringify(O.decals) === JSON.stringify(M.decals)) { R.list[k] = O; O.carried = true; }
+    });
     var game = { key: key, park: park, pitcher: pitcher, team: R.team, list: R.list, members: {}, libs: {}, released: false, t0: now() };
     R.list.forEach(function (M) { game.members[M.role] = M; });
     CUR = game;
-    game.promise = Promise.all(R.list.map(function (M) { return loadMember(game, M); })).then(function () {
+    game.promise = Promise.all(R.list.map(function (M) {
+      if (!M.carried) return loadMember(game, M);
+      M.carried = false;
+      return (M.loading || Promise.resolve()).then(function () { M.libs.forEach(function (n) { library(game, n); }); return M.state === 'ready'; });   // keep its libraries referenced
+    })).then(function () {
       game.ms = now() - game.t0; game.done = true;
       if (prev) releaseGame(prev);   // after the new game holds its files: shared ones are not parsed twice
       return status();
@@ -143,7 +154,11 @@ BB.Crew = (function () {
   function releaseGame(game) {
     if (game.released) return;
     game.released = true;
-    game.list.forEach(function (M) { if (M.actor) { try { M.actor.dispose(); } catch (e) {} M.actor = null; } M.state = 'released'; });
+    game.list.forEach(function (M) {
+      if (CUR && CUR !== game && CUR.members[M.role] === M) return;   // carried over into the current game
+      if (M.actor) { try { M.actor.dispose(); } catch (e) {} M.actor = null; }
+      M.state = 'released';
+    });
     for (var n in game.libs) if (game.libs[n].gltf) BB.Assets.release(n);
   }
   // the frame's view names the park and pitcher: (re)prepare lazily when a game arrives without a briefing
@@ -157,7 +172,7 @@ BB.Crew = (function () {
     var lv = has(M.base) ? M.base : has(1 - M.base) ? 1 - M.base : -1;
     if (lv < 0) { M.state = 'missing'; return Promise.resolve(false); }
     M.state = 'loading'; M.lod = lv;
-    return AC.create('cast', { asset: M.files[lv], baseLod: lv, colors: M.colors, decalText: M.decals || {} }).then(function (A) {
+    return (M.loading = AC.create('cast', { asset: M.files[lv], baseLod: lv, colors: M.colors, decalText: M.decals || {} }).then(function (A) {
       if (game.released) { A.dispose(); return false; }
       M.actor = A; A.root.visible = false;
       if (M.hand === 'L') A.setMirror(true);                     // left-handers: the right-handed model mirrored
@@ -171,7 +186,7 @@ BB.Crew = (function () {
       M.state = 'failed'; M.error = String((e && e.message) || e);
       console.warn('BB.Crew: ' + M.role + ' (' + M.files[lv] + ') stays procedural: ' + M.error);
       return false;
-    });
+    }));
   }
   function hipOf(A) {
     var h = +(A.extras && A.extras.hipHeight);

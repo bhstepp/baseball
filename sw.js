@@ -3,12 +3,12 @@
    Character models (assets/*.glb, fetched by BB.Assets when a game needs them) live in their own cache that outlives
    releases: their URLs carry a content hash (?v=...), so an unchanged model is never downloaded twice; the page asks
    for a background pre-cache of the current list after it loads (message 'precache-assets'), so play works offline. */
-var VERSION = 'e8531c4d4c';
+var VERSION = '3c1b3c2a64';
 var APP = 'halftone-app-' + VERSION;
 var FONTS = 'halftone-fonts-v1';
 var MODELS = 'halftone-assets-v1';
 var PRECACHE = ['./', 'index.html', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
-var ASSETS = ["assets/anim_catcher.glb?v=b57a53f68e","assets/anim_fielder.glb?v=e754fcb6d0","assets/anim_pitcher.glb?v=ba1cb420da","assets/anim_umpire.glb?v=e752d4f7c5","assets/rocco_lod1.glb?v=b0286becff"];
+var ASSETS = ["assets/anim_catcher.glb?v=b57a53f68e","assets/anim_fielder.glb?v=e754fcb6d0","assets/anim_pitcher.glb?v=ba1cb420da","assets/anim_umpire.glb?v=e752d4f7c5","assets/char_c1-04.glb?v=fbaf327daa","assets/char_c1-04_lod1.glb?v=d0773797f0","assets/char_c1-05_lod1.glb?v=3296a07729","assets/char_c1-06_lod1.glb?v=08a2caa48a","assets/char_c1-07_lod1.glb?v=9154f5d66c","assets/char_c1-08_lod1.glb?v=f87c678616","assets/char_c1-09_lod1.glb?v=855b790787","assets/char_c1-10_lod1.glb?v=9b996e1408","assets/char_c1-11_lod1.glb?v=4688b2a92f","assets/char_mate_beaver_lod1.glb?v=4bdbe9bf94","assets/char_mate_fox_lod1.glb?v=dbba7d4f3f","assets/char_mate_otter_lod1.glb?v=dedc56bb4c","assets/char_p_clem.glb?v=c4101b6cc1","assets/char_p_clem_lod1.glb?v=ec1d8668ce","assets/char_p_dottie.glb?v=3cda7c0bec","assets/char_p_dottie_lod1.glb?v=907190c706","assets/char_p_hank.glb?v=622f34d5f4","assets/char_p_hank_lod1.glb?v=f4ea33870f","assets/char_p_ox.glb?v=1c76f77545","assets/char_p_ox_lod1.glb?v=b968ea68d6","assets/char_ump.glb?v=f5cc1b8069","assets/char_ump_lod1.glb?v=40e2483137","assets/rocco_lod1.glb?v=b0286becff"];
 
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(APP).then(function (c) { return c.addAll(PRECACHE); }).then(function () { return self.skipWaiting(); }));

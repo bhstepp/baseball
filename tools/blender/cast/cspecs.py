@@ -155,7 +155,7 @@ def palette_colors(species, pal, seed=0):
 # ------------------------------------------------------------------------------------------- characters
 def base_spec(id_, species, role, name, number, seed, face, team_idx, build=None):
     if species not in species_registry():
-        raise KeyError('no species module heads/%s.py (with a SPECIES entry) for %s' % (species, id_))
+        raise MissingSpecies(species)
     sp = species_registry()[species]
     bname = build or sp['build']
     b, bp = BUILDS[bname]
@@ -233,6 +233,19 @@ def _apply(s, over):
         else:
             s[k] = v
     return s
+
+
+class MissingSpecies(KeyError):
+    pass
+
+
+def add(S, pending, cid, make):
+    """S[cid] = make(), or note the character as pending when its species module does not exist yet (a park can
+    list its whole roster while its species heads are still being written)."""
+    try:
+        S[cid] = make()
+    except MissingSpecies as e:
+        pending[cid] = e.args[0] if e.args else 'missing species'
 
 
 _SPECS = None
