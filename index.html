@@ -8640,10 +8640,20 @@ BB.Anim = (function () {
   var INK = '#1B1420', CREAM = '#FFF4DC', MUSTARD = '#F2B632', BRICK = '#D9483B', TEAL = '#7FD1D9';
 
   // ------------------------------------------------------------------ tunables
+  // ?rocco=old shows the game as it was before the Rocco pilot: the procedural Rocco and the old bat-scene staging
+  // (add &stage=new to see the procedural Rocco on the new staging, which is what players get if the model fails).
+  function flag(re) { try { return re.test(location.search); } catch (e) { return false; } }
+  var OLD = flag(/[?&]rocco=(old|0|off|proc)(&|$)/) && !flag(/[?&]stage=new(&|$)/);
   var ROCCO = { x: -2.35, y: 0.9, size: 1.12 };             // render spot of the right-handed hero (physics uses K.BATTER_X)
-  var CATCHER = { x: 0.4, y: -5.4, size: 0.9 };
+  var CATCHER = OLD ? { x: 0.4, y: -5.4, size: 0.9 } : { x: 0.55, y: -5.2, size: 0.8 };
   var UMP = { x: 1.75, y: -3.2, size: 1.08, off: 4.6 };
-  var BATCAM = { pos: [-0.9, -18, 8.0], look: [0.2, 30, -1.6], fov: 38 };
+  // bat camera. Old: fixed pose and fov. New: further back on a longer lens (bigger pitcher, smaller catcher), centred
+  // on the zone (aim), sized so the zone gets ppf px per ft (min of ppfW * width, ppfH * height) and shifted (lens
+  // shift, so verticals stay put) to put the aim point at screen fraction `at`. Solved per screen size in layoutBat.
+  var BATCAM = OLD ? { pos: [-0.9, -18, 8.0], look: [0.2, 30, -1.6], fov: 38 } : { pos: [-1.0, -30, 8.6], aim: [0, 0, 2.5], ppfW: 0.16, ppfH: 0.074, at: [0.56, 0.62] };
+  var PITCHER_K = OLD ? 1 : 1;                               // pitcher size multiplier
+  // the modelled Rocco (BB.Rocco, 36-rocco.js): where his contact frame meets a middle-middle pitch
+  var HERO_AIM = { x: 0, y: 0.1, z: 2.5 };
 
   var S = {
     canvas: null, renderer: null, scene: null, W: 390, H: 844, dpr: 1, pr: 1, prCap: 2, failed: false,
@@ -8695,6 +8705,26 @@ BB.Anim = (function () {
     S.batFrame = new T.Group(); S.scene.add(S.batFrame);
     setInks(S.ink || BB.INKSETS[0]);
     resize(window.innerWidth || 390, window.innerHeight || 844, Math.min(window.devicePixelRatio || 1, 2));
+    if (BB.Rocco && BB.Rocco.boot) BB.Rocco.boot();   // async: the procedural Rocco stands in until the model is ready
+  }
+  // the modelled hero is used once BB.Rocco has parsed rocco.glb (never with ?rocco=old)
+  function glb() {
+    if (S.glbFailed || !BB.Rocco || !BB.Rocco.ready || !BB.Rocco.ready()) return false;
+    if (!S.hero) {
+      try {
+        var root = BB.Rocco.root(), prop = BB.Rocco.prop();
+        S.scene.add(root); if (prop) S.scene.add(prop);
+        BB.Rocco.setColors(S.col);
+        var size = BB.Rocco.autoSize(), pl = BB.Rocco.solvePlacement(HERO_AIM, size);
+        S.hero = { x: pl.x, y: pl.y, size: size };
+        BB.Rocco.place(S.hero.x, S.hero.y, 0, PI / 2, size);
+        var br = BB.Rocco.batRest();
+        if (br) S.hero.batRest = { x: br.p.x, y: br.p.y, dx: br.dir.x, dy: br.dir.y };
+        BB.Rocco.poseTitle(0);
+        try { S.renderer.compile(S.scene, S.cam); } catch (e) {}
+      } catch (e) { console.warn('BB.Render: model Rocco disabled', e); S.glbFailed = true; return false; }
+    }
+    return true;
   }
 
   function softwareGL() {
@@ -8724,13 +8754,20 @@ BB.Anim = (function () {
   }
   // the bat camera: fixed per screen size; camBase is never shaken so screenToPlate/plateToScreen stay exact
   function layoutBat() {
-    var a = S.W / S.H, fov = BATCAM.fov * (a > 0.62 ? 0.9 : 1);
+    var B = BATCAM, W = S.W, H = S.H, fov, look = batLook();
+    if (B.look) fov = B.fov * (W / H > 0.62 ? 0.9 : 1);
+    else {
+      var ppf = Math.min(B.ppfW * W, B.ppfH * H), d = Math.hypot(B.pos[0] - B.aim[0], B.pos[1] - B.aim[1], B.pos[2] - B.aim[2]);
+      fov = 2 * Math.atan(H / 2 / (ppf * d)) * 180 / PI;
+    }
     [S.camBat, S.camBase].forEach(function (c) {
-      c.fov = fov; c.position.set(BATCAM.pos[0], BATCAM.pos[1], BATCAM.pos[2]);
-      c.lookAt(BATCAM.look[0], BATCAM.look[1], BATCAM.look[2]);
+      c.fov = fov; c.position.set(B.pos[0], B.pos[1], B.pos[2]);
+      c.lookAt(look[0], look[1], look[2]);
+      if (B.at) c.setViewOffset(W, H, (0.5 - B.at[0]) * W, (0.5 - B.at[1]) * H, W, H); else if (c.view) c.clearViewOffset();
       c.updateProjectionMatrix(); c.updateMatrixWorld(true);
     });
   }
+  function batLook() { return BATCAM.look || BATCAM.aim; }
   function plateToScreen(x, z) {
     V.set(x, 0, z).project(S.camBase || new T.PerspectiveCamera());
     return { x: (V.x + 1) / 2 * S.W, y: (1 - V.y) / 2 * S.H };
@@ -8758,6 +8795,7 @@ BB.Anim = (function () {
     S.inkKey = key;
     S.col = { a: tame(ink.a), b: tame(ink.b), c: tame(ink.c) };
     buildHero();
+    if (BB.Rocco && BB.Rocco.setColors) BB.Rocco.setColors(S.col);
     S.hud.key = '';
   }
   function heroOpts(species, simple) {
@@ -8765,6 +8803,8 @@ BB.Anim = (function () {
     return { species: species, simple: simple, size: ROCCO.size, shirt: '#FFF9EE', pants: '#FFF9EE', trim: c.a, cap: c.a, brim: TN.shade(c.a, 0.8), socks: c.a, shoes: INK, shoeTip: c.b,
       number: simple ? null : 7, letter: simple ? null : 'R', numColor: c.a, numEdge: INK, belt: INK, capPatch: '#FFF9EE' };
   }
+  // layer 1 = inked (docs/PILOT-ROCCO.md): characters, their gear, the bat and the ball get BB.Ink's lines
+  function inkMark(o, opts) { if (o && BB.Ink && BB.Ink.mark) BB.Ink.mark(o, opts); return o; }
   function buildHero() {
     if (S.rocco) dispose(S.rocco);
     S.rocco = C.make(heroOpts('raccoon', false));
@@ -8772,8 +8812,9 @@ BB.Anim = (function () {
     if (S.bat) { S.bat.parent && S.bat.parent.remove(S.bat); disposeObj(S.bat); }
     S.bat = C.makeBat({ wood: '#D9A066', tape: S.col.b, stripe: INK });
     S.rocco.up.add(S.bat);
+    inkMark(S.rocco.root); inkMark(S.bat);
     S.mates.forEach(dispose);
-    S.mates = ['otter', 'fox', 'beaver'].map(function (sp) { var m = C.make(Object.assign(heroOpts(sp, true), { size: 1.05 })); S.scene.add(m.root); return m; });
+    S.mates = ['otter', 'fox', 'beaver'].map(function (sp) { var m = C.make(Object.assign(heroOpts(sp, true), { size: 1.05 })); S.scene.add(m.root); inkMark(m.root); return m; });
   }
   function ensureOpponents(pitcher) {
     var id = (pitcher && pitcher.id) || 'none';
@@ -8788,17 +8829,17 @@ BB.Anim = (function () {
     S.pitcher = C.make({ species: sp, size: size, build: look.build, shirt: road, pants: road, trim: team, cap: team, brim: TN.shade(team, 0.75), socks: team, shoes: INK,
       number: look.number != null ? look.number : 1, numColor: team, numEdge: INK, glove: 'L', mirror: pitcher && pitcher.hand === 'L', headScale: boss ? 1.08 : 1 });
     S.pitcher.boss = boss; S.pitcher.style = look.windup || 'classic';
-    S.scene.add(S.pitcher.root);
+    S.scene.add(S.pitcher.root); inkMark(S.pitcher.root);
     S.catcher = C.make({ species: sp, size: CATCHER.size, build: 'stout', shirt: road, pants: road, trim: team, cap: TN.shade(team, 0.8), socks: team, shoes: INK, glove: 'C', mask: true,
       chestPad: TN.shade(team, 0.7), shinPads: TN.shade(team, 0.7), number: 2, numColor: team, numEdge: INK });
     S.catcher.cap && (S.catcher.cap.rotation.y = PI);
-    S.scene.add(S.catcher.root);
+    S.scene.add(S.catcher.root); inkMark(S.catcher.root);
     S.fielders = BB.Bat && BB.Bat.ORDER ? BB.Bat.ORDER.map(function (pos, i) {
       var f = C.make({ species: sp, simple: true, size: 1.25, shirt: road, pants: road, trim: team, cap: team, socks: team, shoes: INK, glove: i === 1 ? 'C' : 'L' });
-      S.scene.add(f.root); return f;
+      S.scene.add(f.root); inkMark(f.root); return f;
     }) : [];
     S.species = sp;
-    if (!S.ump) { S.ump = C.make({ species: 'mole', size: UMP.size, build: 'stout', shirt: '#2B2F5E', pants: '#7A7684', trim: '#1B1420', cap: '#1B1420', socks: '#1B1420', shoes: INK, mask: true, belt: '#1B1420' }); S.scene.add(S.ump.root); }
+    if (!S.ump) { S.ump = C.make({ species: 'mole', size: UMP.size, build: 'stout', shirt: '#2B2F5E', pants: '#7A7684', trim: '#1B1420', cap: '#1B1420', socks: '#1B1420', shoes: INK, mask: true, belt: '#1B1420' }); S.scene.add(S.ump.root); inkMark(S.ump.root); }
   }
   function disposeObj(o) {
     o.traverse(function (n) {
@@ -8815,7 +8856,7 @@ BB.Anim = (function () {
     S.ballG = new T.Group();
     S.ball = C.makeBall();
     S.ballG.add(S.ball);
-    S.scene.add(S.ballG);
+    S.scene.add(S.ballG); inkMark(S.ballG, { weight: 0.9 });
     S.ballShadow = new T.Mesh(new T.CircleGeometry(1, 16), new T.MeshBasicMaterial({ color: 0x1B1420, transparent: true, opacity: 0.25, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -14, polygonOffsetUnits: -44 }));
     S.scene.add(S.ballShadow);
   }
@@ -8881,6 +8922,7 @@ BB.Anim = (function () {
     if (info.ground && info.pos[1] < 0.15) { bat.position.y = 0.15; }
   }
   function hideAll() {
+    if (S.hero) { BB.Rocco.root().visible = false; var pr = BB.Rocco.prop(); if (pr) pr.visible = false; }
     [S.rocco, S.pitcher, S.catcher, S.ump].forEach(function (c) { if (c) c.root.visible = false; });
     S.fielders.forEach(function (f) { f.root.visible = false; });
     S.mates.forEach(function (f) { f.root.visible = false; });
@@ -8911,25 +8953,29 @@ BB.Anim = (function () {
     var t = v.time || 0, p = v.pitch, ci = contactInfo(v), sw = v.swing;
     st.ci = ci;
     // --- Rocco
-    var R = S.rocco;
-    place(R, ROCCO.x, ROCCO.y, 0, PI / 2);
-    syncBatFrame();
-    var tgt = null;
-    if (p && p.plate) tgt = toUp(R, p.plate.x, 0.25, p.plate.z);
-    var o = { time: t, load: v.loading != null ? v.loading : 0, swingT: sw ? sw.t : null, contact: !!(ci && ci.hit), tgt: tgt, power: sw && sw.power,
-      whiff: !!(sw && sw.result && !sw.result.contact), tc: ci ? ci.tc : null, hr: !!(v.play && v.play.type === 'HR'), onFire: v.onFire };
-    if (v.windup != null && !v.loading) o.load = 0.18 * smooth((v.windup - 0.6) / 0.4); // a little natural coil as the pitcher strides
-    var pose = A.batter(o);
-    C.apply(R, pose);
-    var bi = A.batterBat(pose, o);
-    if (bi.free) { S.bat.parent !== S.batFrame.userData.up && S.batFrame.userData.up.add(S.bat); S.bat.position.set(bi.pos[0], Math.max(0.15, bi.pos[1]), bi.pos[2]); V2.set(bi.dir[0], bi.dir[1], bi.dir[2]).normalize(); _q.setFromUnitVectors(_up, V2); S.bat.quaternion.copy(_q); }
-    else poseBat(R, S.bat, bi);
-    var smear = sw && sw.t > 0.012 && sw.t < 0.13;
-    S.bat.scale.set(1, smear ? 1.22 : 1, 1);
-    st.pose = pose; st.o = o;
+    if (glb()) heroBat(v, st, ci);
+    else {
+      var R = S.rocco;
+      place(R, ROCCO.x, ROCCO.y, 0, PI / 2);
+      syncBatFrame();
+      var tgt = null;
+      if (p && p.plate) tgt = toUp(R, p.plate.x, 0.25, p.plate.z);
+      var o = { time: t, load: v.loading != null ? v.loading : 0, swingT: sw ? sw.t : null, contact: !!(ci && ci.hit), tgt: tgt, power: sw && sw.power,
+        whiff: !!(sw && sw.result && !sw.result.contact), tc: ci ? ci.tc : null, hr: !!(v.play && v.play.type === 'HR'), onFire: v.onFire };
+      if (v.windup != null && !v.loading) o.load = 0.18 * smooth((v.windup - 0.6) / 0.4); // a little natural coil as the pitcher strides
+      var pose = A.batter(o);
+      C.apply(R, pose);
+      var bi = A.batterBat(pose, o);
+      if (bi.free) { S.bat.parent !== S.batFrame.userData.up && S.batFrame.userData.up.add(S.bat); S.bat.position.set(bi.pos[0], Math.max(0.15, bi.pos[1]), bi.pos[2]); V2.set(bi.dir[0], bi.dir[1], bi.dir[2]).normalize(); _q.setFromUnitVectors(_up, V2); S.bat.quaternion.copy(_q); }
+      else poseBat(R, S.bat, bi);
+      var smear = sw && sw.t > 0.012 && sw.t < 0.13;
+      S.bat.scale.set(1, smear ? 1.22 : 1, 1);
+      st.pose = pose; st.o = o;
+    }
     // --- pitcher
     var Pm = S.pitcher, rel = releaseOf(v);
     place(Pm, 0, 60.5, 0.83, 0);
+    if (PITCHER_K !== 1) Pm.root.scale.setScalar(PITCHER_K);
     var react = null, reactT = 0;
     if (ci && ci.hit && v.play) { react = v.play.type === 'HR' || v.play.type === '3B' || v.play.type === '2B' ? 'jaw' : v.play.type === 'OUT' || v.play.type === 'FOUL' ? null : 'grr'; reactT = ci.tc; }
     else if (p && v.pitchT != null && v.pitchT > p.T + 0.15 && !(ci && ci.hit) && (sw || p.strike)) { react = 'smug'; reactT = v.pitchT - p.T - 0.15; }
@@ -8985,14 +9031,40 @@ BB.Anim = (function () {
     // --- camera: shake + contact punch
     var cam = S.camBat;
     cam.position.set(BATCAM.pos[0], BATCAM.pos[1], BATCAM.pos[2]);
-    var shake = (v.shake || 0);
-    if (shake > 0) cam.position.add(V.set(Math.sin(t * 71) * 0.16 * shake, 0, Math.cos(t * 83) * 0.12 * shake));
-    cam.lookAt(BATCAM.look[0], BATCAM.look[1], BATCAM.look[2]);
+    var shake = (v.shake || 0), look = batLook(), sk = OLD ? 1 : 0.6;   // the longer lens magnifies the shake
+    if (shake > 0) cam.position.add(V.set(Math.sin(t * 71) * 0.16 * shake * sk, 0, Math.cos(t * 83) * 0.12 * shake * sk));
+    cam.lookAt(look[0], look[1], look[2]);
     var punch = ci && ci.hit ? Math.max(0, 1 - ci.tc / 0.25) * (ci.sweet ? 1 : 0.6) : 0;
     cam.fov = S.camBase.fov * (1 - 0.07 * punch);
     cam.updateProjectionMatrix();
     S.cam = cam;
   }
+  // ------------------------------------------------------------------ the modelled Rocco (BB.Rocco, 36-rocco.js)
+  var PITCHER_EYE = { x: 0, y: 59, z: 7 };
+  function latency() { try { var s = BB.Meta && BB.Meta.settings ? BB.Meta.settings() : null; return s && s.latencyMs != null ? s.latencyMs / 1000 : K.INPUT_LATENCY; } catch (e) { return K.INPUT_LATENCY; } }
+  function heroBat(v, st, ci) {
+    var p = v.pitch, H = S.hero;
+    BB.Rocco.place(H.x, H.y, 0, PI / 2, H.size);
+    BB.Rocco.setHot(v.onFire);
+    var o = { ci: ci, pitcherHead: PITCHER_EYE, latency: latency(), hr: !!(v.play && v.play.type === 'HR') };
+    if (p && v.pitchT != null) {
+      if (ci && ci.hit && v.play) { o.ball = pitchPos(p, ci.cT); o.ballAfter = v.play.ballAt(Math.max(0, ci.tc) + 0.2); }
+      else o.ball = pitchPos(p, Math.min(v.pitchT + 0.05, p.T + 0.3));
+      o.contactPt = ci ? pitchPos(p, ci.cT) : pitchPos(p, p.T);
+    }
+    st.hero = BB.Rocco.poseBat(v, o); st.heroO = o; st.glb = true;
+    S.bat.visible = false;
+  }
+  // fx anchors that follow whichever Rocco is on screen
+  function heroHead(st, lift) {
+    if (st && st.glb) { var h = BB.Rocco.headPoint(V3); return { x: h.x, y: h.y, z: h.z + (lift || 0) }; }
+    var hp = worldPt(S.rocco, S.rocco.headC); hp.z += lift || 0; return hp;
+  }
+  function heroBatTip(st) {
+    if (st && st.glb) { var b = BB.Rocco.point('bat_tip', V3); return { x: b.x, y: b.y, z: b.z }; }
+    S.bat.updateMatrixWorld(true); V3.set(0, 2.8, 0); S.bat.localToWorld(V3); return { x: V3.x, y: V3.y, z: V3.z };
+  }
+  function heroFeet(st) { var r = st && st.glb ? BB.Rocco.root().position : S.rocco.root.position; return { x: r.x, y: r.y, z: 0.1 }; }
   function showFieldersIdle(t, cam) {
     if (!S.fielders.length || !BB.Bat) return;
     cam.updateMatrixWorld(true);
@@ -9016,7 +9088,7 @@ BB.Anim = (function () {
   }
   function runnerPos(m, tx, dur) {
     var to = m.to === -1 ? m.from + 1 : Math.min(4, m.to), out = m.to === -1;
-    var startT = m.from === 0 ? 0.32 : 0.12, runDur = Math.max(0.6, dur + 0.45 - startT);
+    var startT = m.from === 0 ? S.batStart || 0.32 : 0.12, runDur = Math.max(0.6, dur + 0.45 - startT);
     var u = clamp((tx - startT) / runDur, 0, 1);
     if (out) u = Math.min(u * 1.25, 0.86);
     var p = basePath(m.from, to, u);
@@ -9034,7 +9106,9 @@ BB.Anim = (function () {
   function doField(v, st) {
     var play = v.play, t = v.playT || 0, time = v.time || 0;
     if (!play) { doBat(v, st); return; }
-    var dur = play.dur || 3;
+    var dur = play.dur || 3, hero = glb();
+    // the modelled Rocco flips his bat on a homer before he starts the trot
+    S.batStart = hero && play.type === 'HR' && BB.Rocco.has('bat_flip') ? 0.95 : 0.32;
     // main holds the field scene a little after playT reaches dur ('between'): keep the runners and camera going
     if (S.endPlay !== play) { S.endPlay = play; S.endAt = null; }
     if (t >= dur - 1e-3) { if (S.endAt == null) S.endAt = time; } else S.endAt = null;
@@ -9087,6 +9161,7 @@ BB.Anim = (function () {
       var pos = rp, arrived = u >= 1;
       var ch;
       if (m.from === 0) { ch = R; batterMoved = true; } else ch = S.mates[(mi++) % S.mates.length];
+      if (m.from === 0 && hero) { heroRunner(v, m, rp, tx, t, play, cam, st); return; }
       if (m.from === 0 && t < startT) { batterAtHome(v, t, play); return; }
       place(ch, pos.x, pos.y, 0, arrived && to === 4 ? yawToward(cam.position.x - pos.x, cam.position.y - pos.y) : yawToward(pos.dx, pos.dy));
       var spd = arrived ? 0 : bases * 90 / runDur;
@@ -9100,7 +9175,7 @@ BB.Anim = (function () {
         S.bat.position.set(fb.pos[0], Math.max(0.16, fb.pos[1]), fb.pos[2]); V2.set(fb.dir[0], fb.dir[1], fb.dir[2]).normalize(); _q.setFromUnitVectors(_up, V2); S.bat.quaternion.copy(_q);
       }
     });
-    if (!batterMoved) batterAtHome(v, t, play);
+    if (!batterMoved) { if (hero) heroHome(v, t, play, st); else batterAtHome(v, t, play); }
     // runners who stayed put
     var bases = (v.hud && v.hud.bases) || [];
     bases.forEach(function (on, k) {
@@ -9123,6 +9198,30 @@ BB.Anim = (function () {
     S.batFrame.position.set(ROCCO.x, ROCCO.y, 0); S.batFrame.rotation.set(0, 0, PI / 2);
     if (!S.batFrame.userData.up) { var u = new T.Group(); u.rotation.x = PI / 2; u.scale.setScalar(ROCCO.size); S.batFrame.add(u); S.batFrame.userData.up = u; }
   }
+  // the modelled Rocco: at home after contact (follow-through, watch, bat flip), then running / trotting the bases
+  var FIELD_DELAY = 0.22;   // main lingers this long on the bat scene after contact (60-main fieldDelay)
+  function heroHome(v, t, play, st) {
+    var H = S.hero;
+    BB.Rocco.place(H.x, H.y, 0, PI / 2, H.size);
+    BB.Rocco.setHot(v.onFire);
+    BB.Rocco.poseHome(v, { tc: t + FIELD_DELAY, hr: play.type === 'HR', plateZ: v.pitch && v.pitch.plate ? v.pitch.plate.z : 2.5, ball: play.ballAt(Math.min(t + 0.3, play.dur)) });
+    st.glb = true; S.bat.visible = false;
+  }
+  function heroRunner(v, m, rp, tx, t, play, cam, st) {
+    if (t < rp.startT) { heroHome(v, t, play, st); return; }
+    var H = S.hero, arrived = rp.u >= 1;
+    var yaw = arrived && rp.to === 4 ? yawToward(cam.position.x - rp.x, cam.position.y - rp.y) : yawToward(rp.dx, rp.dy);
+    BB.Rocco.place(rp.x, rp.y, 0, yaw, H.size);
+    BB.Rocco.setHot(v.onFire);
+    var bases = rp.to - m.from;
+    BB.Rocco.poseRun(v, { dist: rp.u * bases * 90, hr: play.type === 'HR', arrived: arrived && !rp.out, arriveT: arrived ? tx - (rp.startT + rp.runDur) : null,
+      out: rp.out, outT: rp.out ? tx - (rp.startT + rp.runDur * 0.86 / 1.25) : null });
+    st.glb = true; S.bat.visible = false;
+    // the bat lies in the dirt by the plate (where the flip dropped it on a homer)
+    var r = play.type === 'HR' && H.batRest;
+    if (r) BB.Rocco.dropBat(r.x, r.y, r.dx, r.dy);
+    else BB.Rocco.dropBat(H.x + 1.5, H.y - 0.5, 0.45, -1);
+  }
   function batterAtHome(v, t, play) {
     var R = S.rocco;
     syncBatFrame();
@@ -9140,14 +9239,21 @@ BB.Anim = (function () {
   // ------------------------------------------------------------------ TITLE SCENE
   function doTitle(v, st) {
     var t = v.time || 0, R = S.rocco;
-    place(R, -3.0, -1.0, 0, 0.42);
-    var cyc = t % 6.5, o = { time: t, load: 0 };
-    if (cyc > 4.6) { o.swingT = (cyc - 4.6) * 0.8; o.contact = false; o.tc = null; }
-    var pose = A.batter(o);
-    if (o.swingT == null) { pose.hy = 0.45 + Math.sin(t * 0.6) * 0.25; pose.hx = -0.1; pose.lx = -0.5; pose.smile = 1; pose.brow = -0.1; }
-    C.apply(R, pose);
-    poseBat(R, S.bat, A.batterBat(pose, o));
-    S.bat.scale.set(1, 1, 1);
+    if (glb()) {
+      BB.Rocco.place(-3.0, -1.0, 0, 0.42, S.hero.size);
+      BB.Rocco.setHot(false);
+      BB.Rocco.poseTitle(t);
+      st.glb = true; S.bat.visible = false;
+    } else {
+      place(R, -3.0, -1.0, 0, 0.42);
+      var cyc = t % 6.5, o = { time: t, load: 0 };
+      if (cyc > 4.6) { o.swingT = (cyc - 4.6) * 0.8; o.contact = false; o.tc = null; }
+      var pose = A.batter(o);
+      if (o.swingT == null) { pose.hy = 0.45 + Math.sin(t * 0.6) * 0.25; pose.hx = -0.1; pose.lx = -0.5; pose.smile = 1; pose.brow = -0.1; }
+      C.apply(R, pose);
+      poseBat(R, S.bat, A.batterBat(pose, o));
+      S.bat.scale.set(1, 1, 1);
+    }
     var cam = S.camTitle, a = Math.sin(t * 0.07) * 0.18;
     cam.position.set(-3.0 + Math.sin(a) * 26, -1.0 - Math.cos(a) * 26, 4.2 + Math.sin(t * 0.11) * 0.4);
     cam.fov = 40;
@@ -9256,9 +9362,15 @@ BB.Anim = (function () {
       }
     }
     // bat smear during the swing
-    if (sw && sw.t > 0.008 && sw.t < 0.14 && S.rocco) {
-      var R = S.rocco, tips = [], grips = [];
-      for (var m = 0; m <= 6; m++) {
+    var trail = null;
+    if (sw && sw.t > 0.008 && sw.t < 0.14 && st.glb) {
+      var times = []; for (var m0 = 0; m0 <= 6; m0++) times.push(Math.max(0, sw.t - m0 * 0.011));
+      trail = BB.Rocco.batTrail(v, st.heroO, times);
+    }
+    if (sw && sw.t > 0.008 && sw.t < 0.14 && (trail || (!st.glb && S.rocco && st.o))) {
+      var R = S.rocco, tips = [], grips = [], m;
+      if (trail) for (m = 0; m <= 6; m++) { tips.push(proj(trail.tips[m].x, trail.tips[m].y, trail.tips[m].z, cam)); grips.push(proj(trail.mids[m].x, trail.mids[m].y, trail.mids[m].z, cam)); }
+      else for (m = 0; m <= 6; m++) {
         var ts = Math.max(0, sw.t - m * 0.011), o2 = Object.assign({}, st.o, { swingT: ts }), ps = A.batter(o2), bi = A.batterBat(ps, o2);
         var dd = bi.dir, gl = Math.hypot(dd[0], dd[1], dd[2]) || 1;
         var tip = fromUp(R, [bi.pos[0] + dd[0] / gl * 3.2, bi.pos[1] + dd[1] / gl * 3.2, bi.pos[2] + dd[2] / gl * 3.2], new T.Vector3());
@@ -9295,7 +9407,7 @@ BB.Anim = (function () {
     }
     // loading: coiled power, sweat drop
     if (v.loading > 0.05 && S.rocco) {
-      var hp = worldPt(S.rocco, S.rocco.headC), hs = proj(hp.x, hp.y, hp.z + 0.9, cam), L1 = v.loading;
+      var hp = heroHead(st, 0), hs = proj(hp.x, hp.y, hp.z + 0.9, cam), L1 = v.loading;
       X.save(); X.globalAlpha = smooth(L1);
       for (var q2 = 0; q2 < 3; q2++) { var yy = hs.y + 50 + q2 * 26, xx = hs.x - 70 - q2 * 6 + Math.sin(t * 40 + q2) * 2 * L1; X.beginPath(); X.moveTo(xx, yy); X.lineTo(xx - 22 - 8 * L1, yy + 4); X.lineWidth = 4; X.strokeStyle = INK; X.stroke(); }
       if (L1 > 0.6) { var sdx = hs.x + 30, sdy = hs.y + 6 + ((t * 1.5) % 1) * 12; X.beginPath(); X.moveTo(sdx, sdy - 10); X.quadraticCurveTo(sdx + 7, sdy, sdx, sdy + 6); X.quadraticCurveTo(sdx - 7, sdy, sdx, sdy - 10); X.fillStyle = TEAL; X.fill(); X.lineWidth = 2; X.strokeStyle = INK; X.stroke(); }
@@ -9304,15 +9416,14 @@ BB.Anim = (function () {
     }
     // dizzy stars after the corkscrew
     if (sw && sw.result && !sw.result.contact && sw.t > 0.6 && S.rocco) {
-      var hp2 = worldPt(S.rocco, S.rocco.headC), hc = proj(hp2.x, hp2.y, hp2.z + 1.0, cam), rx = 34, ry = 11;
+      var hp2 = heroHead(st, 0), hc = proj(hp2.x, hp2.y, hp2.z + (st.glb ? 1.25 : 1.0), cam), rx = 34, ry = 11;
       for (var k2 = 0; k2 < 4; k2++) { var an = t * 5 + k2 / 4 * PI * 2; star(hc.x + Math.cos(an) * rx, hc.y + Math.sin(an) * ry, 9 + Math.sin(an) * 2, t * 3 + k2, k2 % 2 ? MUSTARD : '#FFF9EE'); }
     }
     // on fire: the bat smokes and flames lick at Rocco's cleats
     if (v.onFire && S.rocco) {
-      S.bat.updateMatrixWorld(true); V3.set(0, 2.8, 0); S.bat.localToWorld(V3);
-      var bt = proj(V3.x, V3.y, V3.z, cam);
+      var btw = heroBatTip(st), bt = proj(btw.x, btw.y, btw.z, cam);
       for (var sm = 0; sm < 4; sm++) { var ph = (t * 0.9 + sm / 4) % 1; puff(bt.x + Math.sin(ph * 6 + sm) * 8, bt.y - ph * 70, 8 + ph * 14, '#E9E2D6', 0.8 * (1 - ph), sm + 40); }
-      var ft = proj(S.rocco.root.position.x, S.rocco.root.position.y, 0.1, cam);
+      var fw = heroFeet(st), ft = proj(fw.x, fw.y, fw.z, cam);
       for (var fl = 0; fl < 5; fl++) flame(ft.x - 50 + fl * 25, ft.y + 6, 26 + (fl % 2) * 10, t, fl);
     }
   }
@@ -9543,7 +9654,7 @@ BB.Anim = (function () {
     if (since >= 0 && since < 0.45 && S.prevScene && S.prevScene !== v.scene) {
       var k = U.easeOut(since / 0.45), c = { x: S.W / 2, y: S.H / 2 };
       if (v.scene === 'field' && st.ballPos) { var b = proj(st.ballPos.x, st.ballPos.y, st.ballPos.z, S.cam); c = { x: clamp(b.x, 40, S.W - 40), y: clamp(b.y, 60, S.H - 60) }; }
-      if (v.scene === 'bat' && S.rocco) { var hp = worldPt(S.rocco, S.rocco.headC), hs = proj(hp.x, hp.y, hp.z, S.cam); c = { x: hs.x, y: hs.y }; }
+      if (v.scene === 'bat' && S.rocco) { var hp = heroHead(st, 0), hs = proj(hp.x, hp.y, hp.z, S.cam); c = { x: hs.x, y: hs.y }; }
       iris(c.x, c.y, 18 + full * k);
     }
   }
@@ -9620,6 +9731,1412 @@ BB.Anim = (function () {
     init: init, resize: resize, setInks: setInks, prepare: prepare, frame: frame,
     title: function (v) { v = Object.assign({}, v || {}, { scene: 'title' }); frame(v); },
     screenToPlate: screenToPlate, plateToScreen: plateToScreen, stats: stats, _S: S,
+  };
+})();
+
+// ===================== MODULE: 36-rocco.js =====================
+// 36-rocco.js — BB.Rocco: the modelled hero (assets/rocco.glb, built by tools/blender/rocco.py; the asset contract is
+// docs/PILOT-ROCCO.md). Owned by the integration agent.
+// Parses the glb once at boot (async), turns it into a toon character (cel materials chosen by material name, team
+// colours from the uniform scheme, ink hulls that deform with the skeleton and the face shapes, layer 1 for the ink
+// pass), owns an AnimationMixer and maps game state to clips, shape keys and gaze. BB.Render (35-scene) places him and
+// calls poseBat / poseHome / poseRun / poseTitle once per frame.
+// If the asset is missing, fails to load, breaks the contract, or the page has ?rocco=old, ready() stays false and
+// BB.Render keeps the procedural Rocco (BB.Cast / BB.Anim) exactly as before.
+//
+// Poses are a pure function of the state passed in (like BB.Anim), so a harness frame shows exactly what the game
+// shows at that instant. Two small bits of frame-to-frame memory sit on top: a short snapshot crossfade over
+// discontinuities (dizzy -> the next windup, swing during the stride ...) and, once a pitch is resolved and main
+// stops advancing pitchT ('between'), the reaction keeps playing on the clock.
+// Model space: glTF Y-up, facing +Z, his left = +X. World: Z-up; up.rotation.x = PI/2 and root.rotation.z = yaw, the
+// same convention as BB.Cast characters (yaw PI/2 = facing +x, i.e. a right-handed hitter facing the plate).
+BB.Rocco = (function () {
+  var T = (typeof THREE !== 'undefined') ? THREE : null;
+  var R = { status: 'idle', error: null, warnings: [] };
+  function no() { return false; }
+  var API = { ready: no, status: function () { return R.status; }, boot: function () {}, loadBuffer: function (b, cb) { if (cb) cb('unavailable'); }, R: R };
+  if (!T || !T.GLTFLoader || !BB.Toon || !BB.U) { R.status = 'unavailable'; return API; }
+  var TN = BB.Toon, U = BB.U, K = BB.K, PI = Math.PI;
+  var clamp = U.clamp, lerp = U.lerp, smooth = U.smooth;
+
+  // ------------------------------------------------------------------ contract tables
+  var PALETTE = { fur: '#9A97A6', fur_light: '#F2EDE3', mask: '#2E2A38', nose: '#1B1420', eye_white: '#FFFFFF', pupil: '#1B1420', mouth: '#5A1F2A', tongue: '#E0605A',
+    uniform: '#FFF6E6', team_a: '#2E5AAC', team_b: '#D9483B', belt: '#3B2F2A', sock: '#FFFFFF', shoe: '#1E1A22', sole: '#4A3F3A', lace: '#FFFFFF', glove: '#FFFFFF',
+    bat_wood: '#D9A066', bat_tape: '#2E5AAC', decal_chest: '#2E5AAC', decal_back: '#2E5AAC' };
+  var TEAM = { team_a: 'a', team_b: 'b', bat_tape: 'a' };            // recoloured from the uniform scheme
+  var OW = { pupil: 0, tongue: 0, mouth: 0.4, nose: 0.6, eye_white: 0.55, lace: 0.45, sole: 0.9, glove: 0.95, decal_chest: 0, decal_back: 0 }; // hull weight (1 = full)
+  var DECAL = { decal_chest: 1, decal_back: 1 };
+  var INKW = { pupil: 0.55, eye_white: 0.7, nose: 0.8, mouth: 0.7, tongue: 0.6, lace: 0.6 };   // BB.Ink line weight per material
+  var BAT = { bat_wood: 1, bat_tape: 1 };
+  var CLIPS = ['stance', 'stride', 'power_load', 'coil_hold', 'swing_high', 'swing_mid', 'swing_low', 'whiff', 'dizzy', 'watch', 'bat_flip', 'run', 'trot', 'cheer', 'take', 'strike_react'];
+  var BONES = ['root', 'hips', 'spine', 'chest', 'neck', 'head', 'jaw', 'ear.L', 'ear.R', 'eye.L', 'eye.R', 'brow.L', 'brow.R', 'tail.1', 'tail.2', 'tail.3', 'tail.4', 'tail.5',
+    'shoulder.L', 'shoulder.R', 'upper_arm.L', 'upper_arm.R', 'forearm.L', 'forearm.R', 'hand.L', 'hand.R', 'thigh.L', 'thigh.R', 'shin.L', 'shin.R', 'foot.L', 'foot.R',
+    'toe.L', 'toe.R', 'bat', 'bat_sweet', 'bat_tip'];
+  var SHAPES = ['blink', 'smile', 'grin', 'frown', 'mouth_open', 'brows_up', 'brows_angry', 'brows_sad', 'squint', 'cheeks_puff'];
+  var CONTACT_T = 0.25;   // contract: the contact frame of every swing clip
+  var HOT = '#F28C38';
+
+  function warn(msg) { R.warnings.push(msg); }
+
+  // ------------------------------------------------------------------ boot / load
+  function wanted() {
+    try { if (/[?&]rocco=(old|0|off|proc)(&|$)/.test(location.search)) return false; } catch (e) {}
+    return !(typeof window !== 'undefined' && window.BB_ROCCO === 'old');
+  }
+  function boot(cb) {
+    if (R.status !== 'idle') { if (cb) cb(R.status); return; }
+    if (!wanted()) { R.status = 'off'; if (cb) cb(R.status); return; }
+    var buf = null;
+    try { buf = BB.assetBuffer && BB.assetBuffer('rocco'); } catch (e) { buf = null; }
+    if (!buf) { R.status = 'missing'; if (cb) cb(R.status); return; }
+    loadBuffer(buf, cb);
+  }
+  function loadBuffer(buf, cb) {
+    R.status = 'loading'; R.error = null; R.warnings = [];
+    var t0 = (typeof performance !== 'undefined') ? performance.now() : 0;
+    function done() { if (cb) { try { cb(R.status); } catch (e) { console.warn(e); } } }
+    try {
+      new T.GLTFLoader().parse(buf, '', function (gltf) {
+        try { build(gltf); R.status = 'ready'; R.loadMs = ((typeof performance !== 'undefined') ? performance.now() : 0) - t0; }
+        catch (e) { fail(e); }
+        done();
+      }, function (e) { fail(e); done(); });
+    } catch (e) { fail(e); done(); }
+  }
+  function fail(e) {
+    R.status = 'failed'; R.error = String((e && e.message) || e);
+    console.warn('BB.Rocco: keeping the procedural Rocco (' + R.error + ')');
+  }
+
+  // ------------------------------------------------------------------ materials & colours
+  var _c1 = new T.Color(), _c2 = new T.Color();
+  function near(a, b) { return Math.max(Math.abs(a.r - b.r), Math.abs(a.g - b.g), Math.abs(a.b - b.b)); }
+  // the glb stores linear base colours (Blender converts its sRGB swatches); the game paints with sRGB hex values
+  function baseHex(name, json, mat) {
+    var def = null, f = null;
+    if (json && json.materials) for (var i = 0; i < json.materials.length; i++) if (json.materials[i].name === name) { def = json.materials[i]; break; }
+    if (def && def.pbrMetallicRoughness && def.pbrMetallicRoughness.baseColorFactor) f = def.pbrMetallicRoughness.baseColorFactor;
+    var pal = PALETTE[name];
+    if (!f) return pal || (mat && mat.color ? '#' + mat.color.getHexString() : '#CCCCCC');
+    _c1.setRGB(f[0], f[1], f[2]).convertLinearToSRGB();
+    if (!pal) return '#' + _c1.getHexString();
+    _c2.set(pal);
+    if (near(_c1, _c2) < 0.16) return '#' + _c1.getHexString();      // the modeller's tweak of the contract colour
+    _c1.setRGB(f[0], f[1], f[2]);
+    if (near(_c1, _c2) < 0.16) { warn('material ' + name + ' stores sRGB values in a linear slot'); return '#' + _c1.getHexString(); }
+    warn('material ' + name + ' colour is far from the contract (' + pal + '); using the contract colour');
+    return pal;
+  }
+
+  // ------------------------------------------------------------------ ink hull that deforms with skin + morphs
+  var HU = { uRes: TN.OU.uRes, uWorld: TN.OU.uWorld, uMin: TN.OU.uMin, uMax: TN.OU.uMax, uColor: TN.OU.uColor, uScale: { value: 1.12 } };
+  var HULL = new T.ShaderMaterial({
+    uniforms: HU, side: T.BackSide,
+    vertexShader: [
+      '#include <common>',
+      '#include <morphtarget_pars_vertex>',
+      '#include <skinning_pars_vertex>',
+      'attribute vec3 onormal; attribute float ow;',
+      'uniform vec2 uRes; uniform float uWorld; uniform float uMin; uniform float uMax; uniform float uScale;',
+      'void main() {',
+      '  vec3 objectNormal = onormal;',
+      '  #include <morphnormal_vertex>',
+      '  #include <skinbase_vertex>',
+      '  #include <skinnormal_vertex>',
+      '  #include <begin_vertex>',
+      '  #include <morphtarget_vertex>',
+      '  #include <skinning_vertex>',
+      '  vec4 clip = projectionMatrix * modelViewMatrix * vec4(transformed, 1.0);',
+      '  vec3 n = normalize(normalMatrix * objectNormal);',
+      '  vec2 d = (projectionMatrix * vec4(n, 0.0)).xy * uRes;',
+      '  float L = length(d); d = L > 1e-6 ? d / L : vec2(0.0);',
+      '  float f = projectionMatrix[1][1] * uRes.y * 0.5;',
+      '  float px = clamp(uWorld * f / max(clip.w, 0.05), uMin, uMax) * uScale;',
+      '  px *= ow * (0.84 + 0.28 * sin(position.x * 5.3 + position.y * 3.9 + position.z * 4.7));',
+      '  clip.xy += d * px * 2.0 / uRes * clip.w;',
+      '  gl_Position = clip;',
+      '}'].join('\n'),
+    fragmentShader: 'uniform vec3 uColor; void main() { gl_FragColor = vec4(uColor, 1.0); }',
+  });
+  HULL.userData.rocco = true; HULL.userData.inkHull = true;   // BB.Ink keeps hulls out of its normals pass and hides them under its lines
+
+  // ------------------------------------------------------------------ geometry helpers
+  // smooth hull normals, welded by position across all primitives of one glTF mesh (same bind space), so creases,
+  // seams and material borders never crack the ink line
+  function weldGroup(list) {
+    var acc = {}, keys = [], a = new T.Vector3(), b = new T.Vector3(), c = new T.Vector3(), e2 = new T.Vector3();
+    function q(x) { return Math.round(x * 1500); }
+    list.forEach(function (m) {
+      var g = m.geometry, P = g.attributes.position, n = P.count, I = g.index, key = new Array(n), i;
+      for (i = 0; i < n; i++) key[i] = q(P.getX(i)) + ',' + q(P.getY(i)) + ',' + q(P.getZ(i));
+      keys.push(key);
+      var cnt = I ? I.count : n;
+      for (i = 0; i + 2 < cnt; i += 3) {
+        var ia = I ? I.getX(i) : i, ib = I ? I.getX(i + 1) : i + 1, ic = I ? I.getX(i + 2) : i + 2;
+        a.fromBufferAttribute(P, ia); b.fromBufferAttribute(P, ib); c.fromBufferAttribute(P, ic);
+        b.sub(a); e2.subVectors(c, a); b.cross(e2);                  // area-weighted face normal
+        [ia, ib, ic].forEach(function (v) { var s = acc[key[v]] || (acc[key[v]] = [0, 0, 0]); s[0] += b.x; s[1] += b.y; s[2] += b.z; });
+      }
+    });
+    list.forEach(function (m, gi) {
+      var key = keys[gi], n = key.length, out = new Float32Array(n * 3);
+      for (var i = 0; i < n; i++) {
+        var s = acc[key[i]] || [0, 1, 0], l = Math.hypot(s[0], s[1], s[2]) || 1;
+        out[3 * i] = s[0] / l; out[3 * i + 1] = s[1] / l; out[3 * i + 2] = s[2] / l;
+      }
+      m.geometry.setAttribute('onormal', new T.BufferAttribute(out, 3));
+    });
+  }
+  function constAttr(g, name, v) { var a = new Float32Array(g.attributes.position.count); a.fill(v); g.setAttribute(name, new T.BufferAttribute(a, 1)); }
+  function makeHull(src, scale) {
+    var h = src.isSkinnedMesh ? new T.SkinnedMesh(src.geometry, HULL) : new T.Mesh(src.geometry, HULL);
+    if (src.isSkinnedMesh) { h.bind(src.skeleton, src.bindMatrix); h.bindMode = src.bindMode; }
+    if (src.morphTargetInfluences) { h.morphTargetInfluences = src.morphTargetInfluences; h.morphTargetDictionary = src.morphTargetDictionary; }
+    h.renderOrder = 1; h.frustumCulled = false; h.userData.isOutline = true; h.name = src.name + '_ink';
+    src.add(h); src.userData.outline = h;
+    return h;
+  }
+
+  // ------------------------------------------------------------------ build the character from the parsed glTF
+  function build(gltf) {
+    var model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+    if (!model) throw new Error('no scene in rocco.glb');
+    var json = gltf.parser && gltf.parser.json;
+    model.updateMatrixWorld(true);
+    // bones by contract name (GLTFLoader sanitises node names: 'eye.L' -> 'eyeL'; the original is in userData.name)
+    var bones = {}, byName = {};
+    model.traverse(function (o) { byName[o.name] = o; if (o.isBone || o.type === 'Object3D' || o.isGroup) { var nm = (o.userData && o.userData.name) || o.name; if (!bones[nm]) bones[nm] = o; } });
+    var missingBones = BONES.filter(function (b) { return !bones[b]; });
+    if (missingBones.length) warn('missing bones: ' + missingBones.join(', '));
+    ['root', 'head', 'bat'].forEach(function (b) { if (!bones[b]) throw new Error('rocco.glb has no "' + b + '" bone'); });
+    // materials -> one shared cel material per material name; primitives stay separate meshes so the ink pass sees
+    // every paint region as its own object (BB.Ink draws lines where object ids change; same material = same id)
+    var meshes = [];
+    model.traverse(function (o) { if (o.isMesh) meshes.push(o); });
+    if (!meshes.length) throw new Error('rocco.glb has no meshes');
+    var colors = {};
+    meshes.forEach(function (m) {
+      var mat = Array.isArray(m.material) ? m.material[0] : m.material, nm = (mat && mat.name) || 'unnamed';
+      if (!(nm in colors)) { colors[nm] = baseHex(nm, json, mat); if (!PALETTE[nm]) warn('unexpected material ' + nm); }
+      if (mat && mat.dispose) mat.dispose();
+      m.userData.mname = nm;
+    });
+    R.colors = colors; R.base = Object.assign({}, colors); R.mats = {};
+    var groups = {};
+    meshes.forEach(function (m) { var key = (m.parent ? m.parent.uuid : '-') + '|' + (m.skeleton ? m.skeleton.uuid : '-'); (groups[key] = groups[key] || []).push(m); });
+    Object.keys(groups).forEach(function (k) { weldGroup(groups[k]); });
+    var names = Object.keys(colors).sort();
+    meshes.forEach(function (m) {
+      var nm = m.userData.mname, decal = !!DECAL[nm], w = OW[nm] != null ? OW[nm] : 1;
+      m.material = matFor(nm);
+      constAttr(m.geometry, 'ow', w);
+      if (w > 0 && !decal) makeHull(m);
+      m.frustumCulled = false;
+      m.castShadow = m.receiveShadow = false;
+      if (!decal) m.layers.enable(1);
+      m.userData.inkId = 7000 + names.indexOf(nm);
+      if (INKW[nm] != null) m.userData.inkWeight = INKW[nm];
+      m.userData.kind = BAT[nm] ? 'bat' : decal ? 'decal' : 'body';
+    });
+    R.meshes = meshes;
+    R.bat = meshes.filter(function (m) { return m.userData.kind === 'bat'; });
+    if (!R.bat.length) warn('no bat_wood / bat_tape meshes');
+    if (BB.Ink && BB.Ink.registerHull) BB.Ink.registerHull(HULL);
+    paintAll();
+    // face shapes
+    R.face = meshes.filter(function (m) { return m.morphTargetDictionary && m.morphTargetInfluences; });
+    var haveShapes = {};
+    R.face.forEach(function (m) { for (var k in m.morphTargetDictionary) haveShapes[k] = true; });
+    var missingShapes = SHAPES.filter(function (s) { return !haveShapes[s]; });
+    if (missingShapes.length) warn('missing shape keys: ' + missingShapes.join(', '));
+    // clips: drop tracks that would bind to nothing (PropertyBinding would fall back to the root or log errors)
+    var nodeNames = {};
+    model.traverse(function (o) { nodeNames[o.name] = true; });
+    R.clips = {}; R.actions = {}; R.mixer = new T.AnimationMixer(model);
+    (gltf.animations || []).forEach(function (clip) {
+      var seen = {}, tracks = [];
+      clip.tracks.forEach(function (tr) {
+        var pp = T.PropertyBinding.parseTrackName(tr.name), node = pp.nodeName;
+        if (!nodeNames[node] || seen[tr.name]) { R.dropped = (R.dropped || 0) + 1; return; }
+        seen[tr.name] = true; tracks.push(tr);
+      });
+      clip.tracks = tracks;
+      R.clips[clip.name] = clip;
+      var a = R.mixer.clipAction(clip);
+      a.setLoop(T.LoopRepeat, Infinity); a.play(); a.setEffectiveWeight(0);
+      R.actions[clip.name] = a;
+    });
+    var missingClips = CLIPS.filter(function (c) { return !R.clips[c]; });
+    if (missingClips.length) warn('missing clips: ' + missingClips.join(', '));
+    if (!R.clips.stance || !(R.clips.swing_mid || R.clips.swing_high || R.clips.swing_low)) throw new Error('rocco.glb needs at least "stance" and one swing clip');
+    // world wrapper: Y-up model -> Z-up world, like BB.Cast's "up" group
+    R.model = model;
+    R.up = new T.Group(); R.up.rotation.x = PI / 2; R.up.add(model);
+    R.root = new T.Group(); R.root.name = 'rocco_glb'; R.root.add(R.up);
+    var sh = new T.Mesh(SHADOW_G, SHADOW_M); sh.renderOrder = -1; sh.scale.set(1.25, 1.0, 1); R.root.add(sh); R.shadow = sh;
+    R.bones = bones; R.byName = byName;
+    R.allBones = []; model.traverse(function (o) { if (o.isBone) R.allBones.push(o); });
+    R.saved = R.allBones.map(function () { return { p: new T.Vector3(), q: new T.Quaternion(), s: new T.Vector3(1, 1, 1) }; });
+    R.final = R.allBones.map(function () { return { p: new T.Vector3(), q: new T.Quaternion(), s: new T.Vector3(1, 1, 1) }; });
+    R.fadeFrom = R.allBones.map(function () { return { p: new T.Vector3(), q: new T.Quaternion(), s: new T.Vector3(1, 1, 1) }; });
+    R.allBones.forEach(function (b, i) { R.saved[i].p.copy(b.position); R.saved[i].q.copy(b.quaternion); R.saved[i].s.copy(b.scale); });
+    R.restQ = {}; ['eye.L', 'eye.R', 'chest', 'bat'].forEach(function (b) { if (bones[b]) R.restQ[b] = bones[b].quaternion.clone(); });
+    R.morphSaved = R.face.map(function (m) { return m.morphTargetInfluences.slice(); });
+    R.batProp = makeBatProp();
+    R.size = 1; R.yaw = 0;
+    measure();
+  }
+  var SHADOW_G = new T.CircleGeometry(1, 20);
+  var SHADOW_M = new T.MeshBasicMaterial({ color: 0x1B1420, transparent: true, opacity: 0.22, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -12, polygonOffsetUnits: -40 });
+
+  // ------------------------------------------------------------------ colours
+  function matFor(name) {
+    if (R.mats[name]) return R.mats[name];
+    var o = { color: new T.Color(R.colors[name] || '#CCCCCC'), gradientMap: TN.GRAD };
+    if (DECAL[name]) Object.assign(o, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -8, transparent: true, depthWrite: false, side: T.DoubleSide });
+    if (name === 'eye_white') o.emissive = new T.Color('#3A3A3A');          // whites stay white on the shaded side
+    var m = new T.MeshToonMaterial(o); m.name = 'rocco_' + name;
+    R.mats[name] = m;
+    return m;
+  }
+  function paintAll() {
+    for (var name in R.mats) {
+      var hex = R.colors[name] || '#CCCCCC';
+      if (name === 'bat_wood' && R.hot) hex = HOT;
+      R.mats[name].color.set(hex);
+      if (name === 'bat_wood' && R.mats[name].emissive) R.mats[name].emissive.set(R.hot ? '#6A2200' : '#000000');
+    }
+  }
+  function setColors(c) {
+    if (!c) return;
+    R.team = c;
+    if (R.status !== 'ready') return;
+    for (var name in TEAM) if (name in R.base) R.colors[name] = c[TEAM[name]] || R.base[name];
+    paintAll();
+  }
+  function setHot(on) {
+    on = !!on;
+    if (R.hot === on || R.status !== 'ready') return;
+    R.hot = on; paintAll();
+  }
+
+  // a static copy of the bat in bat-bone space (it lies in the dirt while Rocco runs the bases)
+  function makeBatProp() {
+    if (!R.bat.length || !R.bones.bat) return null;
+    var grp = new T.Group(); grp.name = 'rocco_bat_prop';
+    R.bat.forEach(function (src) {
+      var g = src.geometry.clone(), bi = -1, M = new T.Matrix4();
+      if (src.isSkinnedMesh) bi = src.skeleton.bones.indexOf(R.bones.bat);
+      if (bi >= 0) M.multiplyMatrices(src.skeleton.boneInverses[bi], src.bindMatrix);
+      else { src.updateWorldMatrix(true, false); R.bones.bat.updateWorldMatrix(true, false); M.copy(R.bones.bat.matrixWorld).invert().multiply(src.matrixWorld); }
+      ['skinIndex', 'skinWeight'].forEach(function (a) { if (g.attributes[a]) g.deleteAttribute(a); });
+      g.morphAttributes = {};
+      g.applyMatrix4(M);
+      var on = g.attributes.onormal;
+      if (on) { var nm = new T.Matrix3().getNormalMatrix(M), v = new T.Vector3(); for (var i = 0; i < on.count; i++) { v.fromBufferAttribute(on, i).applyMatrix3(nm).normalize(); on.setXYZ(i, v.x, v.y, v.z); } }
+      var m = new T.Mesh(g, src.material);
+      m.frustumCulled = false; m.layers.enable(1); m.userData.inkId = src.userData.inkId;
+      var h = new T.Mesh(g, TN.OUTLINE); h.renderOrder = 1; h.userData.isOutline = true; m.add(h); m.userData.outline = h;
+      grp.add(m);
+    });
+    // its axis: bat bone -> bat_tip, in bat space
+    grp.userData.len = 2.8; grp.userData.axis = new T.Vector3(0, 1, 0);
+    if (R.bones.bat_tip && R.bones.bat_tip.parent === R.bones.bat) { grp.userData.axis.copy(R.bones.bat_tip.position).normalize(); grp.userData.len = R.bones.bat_tip.position.length(); }
+    grp.visible = false;
+    return grp;
+  }
+
+  // ------------------------------------------------------------------ evaluating poses
+  function has(c) { return !!R.clips[c]; }
+  function dur(c) { return R.clips[c] ? R.clips[c].duration : 1; }
+  function first() { for (var i = 0; i < arguments.length; i++) if (has(arguments[i])) return arguments[i]; return 'stance'; }
+  function twos(t) { return (BB.Ink && BB.Ink.twos) ? BB.Ink.twos(t) : t; }
+  // an event-relative time held on twos in step with the global 12 fps grid
+  function onTwos(rel, t) { return Math.max(0, rel - (t - twos(t))); }
+  function restore() {
+    for (var i = 0; i < R.allBones.length; i++) { var b = R.allBones[i], s = R.saved[i]; b.position.copy(s.p); b.quaternion.copy(s.q); b.scale.copy(s.s); }
+    R.face.forEach(function (m, j) { var a = m.morphTargetInfluences, s = R.morphSaved[j]; for (var k = 0; k < a.length; k++) a[k] = s[k]; });
+  }
+  function save() {
+    for (var i = 0; i < R.allBones.length; i++) { var b = R.allBones[i], s = R.saved[i]; s.p.copy(b.position); s.q.copy(b.quaternion); s.s.copy(b.scale); }
+    R.face.forEach(function (m, j) { var a = m.morphTargetInfluences, s = R.morphSaved[j]; for (var k = 0; k < a.length; k++) s[k] = a[k]; });
+  }
+  // layers: [{c: clip, t: seconds, w: weight}] -> bones (the mixer only writes values that changed since its last
+  // update, so everything we touch afterwards is put back first)
+  function evaluate(layers) {
+    restore();
+    var acts = R.actions, w = {}, tm = {}, tot = 0, i, l;
+    for (i = 0; i < layers.length; i++) {
+      l = layers[i];
+      if (!acts[l.c] || !(l.w > 1e-4)) continue;
+      if (w[l.c] == null || l.w > w[l.c]) { tm[l.c] = l.t; }
+      w[l.c] = (w[l.c] || 0) + l.w; tot += l.w;
+    }
+    if (tot <= 0) { w = { stance: 1 }; tm = { stance: 0 }; tot = 1; }
+    for (var n in acts) {
+      var a = acts[n];
+      if (w[n]) { a.enabled = true; a.time = clamp(tm[n], 0, a.getClip().duration); a.setEffectiveWeight(w[n] / tot); }
+      else { a.setEffectiveWeight(0); a.enabled = false; }
+    }
+    R.mixer.update(0);
+    save();
+  }
+  function looped(c, t) { var d = dur(c); return ((t % d) + d) % d; }
+  function mixL(a, b, k) { // blend two layer lists
+    if (k <= 0) return a; if (k >= 1) return b;
+    var o = [], i;
+    for (i = 0; i < a.length; i++) o.push({ c: a[i].c, t: a[i].t, w: a[i].w * (1 - k) });
+    for (i = 0; i < b.length; i++) o.push({ c: b[i].c, t: b[i].t, w: b[i].w * k });
+    return o;
+  }
+  function L(c, t, w) { return { c: c, t: t, w: w == null ? 1 : w }; }
+
+  // ------------------------------------------------------------------ measurements made once after loading
+  var V = new T.Vector3(), V2 = new T.Vector3(), V3 = new T.Vector3(), Q = new T.Quaternion(), Q2 = new T.Quaternion(), M4 = new T.Matrix4();
+  function modelPoint(b, out) { // bone position in model space (glTF, unscaled)
+    b.updateWorldMatrix(true, false);
+    out.setFromMatrixPosition(b.matrixWorld);
+    M4.copy(R.model.matrixWorld).invert(); out.applyMatrix4(M4);
+    return out;
+  }
+  function measure() {
+    var B = R.bones, info = { swings: {} };
+    R.model.updateMatrixWorld(true);
+    ['swing_high', 'swing_mid', 'swing_low'].forEach(function (c) {
+      if (!has(c)) return;
+      evaluate([L(c, CONTACT_T)]); R.model.updateMatrixWorld(true);
+      var sweet = B.bat_sweet ? modelPoint(B.bat_sweet, new T.Vector3()) : null, tip = B.bat_tip ? modelPoint(B.bat_tip, new T.Vector3()) : null, grip = modelPoint(B.bat, new T.Vector3());
+      info.swings[c] = { sweet: sweet || tip || grip, tip: tip, grip: grip };
+    });
+    if (!B.bat_sweet) warn('no bat_sweet bone: aiming with ' + (B.bat_tip ? 'bat_tip' : 'the bat bone'));
+    // stance: height, feet, head
+    evaluate([L('stance', 0)]); R.model.updateMatrixWorld(true);
+    var box = new T.Box3();
+    R.meshes.forEach(function (m) { if (m.userData.kind === 'body') box.expandByObject(m); });
+    info.stanceBox = box;
+    info.head = modelPoint(B.head, new T.Vector3());
+    info.feet = [B['foot.L'], B['foot.R']].filter(Boolean).map(function (b) { return modelPoint(b, new T.Vector3()); });
+    // rest height (bind pose of the skinned body), for the report
+    var hb = new T.Box3();
+    R.meshes.forEach(function (m) { if (m.userData.kind === 'body') { m.geometry.computeBoundingBox(); hb.union(m.geometry.boundingBox); } });
+    info.restBox = hb;
+    // head centre and crown in head-bone space, from the vertices skinned (mostly) to the head
+    var sum = new T.Vector3(), cnt = 0, top = null;
+    R.meshes.forEach(function (m) {
+      if (!m.isSkinnedMesh || m.userData.kind !== 'body') return;
+      var bi = m.skeleton.bones.indexOf(B.head); if (bi < 0) return;
+      var P = m.geometry.attributes.position, SI = m.geometry.attributes.skinIndex, SW = m.geometry.attributes.skinWeight;
+      var toBone = new T.Matrix4().multiplyMatrices(m.skeleton.boneInverses[bi], m.bindMatrix);
+      for (var i = 0; i < P.count; i++) {
+        var w = (SI.getX(i) === bi ? SW.getX(i) : 0) + (SI.getY(i) === bi ? SW.getY(i) : 0) + (SI.getZ(i) === bi ? SW.getZ(i) : 0) + (SI.getW(i) === bi ? SW.getW(i) : 0);
+        if (w < 0.6) continue;
+        V.fromBufferAttribute(P, i).applyMatrix4(toBone);
+        sum.add(V); cnt++;
+      }
+    });
+    R.headLocal = cnt ? sum.multiplyScalar(1 / cnt) : new T.Vector3(0, 0.6, 0);
+    R.info = info;
+    evaluate([L('stance', 0)]);
+  }
+
+  // where to put the root so the contact frame of the middle swing meets a point in the world (yaw = PI/2: model
+  // +Z -> world +x, model +X -> world +y, model +Y -> world +z)
+  function solvePlacement(target, size) {
+    var sw = R.info.swings.swing_mid || R.info.swings.swing_high || R.info.swings.swing_low, s = sweetOf(sw);
+    return { x: target.x - size * s.z, y: target.y - size * s.x, z: 0, size: size, sweet: s.clone() };
+  }
+  function sweetOf(sw) { return sw.sweet; }
+  // a sensible scale: the middle swing meets the middle of the zone (clamped so he stays roughly 5-6 ft tall)
+  function autoSize() {
+    var sw = R.info.swings.swing_mid; if (!sw) return 1;
+    var mid = (K.ZONE.zMin + K.ZONE.zMax) / 2;
+    return clamp(mid / Math.max(0.5, sw.sweet.y), 0.92, 1.3);
+  }
+
+  // ------------------------------------------------------------------ placement in the world
+  function place(x, y, z, yaw, size) {
+    if (!R.root) return;
+    R.root.position.set(x, y, z || 0); R.root.rotation.set(0, 0, yaw || 0);
+    if (size != null && size !== R.size) { R.size = size; R.up.scale.setScalar(size); }
+    R.yaw = yaw || 0;
+    R.root.visible = true;
+    R.root.updateMatrixWorld(true);
+  }
+  function headPoint(out) {
+    out = out || new T.Vector3();
+    var b = R.bones.head; b.updateWorldMatrix(true, false);
+    return out.copy(R.headLocal).applyMatrix4(b.matrixWorld);
+  }
+  function worldOf(name, out) {
+    var b = R.bones[name]; out = out || new T.Vector3();
+    if (!b) return out.copy(R.root.position);
+    b.updateWorldMatrix(true, false);
+    return out.setFromMatrixPosition(b.matrixWorld);
+  }
+
+  // ------------------------------------------------------------------ faces & gaze
+  function blinkAt(t, seed) { var p = (t + seed * 1.7) % 3.7; return p < 0.13 ? Math.sin(p / 0.13 * PI) : 0; }
+  var FACE0 = {};
+  SHAPES.forEach(function (s) { FACE0[s] = 0; });
+  function applyFace(face) {
+    R.face.forEach(function (m) {
+      var d = m.morphTargetDictionary, a = m.morphTargetInfluences;
+      for (var s in face) { var i = d[s]; if (i != null) a[i] = clamp(Math.max(a[i], face[s] || 0), 0, 1); }
+    });
+  }
+  // turn both eyes toward a world point (limited, so they never roll back into the head)
+  var _eyeDir = new T.Vector3(), _want = new T.Vector3(), _pq = new T.Quaternion(), _wq = new T.Quaternion(), _fwd = new T.Vector3();
+  function gaze(target, k) {
+    if (!target || !(k > 0)) return;
+    ['eye.L', 'eye.R'].forEach(function (n) {
+      var b = R.bones[n]; if (!b) return;
+      b.updateWorldMatrix(true, false);
+      // the eye's look direction now: model +Z carried by the head bone (eyes look straight ahead at rest)
+      var head = R.bones.head; head.updateWorldMatrix(true, false);
+      head.getWorldQuaternion(_wq);
+      _fwd.set(0, 0, 1).applyQuaternion(R.headRestInv || (R.headRestInv = headRestInv())).applyQuaternion(_wq);
+      V.setFromMatrixPosition(b.matrixWorld);
+      _want.set(target.x, target.y, target.z).sub(V).normalize();
+      var ang = Math.acos(clamp(_fwd.dot(_want), -1, 1)), lim = 0.42;
+      if (ang < 1e-4) return;
+      Q.setFromUnitVectors(_fwd, _want);
+      if (ang > lim) Q.slerp(Q2.identity(), 1 - lim / ang);
+      Q2.identity().slerp(Q, k);                                   // world-space delta
+      b.parent.getWorldQuaternion(_pq);
+      // local' = P^-1 * delta * P * local
+      Q.copy(_pq).invert().multiply(Q2).multiply(_pq);
+      b.quaternion.premultiply(Q);
+    });
+  }
+  function headRestInv() { // inverse of the head bone's bind-pose world rotation (relative to the model)
+    var q = new T.Quaternion(), sk = null, head = R.bones.head;
+    R.meshes.some(function (m) { if (m.isSkinnedMesh) { sk = m.skeleton; return true; } return false; });
+    if (sk) { var i = sk.bones.indexOf(head); if (i >= 0) { var m = sk.boneInverses[i].clone().invert(); var p = new T.Vector3(), s = new T.Vector3(); m.decompose(p, q, s); } }
+    return q.invert();
+  }
+
+  // aim correction: rotate the chest so the barrel at the contact frame meets the ball (computed once per swing)
+  function aimFor(layersAtContact, target) {
+    var key = layersAtContact.map(function (l) { return l.c + l.w.toFixed(3); }).join() + [target.x, target.y, target.z].map(function (x) { return x.toFixed(3); }).join() + R.root.position.toArray().join() + R.size;
+    if (R.aimKey === key) return R.aimQ;
+    evaluate(layersAtContact);
+    R.root.updateMatrixWorld(true);
+    var chest = R.bones.chest || R.bones.spine || R.bones.hips, tipB = R.bones.bat_sweet || R.bones.bat_tip || R.bones.bat;
+    var C = worldOf(chest === R.bones.chest ? 'chest' : chest === R.bones.spine ? 'spine' : 'hips', new T.Vector3()), S = new T.Vector3().setFromMatrixPosition(tipB.matrixWorld);
+    var a = S.clone().sub(C), b = new T.Vector3(target.x, target.y, target.z).sub(C);
+    var q = new T.Quaternion().setFromUnitVectors(a.clone().normalize(), b.clone().normalize());
+    var ang = 2 * Math.acos(clamp(q.w, -1, 1)), lim = 0.36;
+    q.slerp(new T.Quaternion(), 1 - Math.min(1, lim / Math.max(ang, 1e-6)) * 0.9);   // ~90% of the way, at most ~20 degrees
+    R.aimKey = key; R.aimQ = q; R.aimErr = a.length() && S.distanceTo(new T.Vector3(target.x, target.y, target.z));
+    return q;
+  }
+  function applyAim(q, k) {
+    if (!q || !(k > 0)) return;
+    var b = R.bones.chest || R.bones.spine; if (!b) return;
+    Q2.identity().slerp(q, k);
+    b.parent.getWorldQuaternion(_pq);
+    Q.copy(_pq).invert().multiply(Q2).multiply(_pq);
+    b.quaternion.premultiply(Q);
+  }
+
+  // ------------------------------------------------------------------ the frame driver
+  // finish(): post effects, snapshot crossfade on discontinuities, matrices
+  var mem = { key: '', time: -1, frozen: null };
+  function finish(spec, time) {
+    evaluate(spec.layers);
+    R.root.updateMatrixWorld(true);
+    if (spec.aim) applyAim(spec.aim.q, spec.aim.k);
+    if (spec.gaze) { R.root.updateMatrixWorld(true); gaze(spec.gaze, spec.gazeK == null ? 1 : spec.gazeK); }
+    if (spec.hideBat) R.bat.forEach(function (m) { m.visible = false; }); else R.bat.forEach(function (m) { m.visible = true; });
+    if (spec.capBack && R.bones.cap) R.bones.cap.rotateY(PI);
+    applyFace(spec.face || FACE0);
+    // crossfade over discontinuities between consecutive frames
+    var dt = time - mem.time, i;
+    if (spec.key !== mem.key && mem.time >= 0 && dt >= 0 && dt < 0.25 && (spec.fade || 0) > 0) {
+      for (i = 0; i < R.allBones.length; i++) { R.fadeFrom[i].p.copy(R.final[i].p); R.fadeFrom[i].q.copy(R.final[i].q); R.fadeFrom[i].s.copy(R.final[i].s); }
+      mem.fadeT0 = time; mem.fadeDur = spec.fade;
+    } else if (spec.key !== mem.key) mem.fadeT0 = null;
+    if (mem.fadeT0 != null) {
+      var k = smooth((time - mem.fadeT0) / mem.fadeDur);
+      if (k >= 1 || time < mem.fadeT0) mem.fadeT0 = null;
+      else for (i = 0; i < R.allBones.length; i++) {
+        var b = R.allBones[i], f = R.fadeFrom[i];
+        b.position.lerpVectors(f.p, b.position, k); b.quaternion.slerpQuaternions(f.q, b.quaternion.clone(), k); b.scale.lerpVectors(f.s, b.scale, k);
+      }
+    }
+    for (i = 0; i < R.allBones.length; i++) { var bb = R.allBones[i]; R.final[i].p.copy(bb.position); R.final[i].q.copy(bb.quaternion); R.final[i].s.copy(bb.scale); }
+    mem.key = spec.key; mem.time = time;
+    R.root.updateMatrixWorld(true);
+    R.last = spec;
+  }
+  // once main stops advancing pitchT ('between' after a resolved pitch) keep the reaction playing on the clock
+  function frozenExtra(v, resolved) {
+    var t = v.time || 0, f = mem.frozen, sig = (v.pitch ? v.pitch.id + ':' + v.pitch.T : '') + '|' + v.pitchT + '|' + (v.swing ? v.swing.t : '');
+    if (!f || f.sig !== sig || !resolved || v.hitstop || t - f.last > 0.1 || t < f.last) { mem.frozen = { sig: sig, t0: t, last: t }; return 0; }
+    f.last = t;
+    return Math.min(4, t - f.t0);
+  }
+
+  // swing clip selection: blend high / mid / low so the barrel height follows the pitch height
+  function swingBlend(z) {
+    var S = R.info.swings, cand = [];
+    ['swing_low', 'swing_mid', 'swing_high'].forEach(function (c) { if (S[c]) cand.push({ c: c, h: S[c].sweet.y * R.size }); });
+    cand.sort(function (a, b) { return a.h - b.h; });
+    if (cand.length === 1 || z <= cand[0].h) return [L(cand[0].c, 0, 1)];
+    for (var i = 1; i < cand.length; i++) {
+      if (z <= cand[i].h) { var k = (z - cand[i - 1].h) / Math.max(1e-3, cand[i].h - cand[i - 1].h); return [L(cand[i - 1].c, 0, 1 - k), L(cand[i].c, 0, k)]; }
+    }
+    return [L(cand[cand.length - 1].c, 0, 1)];
+  }
+  function atTime(layers, t) { return layers.map(function (l) { return { c: l.c, t: t, w: l.w }; }); }
+  // game swing time -> clip time: the first 0.25 s of the clip squeezed into the real swing up to contact
+  function warp(st, tcs) { return st < tcs ? CONTACT_T * (st / tcs) : CONTACT_T + (st - tcs); }
+  function stanceL(t) { return [L('stance', looped('stance', twos(t)))]; }
+
+  // ---- bat scene. o = { ci: contact info from BB.Render, ball: world point for the gaze, contactPt: world point the
+  // barrel should meet, pitcherHead: world point, latency }
+  function poseBat(v, o) {
+    o = o || {};
+    var t = v.time || 0, p = v.pitch, sw = v.swing, ci = o.ci, load = v.loading != null ? v.loading : 0;
+    var resolved = !!(p && v.pitchT != null && (v.pitchT > p.T + 0.12 || (ci && ci.hit)));
+    var extra = frozenExtra(v, resolved && !(ci && ci.hit));
+    var pt = (p && v.pitchT != null) ? v.pitchT + extra : null;
+    var face = { blink: blinkAt(t, 1), smile: 0.4, brows_angry: 0.25 }, gz = o.pitcherHead || null, gk = 0.8;
+    var spec = { key: 'idle', fade: 0.14, layers: null, face: face, capBack: !!v.onFire };
+    // power load / coil (held tap)
+    var base;
+    if (load > 0) {
+      var lt = load * 0.35;
+      var coil = load >= 1 ? [L(first('coil_hold', 'power_load'), has('coil_hold') ? looped('coil_hold', t) : dur('power_load'))] : [L(first('power_load', 'stance'), lt * dur(first('power_load', 'stance')) / 0.35)];
+      base = load >= 1 ? coil : mixL(stanceL(t), coil, smooth(lt / 0.08));
+      face.brows_angry = 0.3 + 0.7 * smooth(load); face.squint = 0.55 * load; face.cheeks_puff = 0.55 * smooth((load - 0.3) / 0.7); face.smile = 0; face.blink = 0;
+      spec.key = 'load';
+    } else if (pt != null) {
+      var s1 = first('stride', 'stance');
+      base = mixL(stanceL(t), [L(s1, s1 === 'stride' ? Math.min(pt, dur('stride')) : looped('stance', twos(t)))], smooth(pt / 0.06));
+      spec.key = 'pitch'; spec.fade = 0.06;
+    } else base = stanceL(t);
+    if (p && pt != null && o.ball) { gz = o.ball; gk = 1; }
+    if (!sw) {
+      spec.layers = base;
+      if (p && pt != null && pt > p.T + 0.02) {          // the pitch went by: take it (and argue a called strike three)
+        var tk = onTwos(pt - p.T - 0.02, t), calledK = p.strike && v.stamp && v.stamp.kind === 'bad';
+        var take = has('take') ? [L('take', Math.min(tk, dur('take')))] : stanceL(t);
+        spec.layers = mixL(base, take, smooth(tk / 0.1));
+        face.brows_up = 0.4 * smooth(tk / 0.2); face.smile = 0.2;
+        if (calledK) {
+          var kt = onTwos(pt - p.T - 0.2, t);
+          if (kt > 0) {
+            var sr = has('strike_react') ? [L('strike_react', Math.min(kt, dur('strike_react')))] : take;
+            spec.layers = mixL(spec.layers, sr, smooth(kt / 0.12));
+            face.brows_up = 0; face.brows_angry = kt < 0.5 ? 1 : 1 - smooth((kt - 0.5) / 0.3); face.brows_sad = smooth((kt - 0.5) / 0.3) * 0.9; face.frown = smooth(kt / 0.2); face.smile = 0;
+          }
+        }
+        gk = smooth(1 - (pt - p.T - 0.3) / 0.3) * 0.8;
+      }
+      spec.gaze = gz; spec.gazeK = gk;
+      finish(spec, t);
+      return spec;
+    }
+    // ---- swing
+    var swt = sw.t + extra;
+    var lat = o.latency != null ? o.latency : K.INPUT_LATENCY;
+    var tcs = ci ? Math.max(0.025, ci.cT - (v.pitchT - sw.t)) : Math.max(0.03, K.SWING_LAG - lat);
+    var whiff = !!(sw.result && !sw.result.contact), plateZ = p && p.plate ? p.plate.z : 2.5;
+    var ct = warp(swt, tcs);
+    var blend = swingBlend(plateZ);
+    var swingL, contactL = atTime(blend, CONTACT_T);
+    spec.key = 'swing'; spec.fade = 0.045;
+    face.blink = 0; face.smile = 0; face.brows_angry = 0.85; face.squint = 0.35 * (1 - smooth((ct - 0.3) / 0.2)); face.mouth_open = 0.25;
+    if (whiff) {
+      var wc = first('whiff', 'swing_mid'), wd = dur(wc);
+      var wt = ct < 0.5 ? ct : 0.5 + onTwos(ct - 0.5, t);
+      swingL = [L(wc, Math.min(wt, wd))];
+      if (wc === 'whiff' && wt > wd && has('dizzy')) swingL = mixL(swingL, [L('dizzy', looped('dizzy', wt - wd))], smooth((wt - wd) / 0.1));
+      var u = clamp((ct - 0.3) / 0.6, 0, 1);
+      face.mouth_open = 0.25 + 0.6 * Math.sin(u * PI); face.brows_angry = 0.85 * (1 - u); face.brows_sad = 0.6 * u; face.brows_up = 0.5 * u; face.squint = 0;
+      if (wt > wd) { face.blink = 0.35 + 0.15 * Math.sin(t * 7); face.mouth_open = 0.35 + 0.2 * Math.sin(t * 5.3); face.frown = 0.4; }
+      if (v.stamp && v.stamp.kind === 'bad' && /OUT|K|SIT|STRUCK|FANNED|WHIFF/.test(String(v.stamp.text || '').toUpperCase()) && wt > 0.8) face.brows_sad = 0.9;
+      spec.gaze = o.ball; spec.gazeK = 0.6 * (1 - u);
+    } else {
+      swingL = atTime(blend, Math.min(ct, dur(blend[0].c)));
+      if (ci && ci.hit) {
+        var tc = Math.max(0, ci.tc + extra);
+        face.grin = smooth(tc / 0.05) * (ci.sweet ? 1 : 0.75); face.brows_angry = 0.85 * (1 - smooth(tc / 0.15)); face.brows_up = smooth(tc / 0.2) * 0.8; face.squint = 0;
+        face.mouth_open = o.hr ? smooth((tc - 0.06) / 0.1) * 0.9 : 0.15;
+        var sd = dur(blend[0].c);
+        if (ct > sd - 0.15 && has('watch')) swingL = mixL(swingL, [L('watch', looped('watch', onTwos(ct - sd + 0.15, t)))], smooth((ct - sd + 0.15) / 0.15));
+        spec.gaze = o.ballAfter || o.ball; spec.gazeK = 1;
+      } else spec.gaze = o.ball;
+    }
+    // swing off the base pose (stride / coil) in a frame or two
+    spec.layers = mixL(base, swingL, smooth(swt / 0.02));
+    // aim the barrel at the ball around the contact frame
+    if (o.contactPt && !whiff) {
+      var q = aimFor(contactL, o.contactPt);
+      var env = ct < CONTACT_T ? smooth((ct - 0.05) / (CONTACT_T - 0.05)) : 1 - smooth((ct - CONTACT_T) / 0.3);
+      spec.aim = { q: q, k: env };
+    }
+    finish(spec, t);
+    return spec;
+  }
+
+  // ---- field scene: the batter at home before he runs (swing follow-through, watch, bat flip on a homer)
+  function poseHome(v, o) {
+    var t = v.time || 0, tc = o.tc, hr = !!o.hr, plateZ = o.plateZ != null ? o.plateZ : 2.5;
+    var blend = swingBlend(plateZ), ct = CONTACT_T + tc, sd = dur(blend[0].c);
+    var layers = atTime(blend, Math.min(ct, sd));
+    var face = { grin: 1, brows_up: 0.8, mouth_open: hr ? 0.8 : 0.2, blink: blinkAt(t, 1) * 0.6 };
+    if (hr && has('bat_flip')) {
+      var ft = onTwos(tc - 0.18, t);
+      layers = mixL(layers, [L('bat_flip', Math.min(ft, dur('bat_flip')))], smooth(ft / 0.14));
+    } else if (has('watch') && ct > sd - 0.15) layers = mixL(layers, [L('watch', looped('watch', onTwos(ct - sd + 0.15, t)))], smooth((ct - sd + 0.15) / 0.15));
+    var spec = { key: 'home', fade: 0.05, layers: layers, face: face, capBack: !!v.onFire, gaze: o.ball, gazeK: 0.7 };
+    finish(spec, t);
+    return spec;
+  }
+  // ---- field scene: running the bases. o = { dist: ft along the path, moving, hr, arrived, arriveT, out, outT, scored }
+  function poseRun(v, o) {
+    var t = v.time || 0, layers, face = { brows_angry: 0.5, mouth_open: 0.35, blink: blinkAt(t, 1) * 0.5 };
+    var gait = o.hr ? first('trot', 'run') : first('run', 'trot');
+    var stride = gait === 'trot' ? 6.5 : 10;          // feet per cycle (cartoon-fast legs)
+    var ph = looped(gait, (o.dist / stride) * dur(gait));
+    if (gait === 'trot') ph = looped(gait, onTwos(ph, t));
+    layers = [L(gait, ph)];
+    if (o.hr) { face = { grin: 0.9, smile: 1, brows_up: 0.6, blink: blinkAt(t, 1) }; }
+    var key = 'run';
+    if (o.arrived && o.arriveT != null) {
+      var at = onTwos(o.arriveT, t);
+      var end = has('cheer') ? [L('cheer', Math.min(at, dur('cheer')))] : stanceL(t);
+      layers = mixL(layers, end, smooth(at / 0.12));
+      face = { grin: 1, mouth_open: 0.7 * (1 - smooth((at - 0.9) / 0.3)), brows_up: 1, blink: at > 1 ? blinkAt(t, 1) : 0 };
+    }
+    if (o.out && o.outT != null && o.outT > 0) {
+      var ot = onTwos(o.outT, t);
+      var slump = has('strike_react') ? [L('strike_react', Math.min(ot, dur('strike_react')))] : stanceL(t);
+      layers = mixL(layers, slump, smooth(ot / 0.15));
+      face = { brows_angry: ot < 0.5 ? 1 : 0.2, brows_sad: smooth((ot - 0.5) / 0.3), frown: 1, blink: blinkAt(t, 1) };
+    }
+    var spec = { key: key, fade: 0.1, layers: layers, face: face, hideBat: true, capBack: !!v.onFire };
+    finish(spec, t);
+    return spec;
+  }
+  // ---- title: idle in the stance with a practice swing every few seconds
+  function poseTitle(t) {
+    var cyc = t % 6.5, layers = stanceL(t), face = { smile: 0.6, brows_up: 0.15, blink: blinkAt(t, 1) };
+    if (cyc > 4.5) {
+      var c = first('swing_mid', 'swing_high', 'swing_low'), st = cyc - 4.5;
+      var w = smooth(st / 0.12) * (1 - smooth((st - 1.35) / 0.4));
+      layers = mixL(layers, [L(c, Math.min(st, dur(c)))], w);
+      face = { brows_angry: 0.8 * w, squint: 0.3 * w, smile: 0.6 * (1 - w), mouth_open: 0.2 * w, blink: 0 };
+    }
+    var spec = { key: 'title', fade: 0.2, layers: layers, face: face };
+    finish(spec, t);
+    return spec;
+  }
+
+  // bat positions at other swing times (for the smear): evaluates the pose without touching the frame memory
+  function batTrail(v, o, times) {
+    var tips = [], mids = [], keep = R.last;
+    var sw = v.swing; if (!sw || !keep) return null;
+    var lat = o.latency != null ? o.latency : K.INPUT_LATENCY, ci = o.ci;
+    var tcs = ci ? Math.max(0.025, ci.cT - (v.pitchT - sw.t)) : Math.max(0.03, K.SWING_LAG - lat);
+    var whiff = !!(sw.result && !sw.result.contact);
+    var blend = whiff ? [L(first('whiff', 'swing_mid'), 0)] : swingBlend(v.pitch && v.pitch.plate ? v.pitch.plate.z : 2.5);
+    var tipB = R.bones.bat_tip || R.bones.bat_sweet, midB = R.bones.bat_sweet || R.bones.bat, grip = R.bones.bat;
+    times.forEach(function (st) {
+      var ct = warp(Math.max(0, st), tcs);
+      evaluate(atTime(blend, ct));
+      if (keep.aim && !whiff) { var env = ct < CONTACT_T ? smooth((ct - 0.05) / (CONTACT_T - 0.05)) : 1 - smooth((ct - CONTACT_T) / 0.3); R.root.updateMatrixWorld(true); applyAim(keep.aim.q, env); }
+      R.root.updateMatrixWorld(true);
+      tips.push(new T.Vector3().setFromMatrixPosition(tipB.matrixWorld));
+      var a = new T.Vector3().setFromMatrixPosition(grip.matrixWorld), b = new T.Vector3().setFromMatrixPosition(midB.matrixWorld);
+      mids.push(a.lerp(b, 0.45));
+    });
+    // put the frame's pose back
+    for (var i = 0; i < R.allBones.length; i++) { var bb = R.allBones[i]; bb.position.copy(R.final[i].p); bb.quaternion.copy(R.final[i].q); bb.scale.copy(R.final[i].s); }
+    R.root.updateMatrixWorld(true);
+    return { tips: tips, mids: mids };
+  }
+  // where the flipped bat comes to rest (world, Z-up), for the prop lying in the dirt
+  function batRest(out) {
+    out = out || {};
+    if (!has('bat_flip')) return null;
+    if (!R.batRestCache || R.batRestCache.key !== R.root.matrixWorld.elements.join()) {
+      evaluate([L('bat_flip', dur('bat_flip'))]);
+      R.root.updateMatrixWorld(true);
+      var p = worldOf('bat', new T.Vector3()), tip = R.bones.bat_tip ? worldOf('bat_tip', new T.Vector3()) : p.clone().add(new T.Vector3(1, 0, 0));
+      R.batRestCache = { key: R.root.matrixWorld.elements.join(), p: p, dir: tip.sub(p).setZ(0).normalize() };
+      for (var i = 0; i < R.allBones.length; i++) { var bb = R.allBones[i]; bb.position.copy(R.final[i].p); bb.quaternion.copy(R.final[i].q); bb.scale.copy(R.final[i].s); }
+      R.root.updateMatrixWorld(true);
+    }
+    return R.batRestCache;
+  }
+  // lay the bat prop on the ground at (x, y) pointing along (dx, dy)
+  var _bq = new T.Quaternion(), _bz = new T.Vector3(), _bx = new T.Vector3(), _by = new T.Vector3(), _bm = new T.Matrix4();
+  function dropBat(x, y, dx, dy) {
+    var m = R.batProp; if (!m) return null;
+    var ax = m.userData.axis, len = m.userData.len;
+    _by.set(dx, dy, 0.06).normalize();                       // world direction of the bat axis (handle -> tip)
+    // rotation taking the bat-space axis to _by, with the barrel's roll arbitrary
+    _bq.setFromUnitVectors(ax, _by);
+    m.quaternion.copy(_bq);
+    m.position.set(x, y, 0.17);
+    m.scale.setScalar(R.size);
+    m.visible = true;
+    return m;
+  }
+
+  // world-space bounds of the posed body (CPU skinning of every 2nd vertex; for framing and QA, not per frame)
+  function posedBox(step) {
+    var box = new T.Box3(), v = new T.Vector3();
+    step = step || 2;
+    R.root.updateMatrixWorld(true);
+    R.meshes.forEach(function (m) {
+      if (!m.visible) return;
+      var P = m.geometry.attributes.position;
+      for (var i = 0; i < P.count; i += step) {
+        v.fromBufferAttribute(P, i);
+        if (m.isSkinnedMesh) m.boneTransform(i, v);
+        v.applyMatrix4(m.matrixWorld);
+        box.expandByPoint(v);
+      }
+    });
+    return box;
+  }
+  function info() {
+    var o = { status: R.status, error: R.error, warnings: R.warnings.slice(), clips: R.clips ? Object.keys(R.clips).map(function (c) { return c + ' ' + R.clips[c].duration.toFixed(2) + 's'; }) : [] };
+    if (R.info) {
+      o.contact = {}; for (var c in R.info.swings) { var s = R.info.swings[c].sweet; o.contact[c] = [s.x, s.y, s.z].map(function (x) { return +x.toFixed(3); }); }
+      var b = R.info.restBox; o.restHeight = +(b.max.y - b.min.y).toFixed(3); o.restMinY = +b.min.y.toFixed(3);
+      var sb = R.info.stanceBox; o.stanceBox = { min: sb.min.toArray().map(function (x) { return +x.toFixed(2); }), max: sb.max.toArray().map(function (x) { return +x.toFixed(2); }) };
+      o.triangles = 0; R.meshes.forEach(function (m) { var g = m.geometry; o.triangles += (g.index ? g.index.count : g.attributes.position.count) / 3; });
+      o.materials = Object.keys(R.colors).map(function (n) { return n + ' ' + R.colors[n]; }); o.droppedTracks = R.dropped || 0;
+      o.drawCalls = R.meshes.length + R.meshes.filter(function (m) { return m.userData.outline; }).length;
+    }
+    o.loadMs = R.loadMs;
+    return o;
+  }
+
+  API.ready = function () { return R.status === 'ready'; };
+  API.boot = boot; API.loadBuffer = loadBuffer; API.R = R;
+  API.setColors = setColors; API.setHot = setHot; API.place = place; API.point = function (n, out) { return worldOf(n, out); };
+  API.poseBat = poseBat; API.poseHome = poseHome; API.poseRun = poseRun; API.poseTitle = poseTitle; API.batTrail = batTrail;
+  API.solvePlacement = solvePlacement; API.autoSize = autoSize; API.batRest = batRest; API.dropBat = dropBat; API.info = info;
+  API.root = function () { return R.root; }; API.prop = function () { return R.batProp; };
+  API.headPoint = headPoint; API.has = has; API.dur = dur; API.posedBox = posedBox; API.CONTACT_T = CONTACT_T;
+  return API;
+})();
+
+// ===================== MODULE: 37-ink.js =====================
+// 37-ink.js — BB.Ink: the hand-inked look over the 3D renderer (three.js r149). Owned by the ink agent.
+// See docs/PILOT-ROCCO.md ("Ink look", "Conventions shared by everyone").
+//
+// When BB.Ink.active(), BB.Render (35-scene.js) hands each frame to BB.Ink.render() instead of renderer.render():
+//   1. NORMALS  Layer-1 objects (characters, gear, bat, ball: "layer 1 = inked") are drawn into a small target with
+//      one override material (skinning and morph targets supported) that writes the view-space normal, an object
+//      id and a per-object line weight, plus a depth texture. Anything below the field (world z < 0: feet sunk in
+//      the dirt) is clipped, because the ground hides it in the picture. Layer-2-only objects ("ink occluders",
+//      optional: walls, stands) are drawn there too, as masks, so lines behind them are hidden.
+//   2. PICTURE  The scene is drawn to the canvas exactly as without ink (MSAA intact), with the inverted-hull
+//      outlines hidden: the ink pass draws every line. (Hulls come back when nothing on layer 1 is in view.)
+//   3. EDGES    Silhouettes (inked vs empty), occluding contours (a neighbour off the tangent plane), object and
+//      colour boundaries (id changes) and creases (normal Laplacian) become pen radii: heavy silhouettes, lighter
+//      interior lines, thinner with distance (interior lines also fade out on far figures), heavier on the side
+//      away from the key light, and a slow brush-pressure swell re-rolled 12 times a second.
+//   4. NIB      Two separable passes stamp a round nib of that radius on every edge texel (max of r^2 - d^2, exact
+//      union of discs in 2 x (2R+1) taps) and store the signed distance to the stroke edge.
+//   5. OVERLAY  One full-screen pass blended over the canvas (premultiplied alpha): anti-aliased strokes from the
+//      distance field (smoothed with 4 taps, with a boil: a UV jitter that changes on twos), a static paper grain,
+//      a gentle warm grade and a soft vignette. Backgrounds (layer 0 only) get no lines.
+// Quality: low / medium / high = normals target at 1 / 1.5 / 2 texels per CSS px (never above the canvas). It
+// steps down by itself while the median frame interval stays over 20 ms, switches off below 'low', and stays off
+// once BB.Render has dropped its pixel ratio. `?ink=0` turns it off, `?ink=1` forces it on, `?ink=low|medium|high`
+// pins a level.
+//
+// API: active(), render(renderer, scene, camera, info), resize(renderer, w, h, pr), twos(t), setEnabled(on),
+//      enabled(), setQuality(level | name), quality(), stats(), hullsVisible(), registerHull(material),
+//      mark(root, opts) (helper: put a character/prop on layer 1), debug(mode) ('normals'|'edges'|'nib'|'lines'|null).
+(function () {
+  var T = (typeof THREE !== 'undefined') ? THREE : null;
+  function clock() { return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); }
+  if (!T) {
+    BB.Ink = {
+      active: function () { return false; }, render: function (r, s, c) { r.render(s, c); }, resize: function () {},
+      twos: function (t) { return t; }, setEnabled: function () {}, enabled: function () { return false; },
+      setQuality: function () {}, quality: function () { return 0; }, stats: function () { return { active: false, reason: 'no three.js' }; },
+      hullsVisible: function () { return true; }, registerHull: function () {}, mark: function (o) { return o; }, debug: function () {},
+    };
+    return;
+  }
+
+  // ------------------------------------------------------------------ tunables
+  var CFG = {
+    ink: '#1B1420',
+    // full stroke widths in CSS px at the reference scale (a 5-ft character ~340 px tall)
+    width: { sil: 3.4, contour: 2.5, edge: 1.7, crease: 1.6 },
+    // stroke style per edge type: 0 = solid ink, 1 = a darker shade of the colour underneath
+    style: { sil: 0, contour: 0, edge: 0.2, crease: 0.25 },
+    colorLine: 0.42,          // brightness of a style-1 line relative to the fill under it
+    ppfRef: 64, attPow: 0.5, attMin: 0.3, attMax: 1.12,   // thinner with distance: (px-per-ft / ppfRef) ^ attPow
+    fade: [9, 34, 0.6],       // interior lines fade out between these px-per-ft (contours keep at least [2])
+    shadowSide: 0.4,          // extra weight on edges facing away from the key light
+    pressure: 0.12,           // brush-pressure swell (fraction of the width), re-rolled on twos
+    pressureWave: 42,         // its wavelength along the stroke, CSS px
+    boil: 0.55,               // UV boil amplitude, CSS px, re-rolled on twos
+    boilWave: 48,             // boil wavelength, CSS px
+    gap: [1.5, 3.0],          // occluding contour: neighbour off the tangent plane by this many texels (ramp)
+    crease: [0.3, 0.65],      // crease: |normal Laplacian| ramp
+    minW: 1.0,                // thinnest stroke, texels; thinner strokes fade instead of breaking up
+    ground: 0,                // world z below which layer-1 surfaces are underground (null: no clip)
+    grain: 0.03, mottle: 0.25, vignette: 0.13, lift: [0.024, 0.013, 0.0], gain: 0.97,
+    slowMs: 20,               // median frame interval that counts as slow
+  };
+  var LEVELS = [null, { name: 'low', q: 1.0 }, { name: 'medium', q: 1.5 }, { name: 'high', q: 2.0 }];
+  var MAX_R_PX = 2.9;         // largest nib radius we can draw, CSS px (sets the dilation kernel size)
+
+  // ------------------------------------------------------------------ state
+  var S = {
+    enabled: true, forced: false, off: '', level: 2, startLevel: 2, auto: true, hulls: false, ok: null, err: '',
+    key: '', nW: 0, nH: 0, dbW: 0, dbH: 0, cssW: 0, cssH: 0, rmax: 2,
+    rtN: null, rtE: null, rtH: null, rtD: null,
+    samples: [], lastT: 0, warm: 0, med: 0, cpuMs: 0, frames: 0, drawn: 0, occl: 0, calls: {}, seedK: 0, lastTick: -1,
+    light: null, lightScan: -1e9, debug: '', hullMats: [], hullVis: [], hullAll: [], inked: false,
+  };
+  (function urlFlag() {
+    var m = /[?&]ink=([^&#]*)/.exec((typeof location !== 'undefined' && location.search) || '');
+    if (!m) return;
+    var v = decodeURIComponent(m[1]).toLowerCase();
+    if (v === '0' || v === 'off' || v === 'false' || v === 'no') S.enabled = false;
+    else if (v === '1' || v === 'on' || v === 'true' || v === 'yes') S.forced = true;
+    else if (v === 'low' || v === 'medium' || v === 'med' || v === 'high') {
+      S.forced = true; S.auto = false; S.level = S.startLevel = v === 'low' ? 1 : v === 'high' ? 3 : 2;
+    }
+    // anything else (e.g. a colour-scheme id in the render harness) is not ours
+  })();
+
+  // ------------------------------------------------------------------ shader bits
+  var NOISE = [
+    'float hash12(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }',
+    'float vnoise(vec2 p) {',
+    '  vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);',
+    '  return mix(mix(hash12(i), hash12(i + vec2(1.0, 0.0)), f.x), mix(hash12(i + vec2(0.0, 1.0)), hash12(i + vec2(1.0, 1.0)), f.x), f.y);',
+    '}'].join('\n');
+  var FS_VERT = 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
+
+  // 1. normals / id / weight of layer-1 objects (layer-2-only objects: occluder masks). Skinning + morphs via chunks.
+  //    rgba = (normal.xy * 0.5 + 0.5, id, weight * 0.5); empty = 0; occluder = (.5, .5, 1, 0)
+  var NMAT = new T.ShaderMaterial({
+    uniforms: { uId: { value: 0 }, uW: { value: 0.5 }, uSkip: { value: 0 }, uOcc: { value: 0 }, uGround: { value: -1e9 } },
+    vertexShader: [
+      '#include <common>',
+      '#include <morphtarget_pars_vertex>',
+      '#include <skinning_pars_vertex>',
+      'uniform float uSkip;',
+      'varying vec3 vN; varying float vWz;',
+      'void main() {',
+      '  #include <beginnormal_vertex>',
+      '  #include <morphnormal_vertex>',
+      '  #include <skinbase_vertex>',
+      '  #include <skinnormal_vertex>',
+      '  vec3 nrm = objectNormal;',
+      '  #ifdef USE_INSTANCING',
+      '    mat3 im = mat3(instanceMatrix); nrm /= vec3(dot(im[0], im[0]), dot(im[1], im[1]), dot(im[2], im[2])); nrm = im * nrm;',
+      '  #endif',
+      '  vN = normalMatrix * nrm;',
+      '  #include <begin_vertex>',
+      '  #include <morphtarget_vertex>',
+      '  #include <skinning_vertex>',
+      '  #include <project_vertex>',
+      '  vec4 wp = vec4(transformed, 1.0);',
+      '  #ifdef USE_INSTANCING',
+      '    wp = instanceMatrix * wp;',
+      '  #endif',
+      '  vWz = (modelMatrix * wp).z;',
+      '  if (uSkip > 0.5) gl_Position = vec4(0.0, 0.0, -2.0, 1.0);', // skipped: outside the clip volume
+      '}'].join('\n'),
+    fragmentShader: [
+      'uniform float uId; uniform float uW; uniform float uOcc; uniform float uGround;',
+      'varying vec3 vN; varying float vWz;',
+      'void main() {',
+      '  if (vWz < uGround) discard;',                                   // under the field: the ground hides it
+      '  vec3 n = normalize(vN); if (!gl_FrontFacing) n = -n;',
+      '  gl_FragColor = uOcc > 0.5 ? vec4(0.5, 0.5, 1.0, 0.0) : vec4(n.xy * 0.5 + 0.5, uId, uW);',
+      '}'].join('\n'),
+  });
+  var L1 = 2, L2 = 4; // layer masks
+  NMAT.onBeforeRender = function (renderer, scene, camera, geometry, object, group) {
+    var u = this.uniforms, m = object.material;
+    if (Array.isArray(m)) m = m[(group && group.materialIndex) || 0];
+    var skip = !object.isMesh || (object.userData && object.userData.noInk) || !m || isHull(m) ||
+      (m.transparent && m.depthWrite === false) || m.colorWrite === false;
+    var occ = !skip && (object.layers.mask & L1) === 0;
+    u.uSkip.value = skip ? 1 : 0;
+    u.uOcc.value = occ ? 1 : 0;
+    if (!skip) {
+      var ud = object.userData || {};
+      var id = ud.inkId != null ? ud.inkId : object.id;
+      u.uId.value = ((Math.imul((id | 0) + 0x51ED27, 0x9E3779B1) >>> 24) % 251 + 3) / 255;
+      u.uW.value = Math.max(1 / 255, Math.min(1, (ud.inkWeight != null ? ud.inkWeight : 1) * 0.5));
+      this.side = m.side != null ? m.side : T.FrontSide;
+      if (occ) S.occl++; else S.drawn++;
+    }
+    this.uniformsNeedUpdate = true;
+  };
+  function isHull(m) {
+    if (m.userData && m.userData.inkHull) return true;
+    if (BB.Toon && m === BB.Toon.OUTLINE) return true;
+    for (var i = 0; i < S.hullMats.length; i++) if (S.hullMats[i] === m) return true;
+    return false;
+  }
+
+  // 3. edges -> nib per texel: r = nib radius / rmax (radius measured from the texel centre), g = opacity,
+  //    b = style, a = 1 on edge texels. Both texels either side of an edge are marked (the stroke is centred on it).
+  var EMAT = new T.ShaderMaterial({
+    uniforms: {
+      tN: { value: null }, tZ: { value: null }, uTexel: { value: new T.Vector2() }, uProjInv: { value: new T.Matrix4() },
+      uP11: { value: 1 }, uCssH: { value: 844 }, uPx: { value: 1 }, uWid: { value: new T.Vector4() }, uSty: { value: new T.Vector4() },
+      uAtt: { value: new T.Vector4() }, uFade: { value: new T.Vector3() }, uLight: { value: new T.Vector3() }, uSeed: { value: new T.Vector2() },
+      uPress: { value: 0.2 }, uPressF: { value: 0.04 }, uRmax: { value: 2 }, uMinW: { value: 1 }, uGap: { value: new T.Vector2() }, uCrease: { value: new T.Vector2() },
+    },
+    vertexShader: FS_VERT,
+    fragmentShader: [
+      'uniform sampler2D tN; uniform sampler2D tZ;',
+      'uniform vec2 uTexel; uniform mat4 uProjInv; uniform float uP11; uniform float uCssH; uniform float uPx;',
+      'uniform vec4 uWid; uniform vec4 uSty; uniform vec4 uAtt; uniform vec3 uFade; uniform vec3 uLight; uniform vec2 uSeed;',
+      'uniform float uPress; uniform float uPressF; uniform float uRmax; uniform float uMinW; uniform vec2 uGap; uniform vec2 uCrease;',
+      'varying vec2 vUv;',
+      NOISE,
+      'float isInk(vec4 v) { return step(0.002, v.a); }',
+      'float isOcc(vec4 v) { return (1.0 - step(0.002, v.a)) * step(0.5, v.b); }',
+      'vec3 decN(vec4 v) { vec2 n = v.xy * 2.0 - 1.0; return vec3(n, sqrt(max(0.0, 1.0 - dot(n, n)))); }',
+      'vec3 vpos(vec2 uv) { float d = texture2D(tZ, uv).x; vec4 p = uProjInv * vec4(uv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0); return p.xyz / p.w; }',
+      'float ppf(float dist) { return uCssH * 0.5 * uP11 / max(dist, 0.05); }',          // css px per foot at that depth
+      'float att(float dist) { return clamp(pow(ppf(dist) / uAtt.x, uAtt.y), uAtt.z, uAtt.w); }',
+      'float fadeI(float dist) { return smoothstep(uFade.x, uFade.y, ppf(dist)); }',
+      'float shade(vec4 v) { vec2 d = v.xy * 2.0 - 1.0; float l = length(d); return 1.0 + uLight.z * (l > 0.05 ? smoothstep(-0.15, 0.8, -dot(d / l, uLight.xy)) : 0.0); }',
+      // (width css px, style, opacity) for the edge between this texel (c, at pc) and the neighbour q at uvq
+      'vec3 pairEdge(vec4 c, float ic, float oc, vec3 pc, vec4 q, vec2 uvq) {',
+      '  float iq = isInk(q), oq = isOcc(q);',
+      '  if (ic + iq < 0.5) return vec3(0.0);',
+      '  if (ic + iq < 1.5) {',                                     // silhouette: inked next to empty
+      '    if (oc + oq > 0.5) return vec3(0.0);',                     // ...unless the other side is an occluder
+      '    vec4 m = ic > 0.5 ? c : q; vec3 pm = ic > 0.5 ? pc : vpos(uvq);',
+      '    return vec3(uWid.x * att(-pm.z) * shade(m) * m.a * 2.0, uSty.x, 1.0);',
+      '  }',
+      '  vec3 pq = vpos(uvq), nc = decN(c), nq = decN(q);',
+      '  float front = min(-pc.z, -pq.z);',
+      '  float tw = 2.0 * front / (uP11 * uCssH * uPx);',              // world size of one texel at that depth
+      '  float gap = max(abs(dot(pq - pc, nc)), abs(dot(pc - pq, nq))) / tw;',
+      '  float jump = smoothstep(uGap.x, uGap.y, gap);',
+      '  float idd = step(0.003, abs(c.b - q.b));',
+      '  vec4 fm = -pc.z < -pq.z ? c : q;',
+      '  float a = att(front) * fm.a * 2.0, fi = fadeI(front);',
+      '  float rc = jump * uWid.y * shade(fm) * a, rb = idd * uWid.z * a;',
+      '  return rc >= rb ? vec3(rc, uSty.y, mix(uFade.z, 1.0, fi)) : vec3(rb, uSty.z, fi);',
+      '}',
+      'void main() {',
+      '  vec2 dx = vec2(uTexel.x, 0.0), dy = vec2(0.0, uTexel.y);',
+      '  vec4 c = texture2D(tN, vUv), l = texture2D(tN, vUv - dx), r = texture2D(tN, vUv + dx), b = texture2D(tN, vUv - dy), t = texture2D(tN, vUv + dy);',
+      '  float ic = isInk(c), il = isInk(l), ir = isInk(r), ib = isInk(b), it = isInk(t);',
+      '  if (ic + il + ir + ib + it < 0.5) { gl_FragColor = vec4(0.0); return; }',
+      '  float oc = isOcc(c);',
+      '  vec3 pc = vpos(vUv);',
+      '  vec3 e = pairEdge(c, ic, oc, pc, l, vUv - dx), e2;',
+      '  e2 = pairEdge(c, ic, oc, pc, r, vUv + dx); if (e2.x * e2.z > e.x * e.z) e = e2;',
+      '  e2 = pairEdge(c, ic, oc, pc, b, vUv - dy); if (e2.x * e2.z > e.x * e.z) e = e2;',
+      '  e2 = pairEdge(c, ic, oc, pc, t, vUv + dy); if (e2.x * e2.z > e.x * e.z) e = e2;',
+      '  if (ic > 0.5) {',                                          // crease: |Laplacian of the normal| along x / y
+      '    float sx = il * ir * step(abs(l.b - c.b) + abs(r.b - c.b), 0.003);',
+      '    float sy = ib * it * step(abs(b.b - c.b) + abs(t.b - c.b), 0.003);',
+      '    float k = max(length((l.xy + r.xy - 2.0 * c.xy) * 2.0) * sx, length((b.xy + t.xy - 2.0 * c.xy) * 2.0) * sy);',
+      '    float wk = smoothstep(uCrease.x, uCrease.y, k) * uWid.w * att(-pc.z) * c.a * 2.0, ok = fadeI(-pc.z);',
+      '    if (wk * ok > e.x * e.z) e = vec3(wk, uSty.w, ok);',
+      '  }',
+      '  if (e.x * e.z <= 0.0) { gl_FragColor = vec4(0.0); return; }',
+      '  e.x *= 1.0 + uPress * (vnoise(gl_FragCoord.xy * uPressF + uSeed) * 2.0 - 1.0);',
+      '  float w = e.x * uPx;',                                       // stroke width in texels
+      '  float op = e.z * clamp(w / uMinW, 0.0, 1.0); w = max(w, uMinW);',
+      '  gl_FragColor = vec4(clamp((w * 0.5 - 0.5) / uRmax, 0.0, 1.0), op, e.y, 1.0);', // the marked band is 1 texel wide each side
+      '}'].join('\n'),
+    depthTest: false, depthWrite: false,
+  });
+
+  // 4. nib, separable: H: G(x,y) = max_i (r^2 - i^2) along x;  V: F = max_j (G(x,y+j) - j^2), D = F / 2r (~ signed
+  //    distance to the stroke edge, texels). H out: r = sqrt-encoded G, g = winner radius / rmax, b = style, a = opacity.
+  //    V out: r = D / rmax * 0.5 + 0.5 (linear, so bilinear filtering stays a distance), g = opacity, b = style.
+  var NIBS = {};
+  function nibMats(rmax) {
+    var R = Math.ceil(rmax), k = rmax.toFixed(3);
+    if (NIBS[k]) return NIBS[k];
+    var i, h = [], v = [];
+    for (i = -R; i <= R; i++) {
+      var o = i.toFixed(1), i2 = (i * i).toFixed(1);
+      h.push('  e = texture2D(tE, vUv + vec2(' + o + ', 0.0) * uTexel); if (e.a > 0.5) { rr = e.r * uRmax; f = rr * rr - ' + i2 + '; if (f > best) { best = f; w = vec3(e.r, e.b, e.g); } }');
+      v.push('  e = texture2D(tE, vUv + vec2(0.0, ' + o + ') * uTexel); if (e.a > 0.0) { s = e.r * 2.0 - 1.0; f = s * abs(s) * uRmax * uRmax - ' + i2 + '; if (f > best) { best = f; w = e.gba; } }');
+    }
+    function mat(body, out) {
+      return new T.ShaderMaterial({
+        uniforms: { tE: { value: null }, uTexel: { value: new T.Vector2() }, uRmax: { value: rmax } },
+        vertexShader: FS_VERT,
+        fragmentShader: ['uniform sampler2D tE; uniform vec2 uTexel; uniform float uRmax; varying vec2 vUv;',
+          'void main() {', '  float best = -1e9, f, rr, s; vec3 w = vec3(0.0); vec4 e;'].concat(body, out, ['}']).join('\n'),
+        depthTest: false, depthWrite: false,
+      });
+    }
+    NIBS[k] = {
+      h: mat(h, ['  if (best < -1e8) { gl_FragColor = vec4(0.0); return; }',
+        '  float g = clamp(best / (uRmax * uRmax), -1.0, 1.0);',
+        '  gl_FragColor = vec4(sign(g) * sqrt(abs(g)) * 0.5 + 0.5, w);']),
+      v: mat(v, ['  if (best < -1e8) { gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0); return; }',
+        '  float d = best / (2.0 * max(w.x * uRmax, 0.5));',
+        '  gl_FragColor = vec4(clamp(d / uRmax, -1.0, 1.0) * 0.5 + 0.5, w.z, w.y, 1.0);']),
+    };
+    return NIBS[k];
+  }
+
+  // 5. overlay: strokes + paper + grade + vignette, premultiplied over the picture already on the canvas
+  var OMAT = new T.ShaderMaterial({
+    uniforms: {
+      tD: { value: null }, tG: { value: null }, uTexelN: { value: new T.Vector2() }, uRmax: { value: 2 }, uDevPerTex: { value: 2 },
+      uBoil: { value: 0.6 }, uBoilF: { value: 0.02 }, uBoilSeed: { value: new T.Vector2() }, uInk: { value: new T.Color(CFG.ink) },
+      uLift: { value: new T.Vector3() }, uGain: { value: 1 }, uVig: { value: 0.1 }, uGrain: { value: new T.Vector2() }, uColMul: { value: 0.4 },
+      uGrainScale: { value: 1 / 256 }, uLines: { value: 1 },
+    },
+    vertexShader: FS_VERT,
+    fragmentShader: [
+      'uniform sampler2D tD; uniform sampler2D tG; uniform vec2 uTexelN; uniform float uRmax; uniform float uDevPerTex;',
+      'uniform float uBoil; uniform float uBoilF; uniform vec2 uBoilSeed; uniform vec3 uInk; uniform vec3 uLift;',
+      'uniform float uGain; uniform float uVig; uniform vec2 uGrain; uniform float uColMul; uniform float uGrainScale; uniform float uLines;',
+      'varying vec2 vUv;',
+      NOISE,
+      'vec3 nib(vec2 uv) { vec4 e = texture2D(tD, uv); return vec3((e.r * 2.0 - 1.0) * uRmax, e.g, e.b); }', // (distance texels, opacity, style)
+      'void main() {',
+      '  vec4 g = texture2D(tG, gl_FragCoord.xy * uGrainScale);',
+      '  float cov = 0.0, sty = 0.0;',
+      '  if (uLines > 0.5) {',
+      '    vec2 tc = vUv / uTexelN * uBoilF + uBoilSeed;',
+      '    vec2 uv = vUv + (vec2(vnoise(tc), vnoise(tc + vec2(19.7, 41.3))) * 2.0 - 1.0) * uBoil * uTexelN;',
+      '    vec2 o = uTexelN * 0.5;',                                    // 4 bilinear taps: a smooth reconstruction
+      '    vec3 a = 0.25 * (nib(uv + vec2(-o.x, -o.y)) + nib(uv + vec2(o.x, -o.y)) + nib(uv + vec2(-o.x, o.y)) + nib(uv + o));',
+      '    cov = clamp(a.x * uDevPerTex + 0.5, 0.0, 1.0) * min(1.0, a.y * 1.15) * (0.92 + 0.08 * g.b);', // + a touch of dry brush
+      '    sty = a.z;',
+      '  }',
+      '  float paper = 1.0 + uGrain.x * (g.r - 0.5) * 2.0 + uGrain.y * (g.g - 0.5) * 2.0;',
+      '  vec2 p = (vUv - 0.5) * 2.0;',
+      '  float vig = 1.0 - uVig * smoothstep(0.45, 1.5, length(p * vec2(0.8, 1.0)));',
+      '  float gain = min(1.0, uGain * paper * vig);',
+      '  vec3 rgb = cov * (1.0 - sty) * uInk + (1.0 - cov) * uLift * vig;',
+      '  float keep = cov * sty * uColMul + (1.0 - cov) * gain;',
+      '  gl_FragColor = vec4(rgb, 1.0 - keep);',
+      '}'].join('\n'),
+    depthTest: false, depthWrite: false, transparent: true,
+    blending: T.CustomBlending, blendEquation: T.AddEquation, blendSrc: T.OneFactor, blendDst: T.OneMinusSrcAlphaFactor,
+  });
+
+  // debug views of the intermediate targets (BB.Ink.debug(mode)), drawn opaque over the canvas
+  var XMAT = new T.ShaderMaterial({
+    uniforms: { tN: { value: null }, tE: { value: null }, tD: { value: null }, uMode: { value: 0 }, uRmax: { value: 2 }, uDevPerTex: { value: 2 }, uInk: { value: new T.Color(CFG.ink) } },
+    vertexShader: FS_VERT,
+    fragmentShader: [
+      'uniform sampler2D tN; uniform sampler2D tE; uniform sampler2D tD; uniform float uMode; uniform float uRmax; uniform float uDevPerTex; uniform vec3 uInk; varying vec2 vUv;',
+      'void main() {',
+      '  if (uMode < 1.5) { vec4 n = texture2D(tN, vUv); gl_FragColor = n.a > 0.002 ? vec4(n.xy, 1.0, 1.0) * (0.75 + 0.25 * fract(n.b * 7.0)) : (n.b > 0.5 ? vec4(0.3, 0.3, 0.3, 1.0) : vec4(1.0)); return; }',
+      '  if (uMode < 2.5) { vec4 e = texture2D(tE, vUv); gl_FragColor = e.a > 0.5 ? vec4(0.25 + e.r * 3.0, e.g, e.b, 1.0) : vec4(0.0, 0.0, 0.0, 1.0); return; }',
+      '  vec4 d = texture2D(tD, vUv); float cov = clamp((d.r * 2.0 - 1.0) * uRmax * uDevPerTex + 0.5, 0.0, 1.0) * d.g;',
+      '  if (uMode < 3.5) { gl_FragColor = vec4(d.r, d.g, cov, 1.0); return; }',
+      '  gl_FragColor = vec4(mix(vec3(1.0, 0.98, 0.94), uInk, cov), 1.0);',
+      '}'].join('\n'),
+    depthTest: false, depthWrite: false,
+  });
+  var DEBUG_MODES = { normals: 1, edges: 2, nib: 3, lines: 4 };
+
+  // full-screen triangle
+  var FS_GEO = new T.BufferGeometry();
+  FS_GEO.setAttribute('position', new T.Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3));
+  FS_GEO.setAttribute('uv', new T.Float32BufferAttribute([0, 0, 2, 0, 0, 2], 2));
+  var FS_MESH = new T.Mesh(FS_GEO, OMAT); FS_MESH.frustumCulled = false;
+  var FS_SCENE = new T.Scene(); FS_SCENE.add(FS_MESH); FS_SCENE.matrixWorldAutoUpdate = false;
+  var FS_CAM = new T.Camera();
+  // a stand-in scene that shares the real scene's children (own render lists / light state, no matrix update)
+  var PROXY = new T.Scene(); PROXY.matrixWorldAutoUpdate = false; PROXY.overrideMaterial = NMAT;
+
+  // ------------------------------------------------------------------ paper grain (static, tileable, 256^2)
+  // r: fine tooth + fibres, g: soft mottling, b: a coarser tooth used to break up the ink a touch
+  var GRAIN = (function () {
+    var N = 256, rnd = BB.U ? BB.U.rng(0x5EED1E) : Math.random;
+    function layer(cell) {
+      var n = N / cell, lat = new Float32Array(n * n), out = new Float32Array(N * N), i, x, y;
+      for (i = 0; i < n * n; i++) lat[i] = rnd();
+      for (y = 0; y < N; y++) for (x = 0; x < N; x++) {
+        var fx = x / cell, fy = y / cell, x0 = Math.floor(fx), y0 = Math.floor(fy), tx = fx - x0, ty = fy - y0;
+        tx = tx * tx * (3 - 2 * tx); ty = ty * ty * (3 - 2 * ty);
+        var a = lat[(y0 % n) * n + x0 % n], b = lat[(y0 % n) * n + (x0 + 1) % n], c = lat[((y0 + 1) % n) * n + x0 % n], d = lat[((y0 + 1) % n) * n + (x0 + 1) % n];
+        out[y * N + x] = (a + (b - a) * tx) + ((c + (d - c) * tx) - (a + (b - a) * tx)) * ty;
+      }
+      return out;
+    }
+    var t1 = layer(2), t2 = layer(4), t3 = layer(8), m1 = layer(64), m2 = layer(32);
+    var fib = new Float32Array(N * N), i, k;
+    for (k = 0; k < 420; k++) { // short wavy fibres
+      var x = rnd() * N, y = rnd() * N, a = rnd() * Math.PI * 2, len = 6 + rnd() * 18, v = rnd() < 0.5 ? 1 : -1;
+      for (var s = 0; s < len; s++) {
+        a += (rnd() - 0.5) * 0.35; x += Math.cos(a); y += Math.sin(a);
+        var ix = ((Math.round(x) % N) + N) % N, iy = ((Math.round(y) % N) + N) % N;
+        fib[iy * N + ix] += v * 0.6;
+      }
+    }
+    var d = new Uint8Array(N * N * 4);
+    function u8(f) { return Math.max(0, Math.min(255, Math.round(f * 255))); }
+    for (i = 0; i < N * N; i++) {
+      var tooth = 0.45 * t1[i] + 0.35 * t2[i] + 0.2 * t3[i] + fib[i] * 0.16 + (rnd() - 0.5) * 0.1;
+      d[4 * i] = u8((tooth - 0.5) * 1.6 + 0.5);
+      d[4 * i + 1] = u8(((0.6 * m1[i] + 0.4 * m2[i]) - 0.5) * 2.0 + 0.5);
+      d[4 * i + 2] = u8(0.5 + (t2[i] - 0.5) * 1.4 + fib[i] * 0.3);
+      d[4 * i + 3] = 255;
+    }
+    var tex = new T.DataTexture(d, N, N, T.RGBAFormat);
+    tex.wrapS = tex.wrapT = T.RepeatWrapping; tex.magFilter = T.LinearFilter; tex.minFilter = T.LinearFilter; tex.generateMipmaps = false;
+    tex.needsUpdate = true;
+    return tex;
+  })();
+
+  // ------------------------------------------------------------------ targets
+  var _v2 = new T.Vector2(), _v3 = new T.Vector3();
+  function supported(r) {
+    if (S.ok !== null) return S.ok;
+    var c = r.capabilities, e = r.extensions;
+    S.ok = !!(c && (c.isWebGL2 || (e && e.has('WEBGL_depth_texture'))));
+    if (!S.ok) S.off = 'unsupported';
+    return S.ok;
+  }
+  function makeRT(w, h, filter, depth) {
+    var rt = new T.WebGLRenderTarget(w, h, { minFilter: filter, magFilter: filter, format: T.RGBAFormat, type: T.UnsignedByteType, depthBuffer: !!depth, stencilBuffer: false, generateMipmaps: false });
+    rt.texture.generateMipmaps = false;
+    if (depth) { rt.depthTexture = new T.DepthTexture(w, h); rt.depthTexture.type = T.UnsignedIntType; }
+    return rt;
+  }
+  function dropTargets() { ['rtN', 'rtE', 'rtH', 'rtD'].forEach(function (k) { if (S[k]) { if (S[k].depthTexture) S[k].depthTexture.dispose(); S[k].dispose(); S[k] = null; } }); S.key = ''; }
+  function ensureTargets(r) {
+    r.getDrawingBufferSize(_v2); var dbW = _v2.x, dbH = _v2.y;
+    r.getSize(_v2); var cw = _v2.x || dbW, ch = _v2.y || dbH;
+    var q = LEVELS[S.level].q, nW = Math.max(8, Math.min(dbW, Math.round(cw * q))), nH = Math.max(8, Math.min(dbH, Math.round(ch * q)));
+    var key = nW + 'x' + nH + '/' + dbW + 'x' + dbH + '/' + cw + 'x' + ch;
+    if (key === S.key) return;
+    dropTargets();
+    S.key = key; S.nW = nW; S.nH = nH; S.dbW = dbW; S.dbH = dbH; S.cssW = cw; S.cssH = ch;
+    S.rtN = makeRT(nW, nH, T.NearestFilter, true);
+    S.rtE = makeRT(nW, nH, T.NearestFilter, false);
+    S.rtH = makeRT(nW, nH, T.NearestFilter, false);
+    S.rtD = makeRT(nW, nH, T.LinearFilter, false);
+    var px = nH / ch;                                   // normals texels per CSS px
+    S.rmax = Math.max(1.5, MAX_R_PX * px);
+    S.nib = nibMats(S.rmax);
+    var E = EMAT.uniforms;
+    E.tN.value = S.rtN.texture; E.tZ.value = S.rtN.depthTexture; E.uTexel.value.set(1 / nW, 1 / nH);
+    E.uCssH.value = ch; E.uPx.value = px; E.uRmax.value = S.rmax; E.uMinW.value = CFG.minW;
+    E.uWid.value.set(CFG.width.sil, CFG.width.contour, CFG.width.edge, CFG.width.crease);
+    E.uSty.value.set(CFG.style.sil, CFG.style.contour, CFG.style.edge, CFG.style.crease);
+    E.uAtt.value.set(CFG.ppfRef, CFG.attPow, CFG.attMin, CFG.attMax);
+    E.uFade.value.set(CFG.fade[0], CFG.fade[1], CFG.fade[2]);
+    E.uPress.value = CFG.pressure; E.uPressF.value = 1 / (CFG.pressureWave * px);
+    E.uGap.value.set(CFG.gap[0], CFG.gap[1]); E.uCrease.value.set(CFG.crease[0], CFG.crease[1]);
+    S.nib.h.uniforms.tE.value = S.rtE.texture; S.nib.h.uniforms.uTexel.value.set(1 / nW, 1 / nH);
+    S.nib.v.uniforms.tE.value = S.rtH.texture; S.nib.v.uniforms.uTexel.value.set(1 / nW, 1 / nH);
+    var O = OMAT.uniforms;
+    O.tD.value = S.rtD.texture; O.tG.value = GRAIN; O.uTexelN.value.set(1 / nW, 1 / nH); O.uRmax.value = S.rmax;
+    O.uDevPerTex.value = dbH / nH; O.uBoil.value = CFG.boil * px; O.uBoilF.value = 1 / (CFG.boilWave * px);
+    O.uLift.value.set(CFG.lift[0], CFG.lift[1], CFG.lift[2]); O.uGain.value = CFG.gain; O.uVig.value = CFG.vignette;
+    O.uGrain.value.set(CFG.grain, CFG.grain * CFG.mottle); O.uColMul.value = CFG.colorLine; O.uGrainScale.value = 1 / (256 * Math.max(1, dbH / ch));
+    var X = XMAT.uniforms; X.tN.value = S.rtN.texture; X.tE.value = S.rtE.texture; X.tD.value = S.rtD.texture; X.uRmax.value = S.rmax; X.uDevPerTex.value = dbH / nH;
+    S.warm = 0; S.samples.length = 0;
+  }
+
+  // ------------------------------------------------------------------ the frame
+  function keyLight(scene) {
+    if (S.light && S.light.parent && S.lightScene === scene && S.frames - S.lightScan < 120) return S.light;
+    S.light = null; S.lightScene = scene; S.lightScan = S.frames;
+    for (var i = 0; i < scene.children.length; i++) { var o = scene.children[i]; if (o.isDirectionalLight) { S.light = o; break; } }
+    return S.light;
+  }
+  function hulls(on) { for (var i = 0; i < S.hullAll.length; i++) S.hullAll[i].visible = on && S.hullVis[i]; }
+  function pass(r, mat, target) { FS_MESH.material = mat; r.setRenderTarget(target); r.render(FS_SCENE, FS_CAM); }
+  function tally(r, k) { var i = r.info.render; S.calls[k] = i.calls; S.tot.calls += i.calls; S.tot.tris += i.triangles; if (S.prof) S.prof(k); }
+
+  function frameInk(r, scene, camera, info) {
+    ensureTargets(r);
+    S.tot = { calls: 0, tris: 0 };
+    // world matrices once, for both scene passes
+    if (scene.matrixWorldAutoUpdate) scene.updateMatrixWorld();
+    if (camera.parent === null && camera.matrixWorldAutoUpdate) camera.updateMatrixWorld();
+    // hull materials: remember their visibility, keep them out of the normals pass
+    S.hullAll = (BB.Toon && BB.Toon.OUTLINE ? [BB.Toon.OUTLINE] : []).concat(S.hullMats);
+    S.hullVis = S.hullAll.map(function (m) { return m.visible; });
+    hulls(false);
+
+    // 1. normals / depth / ids of layer 1 (+ layer-2 occluder masks)
+    var mask = camera.layers.mask;
+    PROXY.children = scene.children;
+    camera.layers.mask = L1 | L2;
+    NMAT.uniforms.uGround.value = CFG.ground == null ? -1e9 : CFG.ground;
+    S.drawn = 0; S.occl = 0;
+    r.setRenderTarget(S.rtN);
+    r.setClearColor(0x000000, 0);
+    r.autoClear = true;
+    r.render(PROXY, camera);
+    camera.layers.mask = mask;
+    PROXY.children = [];
+    tally(r, 'normals');
+    var inked = S.drawn > 0;
+
+    // 2. the picture, as it would be without ink (hulls only when nothing inked is in view, or when asked)
+    hulls(S.hulls || !inked);
+    r.setRenderTarget(null);
+    r.setClearColor(S.saved.cc, S.saved.ca);
+    r.autoClear = S.saved.ac;
+    var au = scene.matrixWorldAutoUpdate; scene.matrixWorldAutoUpdate = false;
+    r.render(scene, camera);
+    scene.matrixWorldAutoUpdate = au;
+    tally(r, 'scene');
+    hulls(true);
+
+    // 3 + 4. edges and nib
+    if (inked) {
+      var E = EMAT.uniforms, pe = camera.projectionMatrix.elements;
+      E.uProjInv.value.copy(camera.projectionMatrixInverse); E.uP11.value = pe[5];
+      var L = keyLight(scene), lx = -0.55, ly = 0.83;
+      if (L) {
+        _v3.copy(L.position); if (L.target) _v3.sub(L.target.position);
+        _v3.transformDirection(camera.matrixWorldInverse);
+        var ll = Math.hypot(_v3.x, _v3.y); if (ll > 1e-3) { lx = _v3.x / ll; ly = _v3.y / ll; }
+      }
+      E.uLight.value.set(lx, ly, CFG.shadowSide);
+      // boil + brush pressure re-rolled on twos (held during hitstop)
+      var tick = Math.floor((info.time || 0) * 12);
+      if (tick !== S.lastTick && !info.hitstop) { S.lastTick = tick; S.seedK++; }
+      var k = S.seedK % 4096;
+      E.uSeed.value.set((k * 37.13) % 251, (k * 71.71) % 241);
+      OMAT.uniforms.uBoilSeed.value.set((k * 13.37) % 199, (k * 29.41) % 211);
+      r.setClearColor(0x000000, 0);
+      r.autoClear = true;
+      pass(r, EMAT, S.rtE); tally(r, 'edges');
+      pass(r, S.nib.h, S.rtH); tally(r, 'nibH');
+      pass(r, S.nib.v, S.rtD); tally(r, 'nibV');
+    }
+
+    // 5. overlay (or a debug view)
+    r.autoClear = false;
+    if (S.debug && DEBUG_MODES[S.debug]) { XMAT.uniforms.uMode.value = DEBUG_MODES[S.debug]; pass(r, XMAT, null); }
+    else { OMAT.uniforms.uLines.value = inked ? 1 : 0; pass(r, OMAT, null); }
+    tally(r, 'overlay');
+    var inf = r.info.render; inf.calls = S.tot.calls; inf.triangles = S.tot.tris; // BB.Render.stats() sees the whole frame
+    S.inked = inked;
+  }
+
+  function save(r, scene, camera) {
+    S.saved = S.saved || { cc: new T.Color() };
+    r.getClearColor(S.saved.cc); S.saved.ca = r.getClearAlpha(); S.saved.ac = r.autoClear;
+    S.saved.mask = camera.layers.mask; S.saved.mwa = scene.matrixWorldAutoUpdate;
+  }
+  function restore(r, scene, camera) {
+    var s = S.saved;
+    r.setRenderTarget(null); r.setClearColor(s.cc, s.ca); r.autoClear = s.ac;
+    camera.layers.mask = s.mask; scene.matrixWorldAutoUpdate = s.mwa;
+    PROXY.children = [];
+    for (var i = 0; i < S.hullAll.length; i++) if (S.hullVis[i] != null) S.hullAll[i].visible = S.hullVis[i];
+  }
+
+  function render(renderer, scene, camera, info) {
+    var t0 = clock();
+    if (!supported(renderer)) { renderer.render(scene, camera); return; }
+    try {
+      save(renderer, scene, camera);
+      frameInk(renderer, scene, camera, info || {});
+      restore(renderer, scene, camera);
+    } catch (e) {
+      S.off = 'error'; S.err = String((e && e.message) || e);
+      try { restore(renderer, scene, camera); renderer.render(scene, camera); } catch (e2) { /* nothing more to do */ }
+      if (typeof console !== 'undefined') console.warn('BB.Ink: switched off after an error:', e);
+      return;
+    }
+    S.cpuMs = clock() - t0;
+    adapt(t0);
+  }
+
+  // ------------------------------------------------------------------ adaptive quality
+  function adapt(t0) {
+    var dt = S.lastT ? t0 - S.lastT : 0;
+    S.lastT = t0; S.frames++;
+    if (!(dt > 0 && dt < 250)) return;
+    S.samples.push(dt); if (S.samples.length > 36) S.samples.shift();
+    S.warm++;
+    if (S.samples.length < 36) return;
+    var a = S.samples.slice().sort(function (x, y) { return x - y; }); S.med = a[18];
+    if (!S.auto || S.forced || S.warm < 40) return;
+    var RS = BB.Render && BB.Render._S; if (RS && RS.noAdapt) return;
+    if (S.med > CFG.slowMs) {
+      if (S.level > 1) setLevel(S.level - 1); else S.off = 'slow';
+      S.samples.length = 0; S.warm = 0;
+    }
+  }
+  function setLevel(n) { n = Math.max(1, Math.min(3, n | 0)); if (n !== S.level) { S.level = n; S.key = ''; } }
+
+  function active() {
+    if (!S.enabled || S.ok === false) return false;
+    if (S.forced) return true;
+    if (S.off) return false;
+    var RS = BB.Render && BB.Render._S;
+    if (RS && RS.prCap < 2) { S.off = 'pixel-ratio'; return false; } // BB.Render already traded resolution for speed
+    return true;
+  }
+
+  // ------------------------------------------------------------------ helpers for the cast
+  // Put every drawable mesh under root on layer 1 (it stays on layer 0). Skips hulls, decals and see-through FX.
+  // opts: { weight: line weight multiplier, id: share one ink id (no boundary lines between the parts) }
+  function mark(root, opts) {
+    if (!root) return root;
+    opts = opts || {};
+    root.traverse(function (o) {
+      if (!o.isMesh) return;
+      var m = Array.isArray(o.material) ? o.material[0] : o.material;
+      if (!m || isHull(m) || (m.transparent && m.depthWrite === false) || (m.side === T.BackSide && m.isShaderMaterial)) return;
+      o.layers.enable(1);
+      if (opts.weight != null) o.userData.inkWeight = opts.weight;
+      if (opts.id != null) o.userData.inkId = opts.id;
+    });
+    return root;
+  }
+
+  BB.Ink = {
+    active: active,
+    render: render,
+    resize: function (renderer, w, h, pr) { S.key = ''; S.samples.length = 0; S.warm = 0; },
+    twos: function (t) { return active() ? Math.floor(t * 12 + 1e-7) / 12 : t; },
+    setEnabled: function (on) {
+      S.enabled = !!on;
+      if (on) { S.off = S.ok === false ? 'unsupported' : ''; S.level = S.startLevel; S.key = ''; S.samples.length = 0; S.warm = 0; }
+    },
+    enabled: function () { return S.enabled; },
+    setQuality: function (q) {
+      var n = typeof q === 'string' ? ({ low: 1, medium: 2, med: 2, high: 3 })[q] : q;
+      if (n) { setLevel(n); S.startLevel = S.level; }
+    },
+    quality: function () { return S.level; },
+    setAuto: function (on) { S.auto = !!on; },
+    hullsVisible: function () { return !active() || S.hulls || !S.inked; },
+    setHulls: function (on) { S.hulls = !!on; },                // keep the inverted hulls under the ink (testing)
+    registerHull: function (mat) { if (mat && S.hullMats.indexOf(mat) < 0) S.hullMats.push(mat); },
+    mark: mark,
+    debug: function (mode) { S.debug = mode || ''; },
+    stats: function () {
+      return {
+        enabled: S.enabled, active: active(), forced: S.forced, reason: S.off || (S.enabled ? '' : 'disabled'), error: S.err,
+        level: S.level, quality: LEVELS[S.level].name, auto: S.auto, hulls: S.hulls, inkedDraws: S.drawn, occluders: S.occl,
+        normalsTarget: [S.nW, S.nH], canvas: [S.dbW, S.dbH], cpuMs: +S.cpuMs.toFixed(2), medianFrameMs: +S.med.toFixed(2),
+        frames: S.frames, calls: S.calls,
+      };
+    },
+    CFG: CFG, _S: S,
   };
 })();
 

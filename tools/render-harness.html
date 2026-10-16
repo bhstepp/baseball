@@ -18,17 +18,30 @@ canvas#game { display: block; position: fixed; left: 0; top: 0; }
 <canvas id="game"></canvas>
 <div id="grid"></div>
 <script src="../src/vendor/three.min.js"></script>
+<script src="../src/vendor/three-addons.js"></script>
 <script>window.BB_RENDER_HQ = true;</script>
 <script src="../src/00-const.js"></script>
 <script>
 // load the sim + render modules (missing optional ones are fine)
-var MODS = ['10-pitch.js', '15-bat.js', '20-content.js', '31-toon.js', '32-cast.js', '33-park.js', '34-anim.js', '35-scene.js', '30-riso.js', '38-cards.js'];
-(function next(i) {
-  if (i >= MODS.length) return boot();
-  var s = document.createElement('script'); s.src = '../src/' + MODS[i];
-  s.onload = s.onerror = function () { next(i + 1); };
-  document.head.appendChild(s);
-})(0);
+var MODS = ['10-pitch.js', '15-bat.js', '20-content.js', '31-toon.js', '32-cast.js', '33-park.js', '34-anim.js', '35-scene.js', '36-rocco.js', '37-ink.js', '38-cards.js'];
+// the hero model: window.BB_ASSETS (injected by tools/render-shots.js) or ../assets/rocco.glb, or ?glb=<path> (e.g. the
+// integration proxy). Needs --allow-file-access-from-files for file:// XHR; without it the procedural Rocco is used.
+(function () {
+  var m = /[?&]glb=([^&]*)/.exec(location.search), url = m ? decodeURIComponent(m[1]) : '../assets/rocco.glb';
+  function go() { (function next(i) {
+    if (i >= MODS.length) return boot();
+    var s = document.createElement('script'); s.src = '../src/' + MODS[i];
+    s.onload = s.onerror = function () { next(i + 1); };
+    document.head.appendChild(s);
+  })(0); }
+  if (window.BB_ASSETS && window.BB_ASSETS.rocco && !m) return go();
+  try {
+    var x = new XMLHttpRequest(); x.open('GET', url); x.responseType = 'arraybuffer';
+    x.onload = function () { if ((x.status === 200 || x.status === 0) && x.response && x.response.byteLength) { var buf = x.response; BB.assetBuffer = function (n) { return n === 'rocco' ? buf.slice(0) : null; }; } go(); };
+    x.onerror = function () { go(); };
+    x.send();
+  } catch (e) { go(); }
+})();
 
 var Q = {};
 function qs(str) { var o = {}; (str || '').replace(/^\?/, '').split('&').forEach(function (kv) { if (!kv) return; var p = kv.split('='); o[decodeURIComponent(p[0])] = decodeURIComponent(p[1] || ''); }); return o; }
@@ -43,11 +56,11 @@ var MOCK_PITCHER = { id: 'p_mock', name: 'Mock McGee', hand: 'R', team: 'Mockers
   look: { build: 'tall', hair: 'mustache', windup: 'classic', number: 27 } };
 function parks() { return (BB.Content && BB.Content.PARKS && BB.Content.PARKS.length) ? BB.Content.PARKS : [MOCK_PARK]; }
 function pitchers() { return (BB.Content && BB.Content.PITCHERS && BB.Content.PITCHERS.length) ? BB.Content.PITCHERS : [MOCK_PITCHER]; }
-function mockPitch(pitcher, seed, type, strike) {
+function mockPitch(pitcher, seed, type, strike, pz, px) {
   if (BB.Pitch && BB.Pitch.make) {
-    for (var k = 0; k < 600; k++) {
+    for (var k = 0; k < 4000; k++) {
       var p = BB.Pitch.make(pitcher, { balls: 0, strikes: 0, derby: true, id: 1 }, BB.U.rng(seed + k));
-      if ((!type || p.type === type) && (strike == null || p.strike === strike)) return p;
+      if ((!type || p.type === type) && (strike == null || p.strike === strike) && (pz == null || Math.abs(p.plate.z - pz) < 0.12) && (px == null || Math.abs(p.plate.x - px) < 0.15)) return p;
     }
   }
   var T = 0.72;
@@ -93,7 +106,10 @@ function boot() {
   BB.Render._S.noAdapt = true;
   BB.Render.resize(w, h, Math.min(window.devicePixelRatio || 1, 2));
   var fontsP = (document.fonts && document.fonts.load) ? Promise.all([document.fonts.load('20px "Luckiest Guy"'), document.fonts.load('700 12px "Fredoka"')]).catch(function () {}) : Promise.resolve();
-  fontsP.then(function () {
+  // wait for the hero model to parse (or to fail / be missing) before the first shot
+  var modelP = new Promise(function (res) { var n = 0; (function poll() { var st = BB.Rocco && BB.Rocco.status ? BB.Rocco.status() : 'none'; if (st !== 'loading' && st !== 'idle' || n++ > 400) return res(st); setTimeout(poll, 15); })(); });
+  Promise.all([fontsP, modelP]).then(function () {
+    window.__rocco = BB.Rocco && BB.Rocco.info ? BB.Rocco.info() : null;
     window.setup = setup;
     setup(location.search);
     if (Q.anim) animate();
@@ -112,11 +128,13 @@ function buildView(q) {
   if (v.onFire) v.hud.streak = 4;
   if (q.outs10) v.hud = mockHud({ outs: 4, outsMax: 10, inning: 'DERBY', score: '3 HR', progress: '1,204 ft', goal: 'Hit home runs. Anything but a homer is an out.' });
   if (v.scene === 'bat') {
-    var pitch = mockPitch(pitcher, +(q.seed || 7), q.ptype, q.strike != null ? q.strike === '1' : null);
+    var pitch = mockPitch(pitcher, +(q.seed || 7), q.ptype, q.strike != null ? q.strike === '1' : null, q.pz != null ? +q.pz : null, q.px != null ? +q.px : null);
     var st = q.state || 'idle';
     if (st === 'windup') v.windup = +(q.w || 0.5);
     if (st === 'loading') { v.windup = +(q.w || 0.85); v.loading = +(q.l || 1); }
     if (st === 'mid' || st === 'assist') { v.pitch = pitch; v.pitchT = pitch.T * +(q.f || 0.6); }
+    if (st === 'stride') { v.pitch = pitch; v.pitchT = +(q.pt || 0.2); }
+    if (st === 'loading' && q.pt != null) { v.windup = null; v.pitch = pitch; v.pitchT = +q.pt; }
     if (st === 'swing' || st === 'contact' || st === 'whiff') {
       v.pitch = pitch;
       var sw = +(q.st || (st === 'swing' ? 0.035 : 0.12));
@@ -129,7 +147,7 @@ function buildView(q) {
   }
   if (v.scene === 'field') {
     var play = mockPlay(park, q.play || 'hr');
-    v.play = play; v.playT = Math.min(play.dur, play.dur * +(q.f || 0.5));
+    v.play = play; v.playT = q.pt != null ? Math.min(play.dur, +q.pt) : Math.min(play.dur, play.dur * +(q.f || 0.5));
     if (q.extra) v._extra = +q.extra;
     v.runners = q.play === 'gap' ? [{ from: 1, to: 4 }, { from: 0, to: 2 }] : q.play === 'ground' ? [{ from: 1, to: 2 }, { from: 0, to: -1 }] : q.play === 'hr' || !q.play ? [{ from: 1, to: 4 }, { from: 0, to: 4 }] : [];
     if (q.play === 'gap') v.hud.bases = [false, true, false];

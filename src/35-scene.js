@@ -15,10 +15,20 @@
   var INK = '#1B1420', CREAM = '#FFF4DC', MUSTARD = '#F2B632', BRICK = '#D9483B', TEAL = '#7FD1D9';
 
   // ------------------------------------------------------------------ tunables
+  // ?rocco=old shows the game as it was before the Rocco pilot: the procedural Rocco and the old bat-scene staging
+  // (add &stage=new to see the procedural Rocco on the new staging, which is what players get if the model fails).
+  function flag(re) { try { return re.test(location.search); } catch (e) { return false; } }
+  var OLD = flag(/[?&]rocco=(old|0|off|proc)(&|$)/) && !flag(/[?&]stage=new(&|$)/);
   var ROCCO = { x: -2.35, y: 0.9, size: 1.12 };             // render spot of the right-handed hero (physics uses K.BATTER_X)
-  var CATCHER = { x: 0.4, y: -5.4, size: 0.9 };
+  var CATCHER = OLD ? { x: 0.4, y: -5.4, size: 0.9 } : { x: 0.55, y: -5.2, size: 0.8 };
   var UMP = { x: 1.75, y: -3.2, size: 1.08, off: 4.6 };
-  var BATCAM = { pos: [-0.9, -18, 8.0], look: [0.2, 30, -1.6], fov: 38 };
+  // bat camera. Old: fixed pose and fov. New: further back on a longer lens (bigger pitcher, smaller catcher), centred
+  // on the zone (aim), sized so the zone gets ppf px per ft (min of ppfW * width, ppfH * height) and shifted (lens
+  // shift, so verticals stay put) to put the aim point at screen fraction `at`. Solved per screen size in layoutBat.
+  var BATCAM = OLD ? { pos: [-0.9, -18, 8.0], look: [0.2, 30, -1.6], fov: 38 } : { pos: [-1.0, -30, 8.6], aim: [0, 0, 2.5], ppfW: 0.16, ppfH: 0.074, at: [0.56, 0.62] };
+  var PITCHER_K = OLD ? 1 : 1;                               // pitcher size multiplier
+  // the modelled Rocco (BB.Rocco, 36-rocco.js): where his contact frame meets a middle-middle pitch
+  var HERO_AIM = { x: 0, y: 0.1, z: 2.5 };
 
   var S = {
     canvas: null, renderer: null, scene: null, W: 390, H: 844, dpr: 1, pr: 1, prCap: 2, failed: false,
@@ -70,6 +80,26 @@
     S.batFrame = new T.Group(); S.scene.add(S.batFrame);
     setInks(S.ink || BB.INKSETS[0]);
     resize(window.innerWidth || 390, window.innerHeight || 844, Math.min(window.devicePixelRatio || 1, 2));
+    if (BB.Rocco && BB.Rocco.boot) BB.Rocco.boot();   // async: the procedural Rocco stands in until the model is ready
+  }
+  // the modelled hero is used once BB.Rocco has parsed rocco.glb (never with ?rocco=old)
+  function glb() {
+    if (S.glbFailed || !BB.Rocco || !BB.Rocco.ready || !BB.Rocco.ready()) return false;
+    if (!S.hero) {
+      try {
+        var root = BB.Rocco.root(), prop = BB.Rocco.prop();
+        S.scene.add(root); if (prop) S.scene.add(prop);
+        BB.Rocco.setColors(S.col);
+        var size = BB.Rocco.autoSize(), pl = BB.Rocco.solvePlacement(HERO_AIM, size);
+        S.hero = { x: pl.x, y: pl.y, size: size };
+        BB.Rocco.place(S.hero.x, S.hero.y, 0, PI / 2, size);
+        var br = BB.Rocco.batRest();
+        if (br) S.hero.batRest = { x: br.p.x, y: br.p.y, dx: br.dir.x, dy: br.dir.y };
+        BB.Rocco.poseTitle(0);
+        try { S.renderer.compile(S.scene, S.cam); } catch (e) {}
+      } catch (e) { console.warn('BB.Render: model Rocco disabled', e); S.glbFailed = true; return false; }
+    }
+    return true;
   }
 
   function softwareGL() {
@@ -99,13 +129,20 @@
   }
   // the bat camera: fixed per screen size; camBase is never shaken so screenToPlate/plateToScreen stay exact
   function layoutBat() {
-    var a = S.W / S.H, fov = BATCAM.fov * (a > 0.62 ? 0.9 : 1);
+    var B = BATCAM, W = S.W, H = S.H, fov, look = batLook();
+    if (B.look) fov = B.fov * (W / H > 0.62 ? 0.9 : 1);
+    else {
+      var ppf = Math.min(B.ppfW * W, B.ppfH * H), d = Math.hypot(B.pos[0] - B.aim[0], B.pos[1] - B.aim[1], B.pos[2] - B.aim[2]);
+      fov = 2 * Math.atan(H / 2 / (ppf * d)) * 180 / PI;
+    }
     [S.camBat, S.camBase].forEach(function (c) {
-      c.fov = fov; c.position.set(BATCAM.pos[0], BATCAM.pos[1], BATCAM.pos[2]);
-      c.lookAt(BATCAM.look[0], BATCAM.look[1], BATCAM.look[2]);
+      c.fov = fov; c.position.set(B.pos[0], B.pos[1], B.pos[2]);
+      c.lookAt(look[0], look[1], look[2]);
+      if (B.at) c.setViewOffset(W, H, (0.5 - B.at[0]) * W, (0.5 - B.at[1]) * H, W, H); else if (c.view) c.clearViewOffset();
       c.updateProjectionMatrix(); c.updateMatrixWorld(true);
     });
   }
+  function batLook() { return BATCAM.look || BATCAM.aim; }
   function plateToScreen(x, z) {
     V.set(x, 0, z).project(S.camBase || new T.PerspectiveCamera());
     return { x: (V.x + 1) / 2 * S.W, y: (1 - V.y) / 2 * S.H };
@@ -133,6 +170,7 @@
     S.inkKey = key;
     S.col = { a: tame(ink.a), b: tame(ink.b), c: tame(ink.c) };
     buildHero();
+    if (BB.Rocco && BB.Rocco.setColors) BB.Rocco.setColors(S.col);
     S.hud.key = '';
   }
   function heroOpts(species, simple) {
@@ -140,6 +178,8 @@
     return { species: species, simple: simple, size: ROCCO.size, shirt: '#FFF9EE', pants: '#FFF9EE', trim: c.a, cap: c.a, brim: TN.shade(c.a, 0.8), socks: c.a, shoes: INK, shoeTip: c.b,
       number: simple ? null : 7, letter: simple ? null : 'R', numColor: c.a, numEdge: INK, belt: INK, capPatch: '#FFF9EE' };
   }
+  // layer 1 = inked (docs/PILOT-ROCCO.md): characters, their gear, the bat and the ball get BB.Ink's lines
+  function inkMark(o, opts) { if (o && BB.Ink && BB.Ink.mark) BB.Ink.mark(o, opts); return o; }
   function buildHero() {
     if (S.rocco) dispose(S.rocco);
     S.rocco = C.make(heroOpts('raccoon', false));
@@ -147,8 +187,9 @@
     if (S.bat) { S.bat.parent && S.bat.parent.remove(S.bat); disposeObj(S.bat); }
     S.bat = C.makeBat({ wood: '#D9A066', tape: S.col.b, stripe: INK });
     S.rocco.up.add(S.bat);
+    inkMark(S.rocco.root); inkMark(S.bat);
     S.mates.forEach(dispose);
-    S.mates = ['otter', 'fox', 'beaver'].map(function (sp) { var m = C.make(Object.assign(heroOpts(sp, true), { size: 1.05 })); S.scene.add(m.root); return m; });
+    S.mates = ['otter', 'fox', 'beaver'].map(function (sp) { var m = C.make(Object.assign(heroOpts(sp, true), { size: 1.05 })); S.scene.add(m.root); inkMark(m.root); return m; });
   }
   function ensureOpponents(pitcher) {
     var id = (pitcher && pitcher.id) || 'none';
@@ -163,17 +204,17 @@
     S.pitcher = C.make({ species: sp, size: size, build: look.build, shirt: road, pants: road, trim: team, cap: team, brim: TN.shade(team, 0.75), socks: team, shoes: INK,
       number: look.number != null ? look.number : 1, numColor: team, numEdge: INK, glove: 'L', mirror: pitcher && pitcher.hand === 'L', headScale: boss ? 1.08 : 1 });
     S.pitcher.boss = boss; S.pitcher.style = look.windup || 'classic';
-    S.scene.add(S.pitcher.root);
+    S.scene.add(S.pitcher.root); inkMark(S.pitcher.root);
     S.catcher = C.make({ species: sp, size: CATCHER.size, build: 'stout', shirt: road, pants: road, trim: team, cap: TN.shade(team, 0.8), socks: team, shoes: INK, glove: 'C', mask: true,
       chestPad: TN.shade(team, 0.7), shinPads: TN.shade(team, 0.7), number: 2, numColor: team, numEdge: INK });
     S.catcher.cap && (S.catcher.cap.rotation.y = PI);
-    S.scene.add(S.catcher.root);
+    S.scene.add(S.catcher.root); inkMark(S.catcher.root);
     S.fielders = BB.Bat && BB.Bat.ORDER ? BB.Bat.ORDER.map(function (pos, i) {
       var f = C.make({ species: sp, simple: true, size: 1.25, shirt: road, pants: road, trim: team, cap: team, socks: team, shoes: INK, glove: i === 1 ? 'C' : 'L' });
-      S.scene.add(f.root); return f;
+      S.scene.add(f.root); inkMark(f.root); return f;
     }) : [];
     S.species = sp;
-    if (!S.ump) { S.ump = C.make({ species: 'mole', size: UMP.size, build: 'stout', shirt: '#2B2F5E', pants: '#7A7684', trim: '#1B1420', cap: '#1B1420', socks: '#1B1420', shoes: INK, mask: true, belt: '#1B1420' }); S.scene.add(S.ump.root); }
+    if (!S.ump) { S.ump = C.make({ species: 'mole', size: UMP.size, build: 'stout', shirt: '#2B2F5E', pants: '#7A7684', trim: '#1B1420', cap: '#1B1420', socks: '#1B1420', shoes: INK, mask: true, belt: '#1B1420' }); S.scene.add(S.ump.root); inkMark(S.ump.root); }
   }
   function disposeObj(o) {
     o.traverse(function (n) {
@@ -190,7 +231,7 @@
     S.ballG = new T.Group();
     S.ball = C.makeBall();
     S.ballG.add(S.ball);
-    S.scene.add(S.ballG);
+    S.scene.add(S.ballG); inkMark(S.ballG, { weight: 0.9 });
     S.ballShadow = new T.Mesh(new T.CircleGeometry(1, 16), new T.MeshBasicMaterial({ color: 0x1B1420, transparent: true, opacity: 0.25, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -14, polygonOffsetUnits: -44 }));
     S.scene.add(S.ballShadow);
   }
@@ -256,6 +297,7 @@
     if (info.ground && info.pos[1] < 0.15) { bat.position.y = 0.15; }
   }
   function hideAll() {
+    if (S.hero) { BB.Rocco.root().visible = false; var pr = BB.Rocco.prop(); if (pr) pr.visible = false; }
     [S.rocco, S.pitcher, S.catcher, S.ump].forEach(function (c) { if (c) c.root.visible = false; });
     S.fielders.forEach(function (f) { f.root.visible = false; });
     S.mates.forEach(function (f) { f.root.visible = false; });
@@ -286,25 +328,29 @@
     var t = v.time || 0, p = v.pitch, ci = contactInfo(v), sw = v.swing;
     st.ci = ci;
     // --- Rocco
-    var R = S.rocco;
-    place(R, ROCCO.x, ROCCO.y, 0, PI / 2);
-    syncBatFrame();
-    var tgt = null;
-    if (p && p.plate) tgt = toUp(R, p.plate.x, 0.25, p.plate.z);
-    var o = { time: t, load: v.loading != null ? v.loading : 0, swingT: sw ? sw.t : null, contact: !!(ci && ci.hit), tgt: tgt, power: sw && sw.power,
-      whiff: !!(sw && sw.result && !sw.result.contact), tc: ci ? ci.tc : null, hr: !!(v.play && v.play.type === 'HR'), onFire: v.onFire };
-    if (v.windup != null && !v.loading) o.load = 0.18 * smooth((v.windup - 0.6) / 0.4); // a little natural coil as the pitcher strides
-    var pose = A.batter(o);
-    C.apply(R, pose);
-    var bi = A.batterBat(pose, o);
-    if (bi.free) { S.bat.parent !== S.batFrame.userData.up && S.batFrame.userData.up.add(S.bat); S.bat.position.set(bi.pos[0], Math.max(0.15, bi.pos[1]), bi.pos[2]); V2.set(bi.dir[0], bi.dir[1], bi.dir[2]).normalize(); _q.setFromUnitVectors(_up, V2); S.bat.quaternion.copy(_q); }
-    else poseBat(R, S.bat, bi);
-    var smear = sw && sw.t > 0.012 && sw.t < 0.13;
-    S.bat.scale.set(1, smear ? 1.22 : 1, 1);
-    st.pose = pose; st.o = o;
+    if (glb()) heroBat(v, st, ci);
+    else {
+      var R = S.rocco;
+      place(R, ROCCO.x, ROCCO.y, 0, PI / 2);
+      syncBatFrame();
+      var tgt = null;
+      if (p && p.plate) tgt = toUp(R, p.plate.x, 0.25, p.plate.z);
+      var o = { time: t, load: v.loading != null ? v.loading : 0, swingT: sw ? sw.t : null, contact: !!(ci && ci.hit), tgt: tgt, power: sw && sw.power,
+        whiff: !!(sw && sw.result && !sw.result.contact), tc: ci ? ci.tc : null, hr: !!(v.play && v.play.type === 'HR'), onFire: v.onFire };
+      if (v.windup != null && !v.loading) o.load = 0.18 * smooth((v.windup - 0.6) / 0.4); // a little natural coil as the pitcher strides
+      var pose = A.batter(o);
+      C.apply(R, pose);
+      var bi = A.batterBat(pose, o);
+      if (bi.free) { S.bat.parent !== S.batFrame.userData.up && S.batFrame.userData.up.add(S.bat); S.bat.position.set(bi.pos[0], Math.max(0.15, bi.pos[1]), bi.pos[2]); V2.set(bi.dir[0], bi.dir[1], bi.dir[2]).normalize(); _q.setFromUnitVectors(_up, V2); S.bat.quaternion.copy(_q); }
+      else poseBat(R, S.bat, bi);
+      var smear = sw && sw.t > 0.012 && sw.t < 0.13;
+      S.bat.scale.set(1, smear ? 1.22 : 1, 1);
+      st.pose = pose; st.o = o;
+    }
     // --- pitcher
     var Pm = S.pitcher, rel = releaseOf(v);
     place(Pm, 0, 60.5, 0.83, 0);
+    if (PITCHER_K !== 1) Pm.root.scale.setScalar(PITCHER_K);
     var react = null, reactT = 0;
     if (ci && ci.hit && v.play) { react = v.play.type === 'HR' || v.play.type === '3B' || v.play.type === '2B' ? 'jaw' : v.play.type === 'OUT' || v.play.type === 'FOUL' ? null : 'grr'; reactT = ci.tc; }
     else if (p && v.pitchT != null && v.pitchT > p.T + 0.15 && !(ci && ci.hit) && (sw || p.strike)) { react = 'smug'; reactT = v.pitchT - p.T - 0.15; }
@@ -360,14 +406,40 @@
     // --- camera: shake + contact punch
     var cam = S.camBat;
     cam.position.set(BATCAM.pos[0], BATCAM.pos[1], BATCAM.pos[2]);
-    var shake = (v.shake || 0);
-    if (shake > 0) cam.position.add(V.set(Math.sin(t * 71) * 0.16 * shake, 0, Math.cos(t * 83) * 0.12 * shake));
-    cam.lookAt(BATCAM.look[0], BATCAM.look[1], BATCAM.look[2]);
+    var shake = (v.shake || 0), look = batLook(), sk = OLD ? 1 : 0.6;   // the longer lens magnifies the shake
+    if (shake > 0) cam.position.add(V.set(Math.sin(t * 71) * 0.16 * shake * sk, 0, Math.cos(t * 83) * 0.12 * shake * sk));
+    cam.lookAt(look[0], look[1], look[2]);
     var punch = ci && ci.hit ? Math.max(0, 1 - ci.tc / 0.25) * (ci.sweet ? 1 : 0.6) : 0;
     cam.fov = S.camBase.fov * (1 - 0.07 * punch);
     cam.updateProjectionMatrix();
     S.cam = cam;
   }
+  // ------------------------------------------------------------------ the modelled Rocco (BB.Rocco, 36-rocco.js)
+  var PITCHER_EYE = { x: 0, y: 59, z: 7 };
+  function latency() { try { var s = BB.Meta && BB.Meta.settings ? BB.Meta.settings() : null; return s && s.latencyMs != null ? s.latencyMs / 1000 : K.INPUT_LATENCY; } catch (e) { return K.INPUT_LATENCY; } }
+  function heroBat(v, st, ci) {
+    var p = v.pitch, H = S.hero;
+    BB.Rocco.place(H.x, H.y, 0, PI / 2, H.size);
+    BB.Rocco.setHot(v.onFire);
+    var o = { ci: ci, pitcherHead: PITCHER_EYE, latency: latency(), hr: !!(v.play && v.play.type === 'HR') };
+    if (p && v.pitchT != null) {
+      if (ci && ci.hit && v.play) { o.ball = pitchPos(p, ci.cT); o.ballAfter = v.play.ballAt(Math.max(0, ci.tc) + 0.2); }
+      else o.ball = pitchPos(p, Math.min(v.pitchT + 0.05, p.T + 0.3));
+      o.contactPt = ci ? pitchPos(p, ci.cT) : pitchPos(p, p.T);
+    }
+    st.hero = BB.Rocco.poseBat(v, o); st.heroO = o; st.glb = true;
+    S.bat.visible = false;
+  }
+  // fx anchors that follow whichever Rocco is on screen
+  function heroHead(st, lift) {
+    if (st && st.glb) { var h = BB.Rocco.headPoint(V3); return { x: h.x, y: h.y, z: h.z + (lift || 0) }; }
+    var hp = worldPt(S.rocco, S.rocco.headC); hp.z += lift || 0; return hp;
+  }
+  function heroBatTip(st) {
+    if (st && st.glb) { var b = BB.Rocco.point('bat_tip', V3); return { x: b.x, y: b.y, z: b.z }; }
+    S.bat.updateMatrixWorld(true); V3.set(0, 2.8, 0); S.bat.localToWorld(V3); return { x: V3.x, y: V3.y, z: V3.z };
+  }
+  function heroFeet(st) { var r = st && st.glb ? BB.Rocco.root().position : S.rocco.root.position; return { x: r.x, y: r.y, z: 0.1 }; }
   function showFieldersIdle(t, cam) {
     if (!S.fielders.length || !BB.Bat) return;
     cam.updateMatrixWorld(true);
@@ -391,7 +463,7 @@
   }
   function runnerPos(m, tx, dur) {
     var to = m.to === -1 ? m.from + 1 : Math.min(4, m.to), out = m.to === -1;
-    var startT = m.from === 0 ? 0.32 : 0.12, runDur = Math.max(0.6, dur + 0.45 - startT);
+    var startT = m.from === 0 ? S.batStart || 0.32 : 0.12, runDur = Math.max(0.6, dur + 0.45 - startT);
     var u = clamp((tx - startT) / runDur, 0, 1);
     if (out) u = Math.min(u * 1.25, 0.86);
     var p = basePath(m.from, to, u);
@@ -409,7 +481,9 @@
   function doField(v, st) {
     var play = v.play, t = v.playT || 0, time = v.time || 0;
     if (!play) { doBat(v, st); return; }
-    var dur = play.dur || 3;
+    var dur = play.dur || 3, hero = glb();
+    // the modelled Rocco flips his bat on a homer before he starts the trot
+    S.batStart = hero && play.type === 'HR' && BB.Rocco.has('bat_flip') ? 0.95 : 0.32;
     // main holds the field scene a little after playT reaches dur ('between'): keep the runners and camera going
     if (S.endPlay !== play) { S.endPlay = play; S.endAt = null; }
     if (t >= dur - 1e-3) { if (S.endAt == null) S.endAt = time; } else S.endAt = null;
@@ -462,6 +536,7 @@
       var pos = rp, arrived = u >= 1;
       var ch;
       if (m.from === 0) { ch = R; batterMoved = true; } else ch = S.mates[(mi++) % S.mates.length];
+      if (m.from === 0 && hero) { heroRunner(v, m, rp, tx, t, play, cam, st); return; }
       if (m.from === 0 && t < startT) { batterAtHome(v, t, play); return; }
       place(ch, pos.x, pos.y, 0, arrived && to === 4 ? yawToward(cam.position.x - pos.x, cam.position.y - pos.y) : yawToward(pos.dx, pos.dy));
       var spd = arrived ? 0 : bases * 90 / runDur;
@@ -475,7 +550,7 @@
         S.bat.position.set(fb.pos[0], Math.max(0.16, fb.pos[1]), fb.pos[2]); V2.set(fb.dir[0], fb.dir[1], fb.dir[2]).normalize(); _q.setFromUnitVectors(_up, V2); S.bat.quaternion.copy(_q);
       }
     });
-    if (!batterMoved) batterAtHome(v, t, play);
+    if (!batterMoved) { if (hero) heroHome(v, t, play, st); else batterAtHome(v, t, play); }
     // runners who stayed put
     var bases = (v.hud && v.hud.bases) || [];
     bases.forEach(function (on, k) {
@@ -498,6 +573,30 @@
     S.batFrame.position.set(ROCCO.x, ROCCO.y, 0); S.batFrame.rotation.set(0, 0, PI / 2);
     if (!S.batFrame.userData.up) { var u = new T.Group(); u.rotation.x = PI / 2; u.scale.setScalar(ROCCO.size); S.batFrame.add(u); S.batFrame.userData.up = u; }
   }
+  // the modelled Rocco: at home after contact (follow-through, watch, bat flip), then running / trotting the bases
+  var FIELD_DELAY = 0.22;   // main lingers this long on the bat scene after contact (60-main fieldDelay)
+  function heroHome(v, t, play, st) {
+    var H = S.hero;
+    BB.Rocco.place(H.x, H.y, 0, PI / 2, H.size);
+    BB.Rocco.setHot(v.onFire);
+    BB.Rocco.poseHome(v, { tc: t + FIELD_DELAY, hr: play.type === 'HR', plateZ: v.pitch && v.pitch.plate ? v.pitch.plate.z : 2.5, ball: play.ballAt(Math.min(t + 0.3, play.dur)) });
+    st.glb = true; S.bat.visible = false;
+  }
+  function heroRunner(v, m, rp, tx, t, play, cam, st) {
+    if (t < rp.startT) { heroHome(v, t, play, st); return; }
+    var H = S.hero, arrived = rp.u >= 1;
+    var yaw = arrived && rp.to === 4 ? yawToward(cam.position.x - rp.x, cam.position.y - rp.y) : yawToward(rp.dx, rp.dy);
+    BB.Rocco.place(rp.x, rp.y, 0, yaw, H.size);
+    BB.Rocco.setHot(v.onFire);
+    var bases = rp.to - m.from;
+    BB.Rocco.poseRun(v, { dist: rp.u * bases * 90, hr: play.type === 'HR', arrived: arrived && !rp.out, arriveT: arrived ? tx - (rp.startT + rp.runDur) : null,
+      out: rp.out, outT: rp.out ? tx - (rp.startT + rp.runDur * 0.86 / 1.25) : null });
+    st.glb = true; S.bat.visible = false;
+    // the bat lies in the dirt by the plate (where the flip dropped it on a homer)
+    var r = play.type === 'HR' && H.batRest;
+    if (r) BB.Rocco.dropBat(r.x, r.y, r.dx, r.dy);
+    else BB.Rocco.dropBat(H.x + 1.5, H.y - 0.5, 0.45, -1);
+  }
   function batterAtHome(v, t, play) {
     var R = S.rocco;
     syncBatFrame();
@@ -515,14 +614,21 @@
   // ------------------------------------------------------------------ TITLE SCENE
   function doTitle(v, st) {
     var t = v.time || 0, R = S.rocco;
-    place(R, -3.0, -1.0, 0, 0.42);
-    var cyc = t % 6.5, o = { time: t, load: 0 };
-    if (cyc > 4.6) { o.swingT = (cyc - 4.6) * 0.8; o.contact = false; o.tc = null; }
-    var pose = A.batter(o);
-    if (o.swingT == null) { pose.hy = 0.45 + Math.sin(t * 0.6) * 0.25; pose.hx = -0.1; pose.lx = -0.5; pose.smile = 1; pose.brow = -0.1; }
-    C.apply(R, pose);
-    poseBat(R, S.bat, A.batterBat(pose, o));
-    S.bat.scale.set(1, 1, 1);
+    if (glb()) {
+      BB.Rocco.place(-3.0, -1.0, 0, 0.42, S.hero.size);
+      BB.Rocco.setHot(false);
+      BB.Rocco.poseTitle(t);
+      st.glb = true; S.bat.visible = false;
+    } else {
+      place(R, -3.0, -1.0, 0, 0.42);
+      var cyc = t % 6.5, o = { time: t, load: 0 };
+      if (cyc > 4.6) { o.swingT = (cyc - 4.6) * 0.8; o.contact = false; o.tc = null; }
+      var pose = A.batter(o);
+      if (o.swingT == null) { pose.hy = 0.45 + Math.sin(t * 0.6) * 0.25; pose.hx = -0.1; pose.lx = -0.5; pose.smile = 1; pose.brow = -0.1; }
+      C.apply(R, pose);
+      poseBat(R, S.bat, A.batterBat(pose, o));
+      S.bat.scale.set(1, 1, 1);
+    }
     var cam = S.camTitle, a = Math.sin(t * 0.07) * 0.18;
     cam.position.set(-3.0 + Math.sin(a) * 26, -1.0 - Math.cos(a) * 26, 4.2 + Math.sin(t * 0.11) * 0.4);
     cam.fov = 40;
@@ -631,9 +737,15 @@
       }
     }
     // bat smear during the swing
-    if (sw && sw.t > 0.008 && sw.t < 0.14 && S.rocco) {
-      var R = S.rocco, tips = [], grips = [];
-      for (var m = 0; m <= 6; m++) {
+    var trail = null;
+    if (sw && sw.t > 0.008 && sw.t < 0.14 && st.glb) {
+      var times = []; for (var m0 = 0; m0 <= 6; m0++) times.push(Math.max(0, sw.t - m0 * 0.011));
+      trail = BB.Rocco.batTrail(v, st.heroO, times);
+    }
+    if (sw && sw.t > 0.008 && sw.t < 0.14 && (trail || (!st.glb && S.rocco && st.o))) {
+      var R = S.rocco, tips = [], grips = [], m;
+      if (trail) for (m = 0; m <= 6; m++) { tips.push(proj(trail.tips[m].x, trail.tips[m].y, trail.tips[m].z, cam)); grips.push(proj(trail.mids[m].x, trail.mids[m].y, trail.mids[m].z, cam)); }
+      else for (m = 0; m <= 6; m++) {
         var ts = Math.max(0, sw.t - m * 0.011), o2 = Object.assign({}, st.o, { swingT: ts }), ps = A.batter(o2), bi = A.batterBat(ps, o2);
         var dd = bi.dir, gl = Math.hypot(dd[0], dd[1], dd[2]) || 1;
         var tip = fromUp(R, [bi.pos[0] + dd[0] / gl * 3.2, bi.pos[1] + dd[1] / gl * 3.2, bi.pos[2] + dd[2] / gl * 3.2], new T.Vector3());
@@ -670,7 +782,7 @@
     }
     // loading: coiled power, sweat drop
     if (v.loading > 0.05 && S.rocco) {
-      var hp = worldPt(S.rocco, S.rocco.headC), hs = proj(hp.x, hp.y, hp.z + 0.9, cam), L1 = v.loading;
+      var hp = heroHead(st, 0), hs = proj(hp.x, hp.y, hp.z + 0.9, cam), L1 = v.loading;
       X.save(); X.globalAlpha = smooth(L1);
       for (var q2 = 0; q2 < 3; q2++) { var yy = hs.y + 50 + q2 * 26, xx = hs.x - 70 - q2 * 6 + Math.sin(t * 40 + q2) * 2 * L1; X.beginPath(); X.moveTo(xx, yy); X.lineTo(xx - 22 - 8 * L1, yy + 4); X.lineWidth = 4; X.strokeStyle = INK; X.stroke(); }
       if (L1 > 0.6) { var sdx = hs.x + 30, sdy = hs.y + 6 + ((t * 1.5) % 1) * 12; X.beginPath(); X.moveTo(sdx, sdy - 10); X.quadraticCurveTo(sdx + 7, sdy, sdx, sdy + 6); X.quadraticCurveTo(sdx - 7, sdy, sdx, sdy - 10); X.fillStyle = TEAL; X.fill(); X.lineWidth = 2; X.strokeStyle = INK; X.stroke(); }
@@ -679,15 +791,14 @@
     }
     // dizzy stars after the corkscrew
     if (sw && sw.result && !sw.result.contact && sw.t > 0.6 && S.rocco) {
-      var hp2 = worldPt(S.rocco, S.rocco.headC), hc = proj(hp2.x, hp2.y, hp2.z + 1.0, cam), rx = 34, ry = 11;
+      var hp2 = heroHead(st, 0), hc = proj(hp2.x, hp2.y, hp2.z + (st.glb ? 1.25 : 1.0), cam), rx = 34, ry = 11;
       for (var k2 = 0; k2 < 4; k2++) { var an = t * 5 + k2 / 4 * PI * 2; star(hc.x + Math.cos(an) * rx, hc.y + Math.sin(an) * ry, 9 + Math.sin(an) * 2, t * 3 + k2, k2 % 2 ? MUSTARD : '#FFF9EE'); }
     }
     // on fire: the bat smokes and flames lick at Rocco's cleats
     if (v.onFire && S.rocco) {
-      S.bat.updateMatrixWorld(true); V3.set(0, 2.8, 0); S.bat.localToWorld(V3);
-      var bt = proj(V3.x, V3.y, V3.z, cam);
+      var btw = heroBatTip(st), bt = proj(btw.x, btw.y, btw.z, cam);
       for (var sm = 0; sm < 4; sm++) { var ph = (t * 0.9 + sm / 4) % 1; puff(bt.x + Math.sin(ph * 6 + sm) * 8, bt.y - ph * 70, 8 + ph * 14, '#E9E2D6', 0.8 * (1 - ph), sm + 40); }
-      var ft = proj(S.rocco.root.position.x, S.rocco.root.position.y, 0.1, cam);
+      var fw = heroFeet(st), ft = proj(fw.x, fw.y, fw.z, cam);
       for (var fl = 0; fl < 5; fl++) flame(ft.x - 50 + fl * 25, ft.y + 6, 26 + (fl % 2) * 10, t, fl);
     }
   }
@@ -918,7 +1029,7 @@
     if (since >= 0 && since < 0.45 && S.prevScene && S.prevScene !== v.scene) {
       var k = U.easeOut(since / 0.45), c = { x: S.W / 2, y: S.H / 2 };
       if (v.scene === 'field' && st.ballPos) { var b = proj(st.ballPos.x, st.ballPos.y, st.ballPos.z, S.cam); c = { x: clamp(b.x, 40, S.W - 40), y: clamp(b.y, 60, S.H - 60) }; }
-      if (v.scene === 'bat' && S.rocco) { var hp = worldPt(S.rocco, S.rocco.headC), hs = proj(hp.x, hp.y, hp.z, S.cam); c = { x: hs.x, y: hs.y }; }
+      if (v.scene === 'bat' && S.rocco) { var hp = heroHead(st, 0), hs = proj(hp.x, hp.y, hp.z, S.cam); c = { x: hs.x, y: hs.y }; }
       iris(c.x, c.y, 18 + full * k);
     }
   }
