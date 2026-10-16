@@ -90,10 +90,19 @@ BB.Crew = (function () {
     return { role: role, kind: kindOf(role), id: id, files: { 0: 'char_' + id, 1: 'char_' + id + '_lod1' }, base: o.base || 0, want: o.want || [o.base || 0],
       colors: o.colors || null, decals: o.decals || null, hand: o.hand || 'R', card: o.card || null, state: 'idle', actor: null, meta: {}, libs: [] };
   }
+  // The opponents never wear the hero's colour: if a team's primary is close to the uniform Rocco will wear in this
+  // park (the player's pick, or the park's own colours), the team switches to its alternate (primary <-> second).
+  function awayFrom(col, park) {
+    var hi = BB.Meta && BB.Meta.currentInkset ? BB.Meta.currentInkset(park) : null;
+    if (!hi || !col || !col.b) return col;
+    var sc = BB.CardArt && BB.CardArt.scheme ? BB.CardArt.scheme(hi) : hi;
+    var h = new T.Color(sc.a || hi.a), o = new T.Color(col.a);
+    return Math.hypot(h.r - o.r, h.g - o.g, h.b - o.b) < 0.3 ? { a: col.b, b: col.a, c: col.c } : col;
+  }
   function roster(park, pitcher) {
-    var team = teamOfPark(park), list = [], letter = team ? team.short.charAt(0) : null, home = team ? colorsOf(team) : null;
+    var team = teamOfPark(park), list = [], letter = team ? team.short.charAt(0) : null, home = team ? awayFrom(colorsOf(team), park) : null;
     if (pitcher && pitcher.id) {
-      var pt = teamOfMascot(pitcher.team) || null, pc = pt ? colorsOf(pt) : { a: (BB.Cast && BB.Cast.teamColor) ? BB.Cast.teamColor(pitcher.team) : '#2B4A8C', b: '#D9483B' };
+      var pt = teamOfMascot(pitcher.team) || null, pc = awayFrom(pt ? colorsOf(pt) : { a: (BB.Cast && BB.Cast.teamColor) ? BB.Cast.teamColor(pitcher.team) : '#2B4A8C', b: '#D9483B' }, park);
       var pl = pt ? pt.short.charAt(0) : String(pitcher.team || pitcher.name || 'X').charAt(0).toUpperCase();
       var num = pitcher.look && pitcher.look.number != null ? String(pitcher.look.number) : null;
       list.push(member('P', pitcher.id, { base: 0, want: [0, 1], colors: pc, decals: { decal_chest: pl, decal_back: num }, hand: pitcher.hand }));

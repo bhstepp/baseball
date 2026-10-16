@@ -7,12 +7,21 @@ finds the barrel, early pulls it to left, late slaps it to right, and way off is
 pitches outside the box. **Press and hold during the windup** to load a power swing, then let go to swing: the
 window is tighter, the ball goes further.
 
-You're Rocco, a scrappy raccoon slugger, facing a league of animal pitchers: an ox, a loon, a bear called
-Sasquatch, a tortoise who throws nothing but eephus pitches. Everything is cel-shaded 3D with ink outlines and
-painted mid-century cartoon backgrounds (three.js), with POW!, WHIFF! and KA-BLAM! lettering, iris wipes, dizzy
-stars and bat flips. The whole game is one self-contained HTML file with no image or audio files: every park,
-character and trading card is built in code, and the bat crack, crowd, slide whistles and pit-band music are
-synthesized live with Web Audio.
+You're Rocco, a scrappy raccoon slugger, facing a league of 27 animal pitchers across six parks: Earl "The Ox"
+Oxley, a 7-foot bear called Sasquatch, a tortoise who throws nothing but eephus pitches, a chameleon in aviators,
+and Halo, a vain peacock whose tail fans out behind him like a halo. Every park's home team takes the field: the
+catchers, fielders and pitchers are the same characters as the trading cards in your album.
+
+Everything is cel-shaded 3D (three.js) with hand-inked lines, painted mid-century cartoon backgrounds, POW!, WHIFF!
+and KA-BLAM! lettering, iris wipes, dizzy stars and bat flips. The characters are real rigged models built in
+Blender by scripts in `tools/blender/`, with hand-keyed animation: Rocco has his own clip set (stance, stride, power
+load, three swing heights, whiff into dizzy, bat flip, base running, plate-tap ritual), and the rest of the cast
+shares pitcher, catcher, umpire and fielder libraries. The bat crack, crowd, slide whistles and pit-band music are
+synthesized live with Web Audio; there are no audio files.
+
+The page itself is one HTML file with Rocco built in. Each park's team (about 1.5 MB, compressed with meshopt) is
+fetched while the pre-game briefing is open, and the service worker caches the whole cast in the background so the
+game works offline.
 
 ## Modes
 
@@ -54,11 +63,28 @@ consistently early or late on your device, use **Settings → Timing** to calibr
 Node 18+ only for the build and tests; the game has no dependencies.
 
 ```sh
-node tools/build.js          # src/ -> index.html, sw.js, dist/halftone.html
+node tools/build.js          # src/ + assets/ -> index.html, sw.js, dist/site/ (deployable), dist/halftone.html (tests)
 python3 -m http.server 8080  # http://localhost:8080 (the service worker needs http)
 ```
 
 Edit `src/`, then rebuild. Don't edit `index.html` by hand.
+
+### Characters and animation (Blender)
+
+The models are built by Python scripts with Blender 5.2 as a Python module (`pip install bpy==5.2.2` on Python 3.13);
+raw exports go to `assets/src/` (not committed) and `tools/pack-assets.js` compresses them into `assets/*.glb`
+(committed, shipped).
+
+```sh
+python tools/blender/rocco.py                 # Rocco: model, rig, face shapes and his 18 clips
+python tools/blender/cast/cbuild.py --park 3  # a park's team (or ids, or --list); LOD0 + LOD1 per character
+python3 tools/blender/anim/build.py pitcher   # a shared clip library: pitcher, catcher, umpire, fielder
+node tools/pack-assets.js                     # gltfpack (meshopt) + checks: names, clips, contact frames
+node tools/cast-shots.js --park 3             # turnarounds, faces, lineups and game-camera sheets to qa/cast/
+```
+
+`docs/CAST-CONTRACT.md` describes the shared skeleton, the head kit for adding species, the character files and the
+animation libraries; `docs/CAST-PLAN.md` the decisions behind them.
 
 | File | Job |
 |---|---|
@@ -69,10 +95,14 @@ Edit `src/`, then rebuild. Don't edit `index.html` by hand.
 | `src/25-rules.js` | Count, outs, bases, runner advancement, scenarios, stars, daily derby, share text |
 | `src/vendor/three.min.js` | three.js r149 (MIT), vendored so the game works offline |
 | `src/31-toon.js` | Cel materials, ink outlines, geometry merging, painted scenery helpers |
-| `src/32-cast.js` | The animal cast: species, faces, uniforms, rigs, bat and ball |
+| `src/30-assets.js` | Loading models: inline or fetched, meshopt decoding, reference-counted parsing |
+| `src/32-cast.js`, `src/34-anim.js` | The procedural fallback cast (used for any model that is missing) |
 | `src/33-park.js` | The six 3D ballparks and their set dressing |
-| `src/34-anim.js` | Character acting: windups, swings, whiffs, reactions |
-| `src/35-scene.js` | Cameras, bat view, field view, title, HUD, comic lettering, iris wipes |
+| `src/35-scene.js` | Cameras, bat view, field view, title, HUD, comic lettering, iris wipes, per-game cast loading |
+| `src/36-actors.js` | Character runtime: toon materials, skinned ink hulls, clip retargeting, crossfades, LODs |
+| `src/36-rocco.js` | Rocco's driver: game state to clips, swing contact time-warp, face and gaze |
+| `src/36-crew.js` | Pitcher, catcher, umpire, fielder and runner drivers lined up with the game's events |
+| `src/37-ink.js` | The hand-inked look: ink lines on characters, line boil on twos, paper grain, grade |
 | `src/38-cards.js` | Trading cards, pitcher portraits, bats, uniforms, park postcards |
 | `src/40-audio.js` | Synthesized bat, crowd, cartoon effects and pit-band music |
 | `src/50-save.js`, `src/55-meta.js` | Save data, coins, XP, cards, packs, bats, achievements, tour and daily progress |
@@ -94,6 +124,8 @@ node tools/render-shots.js   # screenshots of every scene, park, ink set and car
 
 ## Background
 
-Built from a single prompt. A lead agent wrote the module contract and the game loop, then physics,
-rules & content, render, audio, and meta & UI sub-agents built their modules in parallel against it, and the lead
-integrated and tested the result in iPhone emulation.
+Built with Claude Code from a single prompt and a few rounds of feedback. A lead agent wrote the module contracts
+and the game loop; sub-agents built physics, rules and content, rendering, audio, and the menus in parallel. After
+the first look (a risograph zine) didn't land, the game was re-skinned as a 3D cartoon, then the procedural characters
+were replaced by real Blender models: a Rocco pilot first, then a cast generator, shared animation libraries and
+three park teams built in parallel, with the lead integrating and testing everything in iPhone emulation.

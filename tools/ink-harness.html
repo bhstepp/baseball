@@ -43,7 +43,7 @@ function loadGlb(done) {
   x.onerror = function () { done(); };
   try { x.send(); } catch (e) { done(); }
 }
-var MODS = ['10-pitch.js', '15-bat.js', '20-content.js', '30-assets.js', '31-toon.js', '32-cast.js', '33-park.js', '34-anim.js', '35-scene.js', '36-actors.js', '36-rocco.js', '37-ink.js', '38-cards.js'];
+var MODS = ['10-pitch.js', '15-bat.js', '20-content.js', '30-assets.js', '31-toon.js', '32-cast.js', '33-park.js', '34-anim.js', '35-scene.js', '36-actors.js', '36-rocco.js', '36-crew.js', '37-ink.js', '38-cards.js'];
 function loadMods(i) {
   if (i >= MODS.length) return boot();
   var s = document.createElement('script'); s.src = '../src/' + MODS[i];
