@@ -49,7 +49,9 @@ function sheets() {
     const pl = placeFor(c), yawDeg = (pl.yaw || 0) * 180 / PI;
     const tgt = [pl.x, pl.y, (pl.z || 0) + 2.4];
     const cell = (t, az, el, dist, lab) => ({ actors: [{ clip: c, t, place: pl }], view: { az: az + yawDeg, el, dist, target: tgt, fov: 26 }, label: `${lab || c} ${t.toFixed(3)}` });
-    S.push(['clip-' + c, { cols: ts.length, cellW: 220, cellH: 300, field: true, cells: ts.map((t) => cell(t, 0, 6, 17, '')).concat(ts.map((t) => cell(t, 90, 6, 17, 'side'))) }]);
+    const cols = Math.min(8, ts.length);
+    S.push(['clip-' + c, { cols, cellW: 250, cellH: 330, field: true, cells: ts.map((t) => cell(t, 0, 6, 15, '')) }]);
+    S.push(['side-' + c, { cols, cellW: 250, cellH: 330, field: true, cells: ts.map((t) => cell(t, 90, 6, 15, 'side')) }]);
   }
   // pitcher: the game's view (bat camera behind home plate), full frame and magnified on the mound
   const pn = names.filter((c) => c.startsWith('p_'));
@@ -59,7 +61,7 @@ function sheets() {
       let ts = range(0, L, 10);
       if (m.release != null) ts = [0, 0.2, 0.4, 0.55, 0.7, 0.85, 0.95, 1.05, 1.15, 1.3, 1.5, 1.75, L];
       ts = [...new Set(ts.map((x) => +x.toFixed(3)))].filter((x) => x <= L + 1e-6);
-      S.push(['bat-' + c, { cols: ts.length, cellW: 200, cellH: 260, field: true, cells: ts.map((t) => ({ actors: [{ clip: c, t, place: MOUND }], view: { bat: true, W: 390, H: 844, zoom: 4.2, center: [0, 60.5, 3.2] }, label: `${c.replace('p_windup_', '')} ${t.toFixed(2)}` })) }]);
+      S.push(['bat-' + c, { cols: Math.min(7, ts.length), cellW: 260, cellH: 300, field: true, cells: ts.map((t) => ({ actors: [{ clip: c, t, place: MOUND }], view: { bat: true, W: 390, H: 844, zoom: 6, center: [-0.4, 60.0, 3.0] }, label: `${c.replace('p_windup_', '')} ${t.toFixed(2)}` })) }]);
     }
     const wind = pn.filter((c) => /windup/.test(c));
     if (wind.length) {

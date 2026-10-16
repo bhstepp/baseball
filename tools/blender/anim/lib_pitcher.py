@@ -58,6 +58,12 @@ def at_sh(c, side, off, W=None):
     return W['upper_arm.' + side][:3, 3] / PZ.SK.U + crot(c, W) @ np.asarray(off, float)
 
 
+def at_shw(c, side, off, W=None):
+    """A point offset from the posed shoulder by `off` in world (model) axes."""
+    W = W or solved(c)
+    return W['upper_arm.' + side][:3, 3] / PZ.SK.U + np.asarray(off, float)
+
+
 def at_hip(c, side, off, W=None):
     """A point offset from the posed hip joint (thigh head) by `off` in the pelvis frame."""
     W = W or solved(c)
@@ -139,18 +145,20 @@ def pose_finish():
 
 # ------------------------------------------------------------------------------------------- windups
 def release_pose(style):
-    """Release frame: front leg braced, chest square to the plate (or past it), throwing arm extended toward the
-    plate in the style's slot, glove tucked into the chest, back foot dragging on its toe."""
+    """Release frame: front leg braced, chest square to the plate (a touch past), the throwing arm reaching up and
+    out toward the plate in the style's slot (target set relative to the posed shoulder, so it is always reachable),
+    glove tucked into the chest, back foot dragging on its toe."""
     c = PZ.base()
     if style in ('classic', 'highkick'):
-        hk = style == 'highkick'
-        put(c, hip__x=0.10, hip__y=-1.22, hip__z=-0.30, hip__rx=16, hip__ry=8, hip__rz=8,
-            spine__rx=8, spine__ry=6, chest__rx=8, chest__ry=8 + 4 * hk, chest__rz=14)
-        foot(c, 'L', (0.30, -2.05, 0.11), rz=12, knee=(0.3, -1, 0.2))
-        foot(c, 'R', (-0.30, -0.25, 0.20), rz=-70, rx=62, toe=-30, knee=(-0.2, -1, 0.4))
-        grip = np.array([-1.10 + 0.12 * hk, -2.55, 3.82 + 0.20 * hk])
-        hand(c, 'R', grip, sock='grip', elbow=(-0.6, 1.0, -0.6))
-        orient(c, 'R', (-0.25 + 0.1 * hk, -0.55, 1.0), (0.05, -1.0, -0.35))
+        hk = 1.0 if style == 'highkick' else 0.0
+        put(c, hip__x=-0.02, hip__y=-1.28, hip__z=-0.08, hip__rx=11, hip__ry=3 + hk, hip__rz=6,
+            spine__rx=5, spine__ry=3 + 2 * hk, chest__rx=4, chest__ry=4 + 4 * hk, chest__rz=12)
+        foot(c, 'L', (0.28, -2.05, 0.11), rz=12, knee=(0.3, -1, 0.2))
+        foot(c, 'R', (-0.30, -0.42, 0.24), rz=-70, rx=64, toe=-32, knee=(-0.2, -1, 0.4))
+        W = solved(c)
+        grip = at_shw(c, 'R', (-0.86 + 0.18 * hk, -0.60, 1.12 + 0.14 * hk), W)
+        hand(c, 'R', grip, sock='grip', elbow=(-0.6, 1.0, -0.5))
+        orient(c, 'R', (-0.35 + 0.15 * hk, -0.45, 1.0), (0.1, -1.0, -0.3))
         hshape(c, 'R', 'ball')
     hand(c, 'L', (0.36, -0.55, 2.42), sock='mitt', rel=1, elbow=(1.0, 0.5, -0.4))
     orient(c, 'L', (-0.3, -0.2, 1.0), (-0.6, 0.6, 0.0))
@@ -166,96 +174,107 @@ def windup_classic():
     c = Clip('p_windup_classic', L)
     S = pose_set()
     c.key(0.0, S)
-    # 0.12 gather: a dip, hands sink to the belly (anticipation for the big hands-up)
+    # 0.12 gather: a dip, hands sink to the belly (anticipation for the pump)
     a = P(S)
-    put(a, hip__z=-0.22, hip__rx=10, chest__rx=12, root__s=0.97)
-    both_hands(a, (0.04, -0.72, 2.42), fingers=(0.1, -0.3, 1.0), palm=(0, 1, 0.1), rel=1)
+    put(a, hip__z=-0.21, hip__rx=10, chest__rx=13, root__s=0.97)
+    both_hands(a, (0.04, -0.74, 2.40), fingers=(0.1, -0.3, 1.0), palm=(0, 1, 0.1), rel=1)
     face(a, squint=0.4, brows_angry=0.8)
     c.key(0.12, a)
-    # 0.30 hands up to the cap: tall, arched, the left foot rocks back
+    # 0.30 the pump: hands swing up over the brow, elbows wide, up tall and arched, the left foot rocks back
     b = P(S)
-    put(b, hip__y=0.14, hip__z=-0.02, hip__rx=-4, spine__rx=-3, chest__rx=-10, root__s=1.03)
-    foot(b, 'L', (0.40, 0.22, 0.11), rz=12, rx=10)
+    put(b, hip__y=0.14, hip__z=-0.02, hip__rx=-4, spine__rx=-3, chest__rx=-8, root__s=1.035, shL__ry=-18, shR__ry=18)
+    foot(b, 'L', (0.40, 0.20, 0.13), rz=12, rx=12)
     foot(b, 'R', (-0.38, -0.12, 0.11), rz=-8)
-    both_hands(b, (0.02, -0.66, 4.32), fingers=(0.0, -0.2, 1.0), palm=(0, 1, 0), eL=(1, 0.2, 0.3), eR=(-1, 0.2, 0.3))
-    PZ.put(b, shL__ry=-14, shR__ry=14)
+    both_hands(b, (0.0, -0.56, 4.10), fingers=(0.0, -0.35, 1.0), palm=(0, 1, -0.1), eL=(1, 0.4, 0.1), eR=(-1, 0.4, 0.1))
     look_at(b, CATCH, tilt=-2)
-    face(b, brows_up=0.4, squint=0.2, grin=0.2)
+    face(b, brows_up=0.4, squint=0.2, grin=0.25)
     c.key(0.30, b)
-    # 0.42 pivot: the right foot turns parallel to the rubber, hips start round, hands come down to the chin
+    # 0.44 pivot: the right foot turns parallel to the rubber, hips start round, hands come down to the chest
     p = P(S)
-    put(p, hip__y=0.08, hip__z=-0.06, hip__rz=-48, hip__rx=0, chest__rz=-12, chest__rx=0, spine__rx=0)
+    put(p, hip__y=0.08, hip__z=-0.06, hip__rz=-50, hip__rx=0, chest__rz=-12, chest__rx=0, spine__rx=0)
     foot(p, 'R', (-0.36, 0.06, 0.11), rz=-88)
-    foot(p, 'L', (0.34, 0.06, 0.24), rz=-30, rx=26)
-    both_hands(p, (0.04, -0.70, 3.30), fingers=(0.05, -0.2, 1.0), palm=(0, 1, 0), rel=1)
+    foot(p, 'L', (0.34, 0.06, 0.26), rz=-30, rx=28)
+    both_hands(p, (0.04, -0.70, 3.05), fingers=(0.05, -0.2, 1.0), palm=(0, 1, 0), rel=1)
     look_at(p, CATCH)
     face(p, brows_angry=0.8, squint=0.5)
-    c.key(0.42, p)
-    # 0.56 leg lift (balance point): left side to the plate, knee up to the chest, a lean back away from the plate
+    c.key(0.44, p)
+    # 0.58 leg lift (balance point): left side to the plate, knee up to the chest, leaning back from the plate
     k = P(S)
-    put(k, hip__x=0.0, hip__y=0.0, hip__z=-0.04, hip__rx=-6, hip__ry=0, spine__rx=-4, chest__rx=-4, chest__rz=-6)
+    put(k, hip__x=0.0, hip__y=0.0, hip__z=-0.03, hip__rx=-7, hip__ry=0, spine__rx=-4, chest__rx=-4, chest__rz=-6)
     foot(k, 'R', (-0.26, -0.30, 0.11), rz=0, knee=(-0.1, -1, 0))
-    foot_at_ankle(k, 'L', (0.18, -0.56, 1.36), rz=0, rx=58, knee=(0.05, -1, 0.5))
+    foot_at_ankle(k, 'L', (0.18, -0.58, 1.38), rz=0, rx=58, knee=(0.05, -1, 0.5))
     both_hands(k, (0.06, -0.70, 2.80), fingers=(0.0, -0.1, 1.0), palm=(0, 1, 0), rel=1)
     put(k, tail__rx=30)
     turn_pose(k, -90, pivot=(-0.30, 0.20))
     look_at(k, CATCH, neck=0.45)
     face(k, brows_angry=1.0, squint=0.65, smirk=0.3)
-    c.key(0.56, k)
-    # 0.68 coil: knee a touch higher, shoulders wind a little further away from the plate (hold)
+    c.key(0.58, k)
+    # 0.70 coil: the knee a touch higher, shoulders wind a little further from the plate (the hold)
     k2 = P(k)
-    put(k2, chest__rz=-14, hip__rz=k['hip.rz'] - 6, hip__z=-0.02, hip__rx=-8)
+    put(k2, chest__rz=-14, hip__rz=k['hip.rz'] - 6, hip__z=-0.02, hip__rx=-9)
     look_at(k2, CATCH, neck=0.45)
-    c.key(0.68, k2)
-    # 0.78 break: the knee kicks out toward the plate, hips drift forward and drop; glove arm reaches for the plate,
-    # ball hand swings down past the right hip (pendulum)
+    c.key(0.70, k2)
+    # 0.80 break: the knee kicks toward the plate, hips drift forward and drop; the glove reaches for the plate,
+    # the ball hand swings down past the right hip (pendulum)
     d = P(k2)
     put(d, hip__y=-0.30, hip__z=-0.14, hip__rx=0, chest__rz=-10)
     foot_at_ankle(d, 'L', (0.0, -0.95, 0.95), rz=-60, rx=20, knee=(0.2, -1, 0.3))
-    hand(d, 'L', (-0.10, -1.30, 2.70), sock='mitt', rel=0, elbow=(0.5, 0.6, -1.0))
+    W = solved(d)
+    hand(d, 'L', at_sh(d, 'L', (0.25, -0.95, 0.10), W), sock='mitt', rel=0, elbow=(0.5, 0.6, -1.0))
     orient(d, 'L', (0.0, -0.6, 0.8), (0.3, -0.3, -1.0))
-    hand(d, 'R', (-0.10, 0.62, 1.62), sock='grip', rel=0, elbow=(-0.3, -1.0, 0.0))
+    hand(d, 'R', at_sh(d, 'R', (-0.30, 0.35, -1.05), W), sock='grip', rel=0, elbow=(-0.3, -1.0, 0.0))
     orient(d, 'R', (0.0, 0.3, -1.0), (0.0, 1.0, 0.0))
     look_at(d, CATCH, neck=0.5)
-    c.key(0.78, d)
+    c.key(0.80, d)
     # 0.88 stride: the leg reaches for the plate, low; the ball arm swings back and up behind him
     s = P(d)
-    put(s, hip__x=0.05, hip__y=-0.72, hip__z=-0.30, hip__rz=-70, hip__rx=4, chest__rz=-16, chest__rx=-4, spine__ry=4)
+    put(s, hip__x=0.05, hip__y=-0.72, hip__z=-0.30, hip__rz=-70, hip__rx=4, chest__rz=-12, chest__rx=-4, spine__ry=4)
     foot_at_ankle(s, 'L', (0.12, -1.62, 0.48), rz=-20, rx=-14, knee=(0.4, -1, 0.3))
     foot(s, 'R', (-0.30, 0.10, 0.12), rz=-86, rx=12)
-    hand(s, 'L', (0.30, -1.80, 2.95), sock='mitt', rel=0, elbow=(0.6, 0.3, -1.0))
+    W = solved(s)
+    hand(s, 'L', at_sh(s, 'L', (0.35, -1.05, 0.30), W), sock='mitt', rel=0, elbow=(0.6, 0.3, -1.0))
     orient(s, 'L', (0.2, -0.8, 0.4), (0.4, -0.5, -0.8))
-    hand(s, 'R', (-0.30, 1.32, 2.70), sock='grip', rel=0, elbow=(-0.6, -0.4, -1.0))
-    orient(s, 'R', (0.0, 0.6, 0.8), (-0.3, 0.4, -0.8))
+    hand(s, 'R', at_sh(s, 'R', (-0.95, 0.65, 0.05), W), sock='grip', rel=0, elbow=(-0.6, -0.4, -1.0))
+    orient(s, 'R', (-0.3, 0.6, 0.8), (-0.3, 0.4, -0.8))
     c.key(0.88, s)
-    # 0.96 foot strike: front foot plants, hips still closed, the ball up behind the head (cocked)
+    # 0.96 foot strike: front foot plants, hips still closed, the ball cocked high beside his head
     f = P(s)
-    put(f, hip__x=0.08, hip__y=-1.00, hip__z=-0.40, hip__rz=-58, hip__rx=8, hip__ry=2, chest__rz=-24, chest__rx=-2, spine__ry=4)
-    foot(f, 'L', (0.30, -2.05, 0.11), rz=12, knee=(0.3, -1, 0.2))
+    put(f, hip__x=0.06, hip__y=-1.00, hip__z=-0.36, hip__rz=-52, hip__rx=8, hip__ry=2, chest__rz=-16, chest__rx=-4, chest__ry=-4, spine__ry=2)
+    foot(f, 'L', (0.28, -2.05, 0.11), rz=12, knee=(0.3, -1, 0.2))
     foot(f, 'R', (-0.30, 0.02, 0.14), rz=-82, rx=26, toe=-14)
-    hand(f, 'L', (0.42, -1.95, 3.00), sock='mitt', elbow=(1.0, 0.0, -0.6))
+    W = solved(f)
+    hand(f, 'L', at_sh(f, 'L', (0.35, -1.05, 0.35), W), sock='mitt', elbow=(1.0, 0.0, -0.6))
     orient(f, 'L', (0.0, -0.7, 0.7), (0.3, -0.9, -0.2))
-    hand(f, 'R', (-0.52, 0.95, 3.72), sock='grip', elbow=(-0.5, 0.3, -1.0))
-    orient(f, 'R', (0.0, 0.3, 1.0), (-0.2, 1.0, -0.2))
+    hand(f, 'R', at_sh(f, 'R', (-0.70, 0.30, 0.95), W), sock='grip', elbow=(-0.5, 0.6, -1.0))
+    orient(f, 'R', (-0.1, 0.4, 1.0), (-0.3, 1.0, -0.1))
     look_at(f, CATCH, neck=0.5)
     face(f, brows_angry=1.0, squint=0.7, grin=0.4)
     c.key(0.96, f)
     # 1.06 layback: hips fire open, the chest follows, the elbow leads and the ball lags back behind the shoulder
     lb = P(f)
-    put(lb, hip__y=-1.12, hip__z=-0.36, hip__rz=-18, hip__rx=12, hip__ry=6, chest__rz=-6, chest__rx=4, chest__ry=6, spine__rx=4, spine__ry=4)
-    foot(lb, 'R', (-0.30, -0.10, 0.16), rz=-76, rx=44, toe=-24)
-    hand(lb, 'R', (-1.05, 0.55, 3.20), sock='grip', elbow=(-0.3, -1.0, -0.5))
-    orient(lb, 'R', (-0.2, 0.7, 0.6), (-0.6, -0.2, -0.8))
-    hand(lb, 'L', (0.40, -0.70, 2.55), sock='mitt', rel=1, elbow=(1.0, 0.5, -0.5))
+    put(lb, hip__y=-1.14, hip__z=-0.28, hip__rz=-16, hip__rx=10, hip__ry=3, chest__rz=-4, chest__rx=0, chest__ry=2, spine__rx=3, spine__ry=2)
+    foot(lb, 'R', (-0.30, -0.12, 0.17), rz=-76, rx=44, toe=-24)
+    W = solved(lb)
+    hand(lb, 'R', at_sh(lb, 'R', (-0.85, 0.55, 0.55), W), sock='grip', elbow=(-0.4, -0.6, -1.0))
+    orient(lb, 'R', (-0.3, 0.7, 0.6), (-0.7, -0.2, -0.6))
+    hand(lb, 'L', (0.42, -0.72, 2.55), sock='mitt', rel=1, elbow=(1.0, 0.5, -0.5))
+    face(lb, brows_angry=1.0, squint=0.75, grin=0.7, cheeks_puff=0.3)
     c.key(1.06, lb)
     R = release_pose('classic')
-    c.key(RELEASE_T, R, mode='lin')
+    # 1.11 over the top: the hand comes up high beside the cap
+    ot = lerp_keys(lb, R, 0.55)
+    W = solved(ot)
+    hand(ot, 'R', at_sh(ot, 'R', (-0.62, 0.05, 1.38), W), sock='grip', elbow=(-0.5, 0.6, -0.8))
+    orient(ot, 'R', (-0.2, 0.1, 1.0), (0.0, -1.0, 0.1))
+    c.key(1.11, ot)
+    c.key(RELEASE_T, R)
     # 1.26 follow-through: the arm whips across to the outside of the left knee, chest over the front leg, the back
     # leg flies up behind
     ft = P(R)
-    put(ft, hip__x=0.12, hip__y=-1.55, hip__z=-0.42, hip__rx=34, hip__rz=26, hip__ry=4, spine__rx=12, chest__rx=12, chest__rz=12, chest__ry=0)
-    foot(ft, 'R', (-0.28, 0.22, 0.95), rz=-40, rx=-20, knee=(-0.4, -1, -0.6))
-    hand(ft, 'R', (0.70, -2.50, 1.10), sock='grip', elbow=(-0.6, 0.5, 0.4))
+    put(ft, hip__x=0.10, hip__y=-1.52, hip__z=-0.34, hip__rx=36, hip__rz=26, hip__ry=4, spine__rx=12, chest__rx=12, chest__rz=12, chest__ry=0)
+    W = solved(ft)
+    foot_at_ankle(ft, 'R', at_hip(ft, 'R', (-0.10, 0.80, 0.05), W), rz=-30, rx=-70, knee=(-0.2, 0.2, -1.0))
+    hand(ft, 'R', (0.72, -2.45, 1.15), sock='grip', elbow=(-0.6, 0.5, 0.4))
     orient(ft, 'R', (0.6, -0.3, -0.7), (0.2, 0.8, 0.0), 0.7)
     hshape(ft, 'R', 'open', 0.8)
     look_at(ft, CATCH + np.array([0, 0, 1.0]), neck=0.5)
@@ -275,11 +294,14 @@ def windup_classic():
     put(o, hip__z=-0.40, hip__rx=19)
     c.key(1.70, o)
     c.key(L, F, mode='stop')
-    c.lags = {'chest.': 0.0}
     c.sec_gain = 1.0
-    c.markers = {'release': RELEASE_T, 'legLift': 0.56, 'handBreak': 0.78, 'footStrike': 0.96, 'finish': 1.70}
+    c.markers = {'release': RELEASE_T, 'legLift': 0.58, 'handBreak': 0.80, 'footStrike': 0.96, 'finish': 1.70}
     c.meta = {'from': 'SET', 'to': 'FINISH', 'style': 'classic', 'ball': [['grip.R', 0.0], [None, RELEASE_T]]}
     return c
+
+
+def lerp_keys(a, b, t):
+    return PZ.lerp_pose(a, b, t)
 
 
 # ------------------------------------------------------------------------------------------- loops & transitions
