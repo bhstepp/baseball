@@ -44,6 +44,10 @@ BUILDS = {
     'boss_bulldog': (dict(leg=0.86, torso=1.02, hipw=1.3, shoulderw=1.45, arm=1.0, hand=1.38, head=1.16, neck=0.55, foot=1.15),
                      dict(chest_w=1.62, chest_d=1.5, belly=1.55, belly_drop=0.06, seat=1.3, thigh=1.42, shoulder=1.6,
                           arm_r=1.55, forearm=1.25, neck_r=1.65, cuff=1.3)),
+    # the Sasquatch: the biggest character in the game (~7 ft): huge everywhere, long arms, giant paws
+    'boss_bear': (dict(leg=1.42, torso=1.45, hipw=1.38, shoulderw=1.8, arm=1.32, hand=1.7, head=1.42, neck=0.75, foot=1.4),
+                  dict(chest_w=1.72, chest_d=1.62, belly=1.35, belly_drop=0.02, seat=1.3, thigh=1.55, shoulder=1.95,
+                       arm_r=1.95, forearm=1.35, neck_r=1.8, cuff=1.35)),
     # the boss: bigger, farm-strong (huge shoulders and arms), a short thick neck, big hands and feet
     'boss_ox': (dict(leg=1.2, torso=1.24, hipw=1.24, shoulderw=1.68, arm=1.16, hand=1.5, head=1.1, neck=0.7, foot=1.25),
                 dict(chest_w=1.72, chest_d=1.5, belly=1.1, belly_drop=0.0, seat=1.16, thigh=1.45, shoulder=2.0,

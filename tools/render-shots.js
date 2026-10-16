@@ -4,6 +4,7 @@
 //   node tools/render-shots.js            all shots + perf
 //   node tools/render-shots.js bat        only shots whose name contains "bat"
 //   node tools/render-shots.js --perf     perf only
+//   node tools/render-shots.js --cast     the game's cast before/after (procedural | modelled) -> qa/cast/
 let pw;
 try { pw = require('playwright'); } catch (e) { pw = require('/opt/node22/lib/node_modules/playwright'); }
 const path = require('path'), fs = require('fs'), { execSync } = require('child_process');
@@ -96,9 +97,15 @@ function shipped() {
 // --old         the game before the Rocco pilot (?rocco=old: procedural Rocco, old staging)
 // --size=WxH    viewport (default 390x844)
 const SHIP = process.argv.includes('--raw') ? { glb: path.join(ROOT, 'assets', 'rocco.glb') } : ARG('glb') ? { glb: path.resolve(ARG('glb')), lod1: ARG('lod1') ? path.resolve(ARG('lod1')) : null } : shipped();
-const EXTRA = (SHIP.glb ? '&glb=' + encodeURIComponent(SHIP.glb) : '') + (SHIP.lod1 ? '&lod1=' + encodeURIComponent(SHIP.lod1) : '') +
+// the game's cast (BB.Crew): the clip libraries and every character file the build ships (assets/char_*.glb);
+// --standin=<glb> plays every role with one body instead (e.g. assets/ref_body.glb, &standin1= its LOD1)
+const CHARS = fs.readdirSync(path.join(ROOT, 'assets')).filter(f => /^char_.*\.glb$/.test(f)).map(f => f.replace(/\.glb$/, ''));
+const CAST = '&cast=1' + (CHARS.length ? '&chars=' + CHARS.join(',') : '') + (ARG('standin') ? '&standin=' + encodeURIComponent(path.resolve(ARG('standin'))) : '') +
+  (ARG('standin1') ? '&standin1=' + encodeURIComponent(path.resolve(ARG('standin1'))) : '');
+const EXTRA = CAST + (SHIP.glb ? '&glb=' + encodeURIComponent(SHIP.glb) : '') + (SHIP.lod1 ? '&lod1=' + encodeURIComponent(SHIP.lod1) : '') +
   (process.argv.includes('--old') ? '&rocco=old' : '') + (ARG('q') ? '&' + ARG('q') : '');
 if (SHIP.glb) console.log('hero model:', path.relative(ROOT, SHIP.glb) + (SHIP.lod1 ? ' + ' + path.relative(ROOT, SHIP.lod1) : ''));
+console.log('cast:', CHARS.length ? CHARS.length + ' character files' : 'no character files', ARG('standin') ? '(stand-in ' + ARG('standin') + ')' : '');
 const SIZE = (ARG('size') || '390x844').split('x').map(Number);
 // --pilot: matched before/after pairs for the Rocco pilot -> qa/pilot/<name>-old.png, -new.png and <name>.png (side by side)
 //   old = ?rocco=old&ink=0 (procedural Rocco, old staging, no ink pass); new = the model, new staging, ink pass on
@@ -132,6 +139,68 @@ const PILOT = [
   ['24-field-hr-zip', 'scene=field&play=hr&pt=1.62'],
   ['25-field-hr-home-stretch', 'scene=field&play=hr&f=1&extra=0.35'],
 ];
+// --cast: the game's cast before/after -> qa/cast/<name>.png (procedural cast | modelled cast; Rocco is the model in both)
+const CASTSHOTS = [
+  ['c01-idle', 'scene=bat&state=idle&time=3.3'],
+  ['c02-intro', 'scene=bat&state=idle&time=3.3&stamp=PLAY%20BALL!&kind=neutral&stt=0.7'],
+  ['c03-windup', 'scene=bat&state=windup&w=0.6'],
+  ['c04-release', 'scene=bat&state=mid&f=0.02'],
+  ['c05-receive-high', 'scene=bat&state=mitt&dt=0.06&live=1&pz=3.3&px=0.4'],
+  ['c06-receive-low-in', 'scene=bat&state=mitt&dt=0.06&live=1&pz=1.7&px=-0.5'],
+  ['c07-called-strike', 'scene=bat&state=called&dt=0.36&strike=1&stamp=STRIKE!&kind=neutral&stt=0.24'],
+  ['c08-called-k', 'scene=bat&state=called&dt=0.54&strike=1&stamp=CAUGHT%20LOOKING&kind=bad&stt=0.42'],
+  ['c09-ball-four', 'scene=bat&state=called&dt=0.4&strike=0&stamp=BALL%20FOUR&kind=good&stt=0.28'],
+  ['c10-throw-back', 'scene=bat&state=called&dt=0.62&strike=0&live=1&pz=2.6&px=1.5'],
+  ['c11-get-ball', 'scene=bat&state=called&dt=0.86&strike=0&live=1&pz=2.6&px=1.5'],
+  ['c12-lefty', 'scene=bat&state=windup&w=0.8&pitcher=1'],
+  ['c13-sidearm', 'scene=bat&state=windup&w=0.9&pitcher=2'],
+  ['c14-boss', 'scene=bat&state=windup&w=0.5&pitcher=3'],
+  ['c15-contact', 'scene=bat&state=contact&st=0.16&pz=2.5&px=0'],
+  ['c16-field-hr-hold', 'scene=field&play=hr&pt=0.35'],
+  ['c17-field-hr-trot', 'scene=field&play=hr&f=1&extra=0.9'],
+  ['c18-field-fly-catch', 'scene=field&play=fly&ct=0.02'],
+  ['c19-field-fly-throw', 'scene=field&play=fly&tt=0.02'],
+  ['c20-field-grounder', 'scene=field&play=ground&ct=0.02'],
+  ['c21-field-out-at-first', 'scene=field&play=ground&ta=0.05'],
+  ['c22-field-gap', 'scene=field&play=gap&f=0.5'],
+  ['c23-field-runners', 'scene=field&play=gap&f=1&extra=0.35'],
+];
+async function castPairs(browser, filt) {
+  const OUTP = path.join(ROOT, 'qa', 'cast');
+  fs.mkdirSync(OUTP, { recursive: true });
+  const [W, H] = SIZE;
+  const ctx = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
+  const page = await ctx.newPage(), errors = [];
+  page.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') errors.push(m.type() + ': ' + m.text()); });
+  page.on('pageerror', e => errors.push('pageerror: ' + e.message));
+  await page.goto('file://' + path.join(ROOT, 'tools', 'render-harness.html') + '?scene=title' + EXTRA);
+  await page.waitForFunction(() => window.__done === true, null, { timeout: 60000 });
+  const list = CASTSHOTS.filter(([n]) => !filt || n.includes(filt));
+  for (const [name, q] of list) for (const [tag, flags] of [['old', '&cast=proc'], ['new', '']]) {
+    await page.evaluate((qq) => { window.__done = false; return window.setup('?' + qq); }, q + flags);
+    await page.screenshot({ path: path.join(OUTP, name + '-' + tag + '.png') });
+  }
+  console.log('cast:', JSON.stringify(await page.evaluate(() => { const s = BB.Crew.status(); return Object.keys(s.members || {}).map(r => r + ':' + s.members[r].state).join(' '); })));
+  const pctx = await browser.newContext({ viewport: { width: W * 2 + 12, height: H + 26 }, deviceScaleFactor: 2 }), pair = await pctx.newPage();
+  const img = (name, tag) => 'data:image/png;base64,' + fs.readFileSync(path.join(OUTP, name + '-' + tag + '.png')).toString('base64');
+  for (const [name] of list) {
+    await pair.setContent(`<body style="margin:0;background:#1B1420;font:600 14px sans-serif;color:#FFF4DC"><div style="display:flex;gap:12px">
+      <div><div style="height:26px;line-height:26px;padding-left:6px">BEFORE (procedural cast)</div><img src="${img(name, 'old')}" style="width:${W}px;height:${H}px;display:block"></div>
+      <div><div style="height:26px;line-height:26px;padding-left:6px">AFTER (modelled cast)</div><img src="${img(name, 'new')}" style="width:${W}px;height:${H}px;display:block"></div></div></body>`, { waitUntil: 'load' });
+    await pair.screenshot({ path: path.join(OUTP, name + '.png') });
+  }
+  if (list.length > 1) {
+    const tw = 150, th = Math.round(tw * H / W), cols = 4, cw = tw * 2 + 30, rows = Math.ceil(list.length / cols);
+    const cells = list.map(([name]) => `<div style="width:${cw}px;margin:0 10px 12px 0"><div style="height:18px;font:600 12px sans-serif;color:#FFF4DC">${name}</div>
+      <div style="display:flex;gap:6px"><img src="${img(name, 'old')}" style="width:${tw}px;height:${th}px"><img src="${img(name, 'new')}" style="width:${tw}px;height:${th}px"></div></div>`).join('');
+    await pair.setViewportSize({ width: cols * (cw + 10) + 10, height: rows * (th + 32) + 40 });
+    await pair.setContent(`<body style="margin:0;padding:10px;background:#1B1420"><div style="font:700 15px sans-serif;color:#F2B632;margin-bottom:8px">The cast ${W}x${H}: before (procedural, &cast=proc) | after (modelled)</div><div style="display:flex;flex-wrap:wrap">${cells}</div></body>`, { waitUntil: 'load' });
+    await pair.screenshot({ path: path.join(OUTP, 'overview.png'), fullPage: true });
+  }
+  await pctx.close(); await ctx.close();
+  const uniq = [...new Set(errors)].filter(e => !/GPU stall|GL Driver Message|swiftshader|Automatic fallback|ERR_FILE_NOT_FOUND/i.test(e));
+  console.log('cast pairs: ' + (uniq.length ? 'console:\n  ' + uniq.join('\n  ') : 'console clean') + ' -> ' + OUTP);
+}
 // face / gaze close-ups of the model (new only): --faces
 const FACES = [
   ['f1-stance', 'scene=bat&state=idle&time=3.3&closeup=1'],
@@ -202,6 +271,7 @@ async function pilot(browser, filt) {
 (async () => {
   const args = process.argv.slice(2), perfOnly = args.includes('--perf'), filt = args.find(a => !a.startsWith('--'));
   if (args.includes('--pilot')) { const br = await pw.chromium.launch({ args: GL_ARGS }); await pilot(br, filt); await br.close(); return; }
+  if (args.includes('--cast')) { const br = await pw.chromium.launch({ args: GL_ARGS }); await castPairs(br, filt); await br.close(); return; }
   if (args.includes('--faces')) {
     const br = await pw.chromium.launch({ args: GL_ARGS }), c = await br.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 }), pg = await c.newPage();
     const OUTP = path.join(ROOT, 'qa', 'pilot'); fs.mkdirSync(OUTP, { recursive: true });

@@ -3,7 +3,7 @@
    Character models (assets/*.glb, fetched by BB.Assets when a game needs them) live in their own cache that outlives
    releases: their URLs carry a content hash (?v=...), so an unchanged model is never downloaded twice; the page asks
    for a background pre-cache of the current list after it loads (message 'precache-assets'), so play works offline. */
-var VERSION = '3c1b3c2a64';
+var VERSION = '39ac39f687';
 var APP = 'halftone-app-' + VERSION;
 var FONTS = 'halftone-fonts-v1';
 var MODELS = 'halftone-assets-v1';

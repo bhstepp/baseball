@@ -455,3 +455,50 @@ def key_ring(J, f, mat='accessory_b', lod=0, side=-1):
     for q in out:
         q.set_weights({'hips': np.full(q.n, 0.7), ('thigh.R' if side < 0 else 'thigh.L'): np.full(q.n, 0.3)})
     return out
+
+
+# ------------------------------------------------------------------------------------------- shaggy fur (big furry bosses)
+def _tuft_ring(c, axis, radius, n, length, r0, mat, rng, name, out_bias=0.0):
+    axis = np.asarray(axis, float)
+    axis = axis / np.linalg.norm(axis)
+    R = G.zframe(axis)
+    terms = []
+    for i in range(n):
+        a = 2 * np.pi * (i + rng.uniform(-0.2, 0.2)) / n
+        radial = R @ np.array([np.cos(a), np.sin(a), 0.0])
+        base = c + radial * radius
+        L = length * rng.uniform(0.75, 1.2)
+        d = radial * (1 - out_bias) + axis * out_bias
+        d = d / np.linalg.norm(d)
+        terms.append(SD.round_cone(base - radial * 0.03, base + d * L, r0, 0.012))
+    f = SD.smooth_union(0.03, *terms)
+    return f
+
+
+def shag(J, f, mat='fur', lod=0, rng=None, bp=None):
+    """Shaggy fur poking out of the uniform: a ruff at the collar and tufts at the sleeve cuffs (gear 'shag', the
+    bear boss). Spiky clumps (round cones) so the silhouette reads as fur from the game camera."""
+    import cbody as CB
+    rng = rng if rng is not None else np.random.default_rng(1)
+    S = CB.scales(J)
+    out = []
+    neck = np.asarray(J['neck'], float)
+    c = neck + np.array([0.0, 0.0, 0.09 * S['ts']])
+    nr = (bp or {}).get('neck_r', 1.0)
+    ar = (bp or {}).get('arm_r', 1.0)
+    g = _tuft_ring(c, (0, 0, 1), 0.27 * nr, 16 if lod == 0 else 8, 0.24, 0.08, mat, rng, 'ruff', out_bias=0.3)
+    V, F = MS.sdf_mesh(g, c - 1.0, c + 1.0, 0.012 if lod == 0 else 0.022, tris=700 if lod == 0 else 120)
+    p = Part(V, F, mat, 'ruff')
+    p.set_weights({'chest': np.full(p.n, 0.6), 'neck': np.full(p.n, 0.4)})
+    out.append(orient_outward(p))
+    for s in (1, -1):
+        sd = 'L' if s > 0 else 'R'
+        wr = np.asarray(J['hand.' + sd], float)
+        d = RR.ARM_DIR * np.array([s, 1, 1])
+        c = wr - d * 0.04
+        g = _tuft_ring(c, d, 0.068 * ar, 9 if lod == 0 else 6, 0.15, 0.05, mat, rng, 'cuff', out_bias=0.45)
+        V, F = MS.sdf_mesh(g, c - 0.45, c + 0.45, 0.01 if lod == 0 else 0.02, tris=320 if lod == 0 else 60)
+        q = Part(V, F, mat, 'shag_cuff_' + sd)
+        q.set_weights({'forearm.' + sd: np.full(q.n, 0.6), 'hand.' + sd: np.full(q.n, 0.4)})
+        out.append(orient_outward(q))
+    return out

@@ -150,7 +150,7 @@ BB.Crew = (function () {
     });
     return game.promise;
   }
-  function release() { if (CUR) { releaseGame(CUR); CUR = null; } }
+  function release() { if (CUR) { releaseGame(CUR); CUR = null; } counts = {}; clocks = {}; }
   function releaseGame(game) {
     if (game.released) return;
     game.released = true;

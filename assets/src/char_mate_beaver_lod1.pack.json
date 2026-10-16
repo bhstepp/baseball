@@ -1,13 +1,13 @@
 {
- "source": "e9d2e0750ff8ca96b6399e4244f41e258319888d",
+ "source": "4f81de2b9e92bfccb90c80ea951db2b4d2a3cddf",
  "flags": "-cc -kn -km -ke -kv -vtf -af 0",
  "tool": "gltfpack@0.24.0",
  "lod1": null,
- "output": "4bdbe9bf94a91a8f48855375de088afd2f992ce3",
- "bytes": 63192,
- "gzip": 30578,
+ "output": "5e83fe5772f5e4cce04735ec55025153981a86c9",
+ "bytes": 63196,
+ "gzip": 30583,
  "rawBytes": 186452,
- "rawGzip": 83642,
+ "rawGzip": 83634,
  "stats": {
   "tris": 3358,
   "rawTris": 3358,
@@ -17,5 +17,5 @@
   "maxBoneErr": 0,
   "maxGeomErr": 0
  },
- "at": "2026-10-16T15:29:00.788Z"
+ "at": "2026-10-16T18:21:43.357Z"
 }

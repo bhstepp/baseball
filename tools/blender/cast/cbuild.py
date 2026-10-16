@@ -129,7 +129,7 @@ def build_body(spec, J, lod, head_world=None):
     tail = spec.get('tail') or 'none'
     tm = bp.get('tail_mat', 'feather' if spec.get('family') == 'bird' else 'fur')
     parts += CT.tail_parts(J, tail, mat=tm, tip_mat=bp.get('tail_tip_mat'), lod=lod, size=bp.get('tail_size', 1.0),
-                           rng=np.random.default_rng(spec['seed'] & 0xFFFFFFFF))
+                           rng=np.random.default_rng(spec['seed'] & 0xFFFFFFFF), stripe_mat=bp.get('tail_stripe_mat'))
     gear = spec.get('gear') or []
     if 'catcher' in gear:
         parts.append(GR.chest_protector(J, f, mat='team_b', trim='accessory_b', lod=lod))
@@ -140,6 +140,8 @@ def build_body(spec, J, lod, head_world=None):
         parts.append(GR.ball_bag(J, f, mat='accessory_b', lod=lod))
     if 'shell' in gear:
         parts.append(GR.shell_part(J, f, kind=bp.get('shell_kind', 'tortoise'), lod=lod))
+    if 'shag' in gear:
+        parts += GR.shag(J, f, mat=bp.get('shag_mat', 'fur'), lod=lod, rng=np.random.default_rng(spec['seed'] & 0xFFFF), bp=bp)
     if 'keys' in gear:
         parts += GR.key_ring(J, f, mat=bp.get('keys_mat', 'accessory_b'), lod=lod)
     if bp.get('decals') is False:

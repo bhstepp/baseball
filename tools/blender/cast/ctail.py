@@ -112,7 +112,29 @@ def hem(J, r=0.12):
     return BD.orient_outward(h)
 
 
-def tail_parts(J, kind, mat='fur', tip_mat=None, lod=0, size=1.0, rng=None):
+def stripe_faces(J, p, stripe_mat, width=0.55):
+    """Recolour the faces on the outer (dorsal) side of a tail sweep: a skunk's white stripe."""
+    pts, s = tail_path(J, 8)
+    hips = np.asarray(J['hips'], float)
+    mats = list(p.mat)
+    for i, fc in enumerate(p.F):
+        c = p.V[fc].mean(0)
+        k = int(np.argmin(np.linalg.norm(pts - c, axis=1)))
+        k2 = min(k + 1, len(pts) - 1)
+        tng = nrm(pts[k2] - pts[max(k - 1, 0)])
+        off = c - pts[k]
+        off = off - np.dot(off, tng) * tng
+        out = (c - hips)
+        out = out - np.dot(out, tng) * tng
+        if np.linalg.norm(off) < 1e-6 or np.linalg.norm(out) < 1e-6:
+            continue
+        if np.dot(nrm(off), nrm(out)) > 1 - width:
+            mats[i] = stripe_mat
+    p.mat = mats
+    return p
+
+
+def tail_parts(J, kind, mat='fur', tip_mat=None, lod=0, size=1.0, rng=None, stripe_mat=None):
     """Tail mesh(es) for a type, weighted to the tail chain (and hips at the root)."""
     sides = 9 if lod == 0 else 5
     n = 26 if lod == 0 else 10
@@ -126,7 +148,10 @@ def tail_parts(J, kind, mat='fur', tip_mat=None, lod=0, size=1.0, rng=None):
             if u > 0.72:
                 b = 0.34 * max((1 - u) / 0.28, 0) ** 0.75 + 0.012
             return b * k * (1 + 0.04 * math.sin(u * math.pi * 7))
-        parts.append(_sweep_tail(J, prof, mat, sides, n, mats=(lambda u: tip_mat if (tip_mat and u > 0.8) else mat)))
+        p = _sweep_tail(J, prof, mat, sides if not stripe_mat else sides + 4, n, mats=(lambda u: tip_mat if (tip_mat and u > 0.8) else mat))
+        if stripe_mat:
+            stripe_faces(J, p, stripe_mat)
+        parts.append(p)
         r0 = 0.10 * k
     elif kind == 'dog':
         def prof(u):

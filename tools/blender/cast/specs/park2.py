@@ -14,7 +14,7 @@ def characters():
     # ---- pitchers
     add('p_vinnie', lambda: C.pitcher_spec('p_vinnie', head=dict(ears=1.08, snout=1.06),
                                            accessories=dict(hair='mustache', hair_mat='mask')))
-    add('p_rosalind', lambda: C.pitcher_spec('p_rosalind'))
+    add('p_rosalind', lambda: C.pitcher_spec('p_rosalind', colors=dict(feather_accent='#6FB894')))
     add('p_marty', lambda: C.pitcher_spec('p_marty', head=dict(coat='tabby'), accessories=dict(hair='sideburns', hair_mat='fur_dark')))
     # the boss: unmistakably the landlord - short and bulky, heavy jowls, an underbite, a mean squint, a mustache, a
     # toothpick and a big ring of keys on his belt (no eye black / freckles from the card portrait)
