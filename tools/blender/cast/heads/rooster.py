@@ -2,6 +2,14 @@
 from heads import fam_bird as B
 
 FAMILY = 'bird'
+# species registry entry (read by cspecs without importing this module: keep it a plain literal)
+SPECIES = {
+    'family': 'bird',
+    'tail': 'fan',
+    'build': 'small',
+    'colors': {'beak': '#F2B632', 'skin': '#D9483B'},
+    'body_over': {'hand_mat': 'feather', 'tail_mat': 'feather', 'tail_tip_mat': 'feather_accent'},
+}
 
 
 def params(ctx):

@@ -4,6 +4,15 @@ import numpy as np
 from heads import fam_mammal as M
 
 FAMILY = 'mammal'
+# species registry entry (read by cspecs without importing this module: keep it a plain literal)
+SPECIES = {
+    'family': 'mammal',
+    'tail': 'hair',
+    'build': 'tall',
+    'build_over': {'neck': 1.35},
+    'colors': {'nose': '#3A2620', 'skin': '#F4ECE0'},
+    'body_over': {'tail_mat': 'fur_dark'},
+}
 
 
 def params(ctx):

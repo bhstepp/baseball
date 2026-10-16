@@ -4,6 +4,13 @@ from heads import fam_mammal as M
 import rk_sdf as SD
 
 FAMILY = 'mammal'
+# species registry entry (read by cspecs without importing this module: keep it a plain literal)
+SPECIES = {
+    'family': 'mammal',
+    'tail': 'stub',
+    'build': 'tall',
+    'colors': {'horn': '#E8D2A8', 'nose': '#3A2620'},
+}
 
 
 def params(ctx):

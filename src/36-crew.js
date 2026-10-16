@@ -38,7 +38,7 @@ BB.Crew = (function () {
   var STYLES = ['classic', 'highkick', 'sidearm', 'submarine'];
   var RELEASE_AT = 1.15;              // contract: every windup clip releases the ball at 1.15 s (= K.WINDUP)
   var POCKET_AT = 0.30;               // contract: the catcher's receives meet the ball at 0.30 s
-  var SIZE = { min: 0.85, max: 1.75 };   // the pitcher's scale is solved from the release height, within these
+  var SIZE = { min: 0.95, max: 1.3 };    // the pitcher's scale is solved from the release height, within these
   // the catcher's throw back to the mound, squeezed into the game's short gap between pitches (mitt -> next windup
   // ~1.0 s): the clip starts TB.delay after the pitch reaches the plate, its release frame lands TB.release later,
   // the ball flies TB.flight (a firm lob, TB.arc ft over the line) into the pitcher's mitt

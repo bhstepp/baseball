@@ -86,16 +86,30 @@ parents or rest orientations.
   ears, caps), exaggerated cartoon timing.
 
 ## Cast generator (tools/blender/cast)
-- **Run:** `<blender-python> tools/blender/cast/cbuild.py <id ...> | --park 1 [--lod 0,1] [--no-cache]` writes
+- **Run:** `<blender-python> tools/blender/cast/cbuild.py <id ...> | --park N [--lod 0,1] [--no-cache]` writes
   `assets/src/char_<id>.glb` (LOD0) and `assets/src/char_<id>_lod1.glb`; `node tools/pack-assets.js` packs them.
-  `--list` prints every known character. QA: `node tools/cast-shots.js --park 1` (turnarounds, face sheets, LOD
-  comparisons, lineups at one scale, the bat camera and the field camera, in `qa/cast/`).
-- **Specs** (`cspecs.py`): plain data built from the card data (`data/cards.json`, written by `node tools/cast-data.js`
-  from `src/`): species, role, name, number (the back decal), seed (individual variation), card face (palette,
-  accessories, cap forwards/backwards), colours, `build` (skeleton proportions: leg, foot, torso, neck, hipw,
-  shoulderw, arm, hand, head, tail), `body` (chest_w, chest_d, belly, belly_drop, seat, thigh, shoulder, arm_r,
-  forearm, neck_r, cuff, hand / tail materials, trousers), head options, tail type, hands (R, L), gear. Named builds:
-  average, stout, lanky, tall, stocky, round, small, athletic, boss_ox.
+  `--park 0` builds the extras (umpire, Rocco's teammates, derby pitchers); `--list` prints every character with its
+  park, species, role, LODs and which files exist (and pending / broken spec modules). Several `cbuild.py` processes
+  may run at once (other agents, other parks): caches live per character (`dist/cast-cache/<id>/`) and every file is
+  written to a process-unique temp name and renamed into place. QA: `node tools/cast-shots.js --park N`
+  (turnarounds, face sheets, LOD comparisons, lineups at one scale, the bat camera with the pitchers on the mound and
+  the catcher and umpire behind the plate, the field camera with the LOD1 fielders - all posed with the shared clip
+  libraries - in `qa/cast/`); `--lineup id,id,...` for an ad-hoc lineup; `--dir` / `--out` to work in a scratch folder.
+- **Specs:** one module per park, `tools/blender/cast/specs/park<N>.py` (+ `extras.py`: umpire, Rocco's teammates,
+  derby / daily pitchers; `tests.py`: head-kit test characters, never shipped), discovered automatically. Each defines
+  `PARK` and `characters() -> {id: spec}` using the helpers in `cspecs.py`: `pitcher_spec(pid, ...)` (from the pitcher
+  table: species, number, look.build / look.hair / windup, hand, boss, card face) and `card_spec(card_id, ...)` (from
+  `BB.Meta.CARDS`: species, position, number, seed, card face), with overrides. A spec is plain data: species, role,
+  name, number (the back decal), seed (individual variation), card face (palette, accessories, cap forwards /
+  backwards), colours, `build` (skeleton proportions: leg, foot, torso, neck, hipw, shoulderw, arm, hand, head,
+  tail), `body` (chest_w, chest_d, belly, belly_drop, seat, thigh, shoulder, arm_r, forearm, neck_r, cuff, hand /
+  tail materials, tail_len, trousers, shell_kind), `head` options for the species module, accessories, tail type,
+  hands (R, L), gear, `lods` (default: pitchers / catchers / umpire 0+1, others 1). Named builds (`cspecs.BUILDS`):
+  average, stout, lanky, tall, stocky, round, small, athletic, boss_ox. Card data comes from `data/cards.json`
+  (`node tools/cast-data.js` re-extracts it from `src/`).
+- **Species registry:** each `heads/<species>.py` declares a literal `SPECIES = {'family', 'tail', 'build',
+  'build_over', 'body_over', 'colors'}` entry (read with `ast`, no import), so adding a species never touches a
+  shared table.
 - **Skeleton** (`cskel.py`): the cast bone list = Rocco's minus the bat (56 bones incl. grip.L/R and mitt); joints
   are moved and bone lengths scaled, rest directions never change, so clips transfer by rotation. Head-local joints
   come from the head module; the tail chain is re-seated on the seat of the knickers.
@@ -111,11 +125,13 @@ parents or rest orientations.
 - **LOD1:** the same spec rebuilt at quality 0.24 (head with all its shape keys, mittens, a coarser torso, no small
   trims), then the unkeyed parts are decimated (materials and weights transferred) until the file is <= 3.5k
   triangles. Same skeleton, materials and shape-key names as LOD0.
-- **Cache:** `dist/cast-cache/` - the head and the body are cached separately, keyed by the spec fields they read
-  and the source of the modules they run (colours are applied at export, so recolouring never rebuilds anything).
+- **Cache:** `dist/cast-cache/<id>/` - the head and the body are cached separately, keyed by the spec fields they
+  read and the source of the modules they run (a head: the kit, the family modules and its own species module, so
+  another agent's species never invalidates it; colours are applied at export, so recolouring never rebuilds
+  anything). Builds are deterministic (a no-cache rebuild is byte-identical).
 
 ## Head kit (species heads)
-How a species head plugs into the cast generator (`tools/blender/cast/`, see "Cast generator" below). A head is a
+How a species head plugs into the cast generator (`tools/blender/cast/`, see "Cast generator" above). A head is a
 small module; everything shared lives in the kit.
 - **Module:** `tools/blender/cast/heads/<species>.py` defines `FAMILY` (`'mammal' | 'bird' | 'reptile'`) and
   `build(ctx) -> hkit.Head`. Usually it is `params(ctx)` (a dict merged over the family's `DEFAULTS`) plus an optional
@@ -173,9 +189,60 @@ small module; everything shared lives in the kit.
 - **Budgets:** a LOD0 head is about 3.5-4.5k triangles (skin 2.7k). LOD1 rebuilds the same head at quality 0.24
   (no teeth, tongue, highlights, cap seams, button or letter patch) - keep species pieces on `hkit.tq()` /
   `hkit.hq()` so they scale too.
-- **Adding a species:** write `heads/<species>.py`, add a `SPECIES` entry in `cspecs.py` (family, tail type, default
-  build, fixed colours such as nose / horn / beak), then `cbuild.py <id>` and `node tools/cast-shots.js <id>` (turn,
-  face and LOD sheets). Check it from the game cameras (`game-bat`, `game-field` sheets).
+- **Adding a species:** write `heads/<species>.py` (its `SPECIES` registry entry: family, tail type, default build,
+  fixed colours such as nose / horn / beak / skin, hand and tail materials), then `cbuild.py <id>` and
+  `node tools/cast-shots.js <id>` (turn, face and LOD sheets). Check it from the game cameras (`game-bat`,
+  `game-field` sheets).
+- **How to add a park** (parks 2-6; several agents in parallel, one park each):
+  1. Species heads: for every species of the park without a module, write `heads/<species>.py` with its `SPECIES`
+     entry, `params(ctx)` and `features(...)` (start from the closest existing module: dog / fox / goat / ox / horse /
+     sheep / mole / otter / beaver / hen / rooster / lizard / moose / walrus / tortoise). Don't edit `hkit.py` or
+     `heads/fam_*.py` for one species (they are shared and invalidate everyone's cache); add helpers in your species
+     module, or ask the generator owner.
+  2. Characters: `specs/park<N>.py` with the park's four pitchers (`pitcher_spec`, the boss gets a custom build in
+     `cspecs.BUILDS` style via `build_name` / `build` / `body` overrides plus signature head options) and the card
+     catcher + seven fielders by position (`card_spec(card_id)`; use the card's palette, accessories and seed; give
+     look-alike species different horns / ears / builds / markings). The catcher gets `gear=['catcher']`,
+     `cap_back=True`.
+  3. Build: `cbuild.py --park N` (LOD0 + LOD1 as the contract says), then `node tools/cast-shots.js --park N`.
+  4. Look at: `turn-<id>` (silhouette from five sides), `face-<id>` (all 11 shape keys front and 3/4; nothing pokes
+     through, mouth closed at rest, teeth only when the lips part), `lod-<id>`, `lineup-park<N>-close` and
+     `lineup-park<N>-team` (one scale with Rocco; everyone readable and different), `game-bat` and
+     `game-bat-pitchers` (the pitcher ~100 px tall from the plate: species reads from the silhouette - horns, ears,
+     beak, comb, colours), `game-plate`, `game-field` (LOD1 fielders at their spots).
+  5. Budgets: LOD0 <= 18k triangles (bosses <= 22k; `cbuild` decimates heavy gear to fit and says OVER BUDGET
+     otherwise), LOD1 <= 3.5k (automatic). Then `node tools/pack-assets.js` for the packed sizes.
+- **Gotchas we hit** (park 1):
+  - Teeth and tongue sit relative to the lips found on the skull surface; a mouth line in a crease between an
+    overhanging snout and a recessed chin used to push the lower teeth through the chin - `fit_mouth` now keeps each
+    row 0.07 behind the surface at its own height, but always check `face-<id>` at rest and with `frown` / `smirk`.
+    Long jaws open by Rocco's lip distance (the hinge angle shrinks); a muzzle pad near the mouth corners needs
+    `key_scale=dict(frown=0.6)`.
+  - Noses are placed a quarter radius in front of the snout surface; nostril pads (`nostril_pad`) carve pits and
+    colour the pad.
+  - Light coats need the inked eye ring (`eye.ring='mask'`, default on) or the eye whites vanish; brows default to
+    `mask` (a dark ink colour mixed from the coat) - on very dark coats they read weakly (fine for LOD1-only players).
+  - Anything that pokes through the cap needs a slot (`geo.slots`, ears and horns register their own); crests and
+    spikes must start below the cap band (reptile `crest(z0=...)`), a bird's comb rides on the crown (bone `cap`).
+    Backwards caps sit level and higher so the brows stay visible.
+  - The head's neck stub ends at design z 3.0 (inside the collar). Very long necks (flamingo, heron, goose, giraffe-
+    like builds with `build.neck` > 1.5) need a longer stub (`neck.b` lower) or a gap opens under the head; the nape
+    must stay inside thin jerseys (lanky builds).
+  - Birds: `fam_bird` has no mouth slit - the beak is two rigid parts (`BeakRig`: upper on the head, lower on the
+    jaw), no `grin`; smile / frown / smirk curl the gape and lift the cheek feathers. Long beaks (pelican, heron, gull,
+    flamingo) = `beak.len` / `droop`; the catcher's mask sizes its cage to the face's most forward point, so a long
+    beak means a deep cage (consider a mask-less catcher helmet for those). Bird hands are bare `feather` four-finger
+    hands (`body.hand_mat`), tails `fan` (feather / feather_accent). Owls: put the eyes further apart and flatter
+    (`eye.axis` closer to -Y), a short hooked beak.
+  - Reptiles: `fam_reptile` reuses the mammal builder with reptile params (wide mouth, `teeth=None`, eyes high on
+    brow bumps, nostril pits, no ears); materials `skin` (scales), `fur_light` (throat), `mask` (crest, markings).
+    A chameleon's casque or a frill is an `extra` SDF; if it rises through the cap use `cap.cranium` (fit the cap on
+    an enlarged ellipsoid, like the sheep's wool) or a cap slot. Shells are body gear: `gear=['shell']`,
+    `body.shell_kind='tortoise' | 'armadillo'`.
+  - Big furry bosses (bear): round ears through cap slots (`ear.kind='round'`, `slot=True`), a heavy build in
+    `cspecs.BUILDS` style (see `boss_ox`: shoulders, Popeye `forearm`, big hands), fur tufts as `hair_tuft` /
+    cheek tufts; keep LOD0 <= 22k.
+  - The decal patches project onto the jersey; narrow chests are handled, but check the back number in `turn-<id>`.
 
 ## Runtime (integration agent)
 `BB.Actors` (from `BB.Rocco`): loads a character by id, applies toon materials by name with team colours, skinned

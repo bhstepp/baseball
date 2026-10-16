@@ -192,7 +192,7 @@ def export_glb(out, extras, animations=False):
     for k, v in extras.items():
         sc[k] = v
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
-    tmp = out + '.tmp.glb'
+    tmp = '%s.%d.tmp.glb' % (out, os.getpid())          # process-unique: parallel builds never share a temp file
     if os.path.exists(tmp):
         os.remove(tmp)
     bpy.ops.export_scene.gltf(

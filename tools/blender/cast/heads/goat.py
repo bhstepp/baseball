@@ -4,6 +4,13 @@ import numpy as np
 from heads import fam_mammal as M
 
 FAMILY = 'mammal'
+# species registry entry (read by cspecs without importing this module: keep it a plain literal)
+SPECIES = {
+    'family': 'mammal',
+    'tail': 'stub',
+    'build': 'lanky',
+    'colors': {'nose': '#E8A9A0', 'horn': '#D9CBB0', 'skin': '#F0B4AC'},
+}
 HORNS = {   # left horn control points (design space), root radius, tip radius, ridge rings
     'swept': ([(0.19, 0.00, 4.60), (0.25, 0.10, 4.93), (0.31, 0.36, 5.12), (0.36, 0.66, 5.08)], 0.085, 0.022, 4),
     'scimitar': ([(0.17, 0.02, 4.60), (0.21, 0.10, 4.98), (0.24, 0.38, 5.30), (0.26, 0.78, 5.30), (0.27, 1.02, 5.10)], 0.08, 0.018, 6),

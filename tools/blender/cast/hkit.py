@@ -43,16 +43,21 @@ def orient_outward(p):
     return BD.orient_outward(p)
 
 
-def march_to(f, p, d, steps=160):
-    """Move point p along direction d until it reaches the surface of f."""
-    p = np.array(p, float)
+def march_to(f, p, d, steps=160, max_dist=2.5):
+    """Move point p along direction d until it reaches the surface of f. A ray that misses (or runs past max_dist)
+    is projected onto the nearest surface point instead of wandering off."""
+    p0 = np.array(p, float)
+    p = p0.copy()
     d = nrm(np.asarray(d, float))
     for _ in range(steps):
         v = f(p[None])[0]
         if abs(v) < 0.0015:
-            break
+            return p
         p = p + d * max(min(v, 0.05), 0.0015) * (1 if v > 0 else -1)
-    return p
+        if np.linalg.norm(p - p0) > max_dist:
+            break
+    q = SD.project(f, p[None], iters=8)[0]
+    return q
 
 
 def surface_y(f, x, z, y0=-2.2, y1=0.9, n=1601):

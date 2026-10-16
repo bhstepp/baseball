@@ -3,6 +3,14 @@
 from heads import fam_reptile as R
 
 FAMILY = 'reptile'
+# species registry entry (read by cspecs without importing this module: keep it a plain literal)
+SPECIES = {
+    'family': 'reptile',
+    'tail': 'lizard',
+    'build': 'round',
+    'colors': {'shell': '#8DAA5E', 'fur_dark': '#5E6E3A'},
+    'body_over': {'hand_mat': 'skin', 'tail_mat': 'skin', 'tail_len': 0.4},
+}
 
 
 def params(ctx):

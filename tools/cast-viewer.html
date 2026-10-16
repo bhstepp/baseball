@@ -226,6 +226,7 @@
         const md = M[a.id]; if (!md) return;
         md.root.visible = true;
         md.root.position.set(a.x || 0, a.y || 0, a.z || 0); md.root.rotation.z = a.yaw || 0; md.root.scale.setScalar(a.scale || 1);
+        if (a.mirror) md.root.scale.x *= -1;      // left-handers: mirrored like the runtime does
         const hide = a.hide || cell.hide || spec.hide || [];
         md.meshes.forEach((m) => { m.visible = !hide.includes(m.material.name); });
         if (a.team || cell.team || spec.team) applyTeam(md, Object.assign({}, spec.team || {}, cell.team || {}, a.team || {}));

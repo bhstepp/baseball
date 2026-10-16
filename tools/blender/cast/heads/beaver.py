@@ -7,6 +7,14 @@ import rk_sdf as SD
 import rk_geo as G
 
 FAMILY = 'mammal'
+# species registry entry (read by cspecs without importing this module: keep it a plain literal)
+SPECIES = {
+    'family': 'mammal',
+    'tail': 'flat',
+    'build': 'round',
+    'colors': {'nose': '#1B1420', 'skin': '#5A4A44', 'teeth': '#F6E7B8'},
+    'body_over': {'tail_mat': 'skin'},
+}
 
 
 def params(ctx):

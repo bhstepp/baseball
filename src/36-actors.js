@@ -597,10 +597,25 @@ BB.Actors = (function () {
   };
   A.hasLod = function (level) { return !!(this.lods[level] && this.lods[level].length); };
   A.updateVisibility = function () {
-    var lvl = this.hasLod(this.lodLevel) ? this.lodLevel : this.hasLod(0) ? 0 : 1, h = this.hidden;
-    this.meshes.forEach(function (m) { m.visible = m.userData.lod === lvl && !h[m.userData.kind]; });
+    var lvl = this.hasLod(this.lodLevel) ? this.lodLevel : this.hasLod(0) ? 0 : 1, h = this.hidden, self = this;
+    this.meshes.forEach(function (m) {
+      m.visible = m.userData.lod === lvl && !h[m.userData.kind] && !(self.decalOff && m.userData.kind === 'decal');
+      if (m.userData.outline) m.userData.outline.visible = !self.hullOff;
+    });
   };
-  A.setLod = function (level) { if (!this.hasLod(level)) level = this.hasLod(0) ? 0 : 1; if (level !== this.lodLevel) { this.lodLevel = level; this.updateVisibility(); } };
+  // detail by size on screen: a character a few dozen px tall drops its ink hulls (drawn only when BB.Ink is off,
+  // i.e. on the slow path: each is a draw call) and its lettering (unreadable at that size)
+  var DETAIL = { hull: 40, decal: 36 };
+  A.setDetail = function (px) {
+    var hullOff = px < DETAIL.hull, decalOff = px < DETAIL.decal;
+    if (hullOff === !!this.hullOff && decalOff === !!this.decalOff) return;
+    this.hullOff = hullOff; this.decalOff = decalOff; this.updateVisibility();
+  };
+  A.setLod = function (level) {
+    if (!this.hasLod(level)) level = this.hasLod(0) ? 0 : 1;
+    if (level === 0 && (this.hullOff || this.decalOff)) { this.hullOff = this.decalOff = false; this.lodLevel = -1; }   // close-ups: full detail
+    if (level !== this.lodLevel) { this.lodLevel = level; this.updateVisibility(); }
+  };
   // projected height in px (for LOD choice and budgets)
   A.screenHeight = function (cam, viewH) {
     this.root.getWorldPosition(V); V.z += this.height * this.size * 0.5;
@@ -614,6 +629,7 @@ BB.Actors = (function () {
     px = px || 120;
     var h = this.screenHeight(cam, viewH), want = this.lodLevel === 1 ? (h > px * 1.15 ? 0 : 1) : (h < px ? 1 : 0);
     this.setLod(want);
+    this.setDetail(h);
     return want;
   };
   // whole-actor frustum culling (skinned meshes keep frustumCulled off: their bind-pose bounds are wrong once posed)

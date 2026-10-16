@@ -36,7 +36,9 @@
   // pitcher's place and scale are solved from his release point)
   // (height: ft tall standing, so the cast's builds keep their proportions; shift: the share of a sideways move the
   // catcher's feet make, his glove arm reaches the rest; clear: ft his head stays right of a ball on his right)
-  var CATCHER_M = { x: CATCHER.x, y: CATCHER.y, height: 4.0, shift: 0.35, clear: 0.3 }, UMP_M = { height: 4.4 };
+  // The modelled umpire pops up in front of the plate on the first-base side (y ft out), right of the zone and above
+  // the catcher, his punch-out box just inside the frame's right edge (solved per screen size: umpSpot)
+  var CATCHER_M = { x: CATCHER.x, y: CATCHER.y, height: 4.0, shift: 0.35, clear: 0.3 }, UMP_M = { height: 4.4, y: 13.5, turn: -0.3, margin: 6 };
   // the modelled Rocco (BB.Rocco, 36-rocco.js): where his contact frame meets a middle-middle pitch
   var HERO_AIM = { x: 0, y: 0, z: 2.5 };
   var HR_HOLD = { pos: [-7, -34, 12], look: [0, 16, 4.5] };   // field camera while the model Rocco flips his bat on a homer
@@ -449,10 +451,13 @@
     var call = umpCall(v, CR), callT = call ? call.t : null, mOut = CR && CR.ready('U');
     var Um = S.ump, slide = callT == null ? 0 : smooth(callT / 0.14) * (1 - smooth((callT - (mOut ? 0.6 : 1.1)) / (mOut ? 0.22 : 0.25)));
     if (slide > 0.01) {
-      var ux = lerp(UMP.off, UMP.x, C.backOut(Math.min(1, slide))), uyaw = yawToward(-0.75, -1);
-      var mu = CR && CR.ready('U') ? CR.poseUmp(v, { callT: callT, kind: call.kind, x: ux, y: UMP.y, yaw: uyaw, height: UMP_M.height }) : null;
+      var mu = null;
+      if (mOut) {
+        var us = umpSpot(CR);
+        mu = CR.poseUmp(v, { callT: callT, kind: call.kind, x: lerp(us.x + 3.5, us.x, C.backOut(Math.min(1, slide))), y: us.y, yaw: us.yaw, height: UMP_M.height });
+      }
       if (mu) adopt(mu.actor);
-      else if (call.kind !== 'ball') { place(Um, ux, UMP.y, 0, uyaw); C.apply(Um, A.ump({ callT: callT, time: t })); }
+      else if (call.kind !== 'ball') { var uyaw = yawToward(-0.75, -1); place(Um, lerp(UMP.off, UMP.x, C.backOut(Math.min(1, slide))), UMP.y, 0, uyaw); C.apply(Um, A.ump({ callT: callT, time: t })); }
     }
     // --- fielders that happen to be in shot
     showFieldersIdle(t, S.camBat);
@@ -618,6 +623,24 @@
       place(f, d.x, d.y, 0, yaw);
       C.apply(f, A.fielder({ speed: 0, time: t, idx: i }));
     }
+  }
+  // where the modelled umpire stands for a call on this screen: his punch-out (u_strike, u_strike3 at the punch) kept
+  // inside the right edge, facing the camera, a little turned toward the plate (measured on his posed body, cached)
+  function umpSpot(CR) {
+    var U = CR.actor('U'), cam = S.camBase, key = S.W + 'x' + S.H + '|' + (U ? U.root.uuid : '');
+    if (S.umpSpot && S.umpSpot.key === key) return S.umpSpot;
+    var y = UMP_M.y, x = 3.6, yaw = 0;
+    for (var it = 0; it < 3 && U; it++) {
+      yaw = yawToward(cam.position.x - x, cam.position.y - y) + UMP_M.turn;
+      var right = -1e9;
+      [['strike', 0.24], ['strike3', 0.42]].forEach(function (k) {
+        CR.poseUmp({ time: 0 }, { callT: k[1], kind: k[0], x: x, y: y, yaw: yaw, height: UMP_M.height });
+        var b = U.posedBox(4);
+        for (var i = 0; i < 8; i++) { V.set(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z).project(cam); right = Math.max(right, (V.x + 1) / 2 * S.W); }
+      });
+      x -= (right - (S.W - UMP_M.margin)) / pxPerFt(Math.hypot(x - cam.position.x, y - cam.position.y, 3 - cam.position.z), cam);
+    }
+    return (S.umpSpot = { key: key, x: x, y: y, yaw: yawToward(cam.position.x - x, cam.position.y - y) + UMP_M.turn });
   }
   // seconds into the 'PLAY BALL!' intro before a game's first pitch (its stamp's age), else null
   function introT(v) { return !v.pitch && v.windup == null && v.stamp && /PLAY BALL/i.test(String(v.stamp.text || '')) ? (v.stamp.t || 0) : null; }

@@ -3,6 +3,13 @@
 from heads import fam_mammal as M
 
 FAMILY = 'mammal'
+# species registry entry (read by cspecs without importing this module: keep it a plain literal)
+SPECIES = {
+    'family': 'mammal',
+    'tail': 'none',
+    'build': 'round',
+    'colors': {'nose': '#1B1420', 'teeth': '#F6EED8'},
+}
 
 
 def params(ctx):

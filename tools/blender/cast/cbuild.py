@@ -1,8 +1,12 @@
 # cbuild.py - THE CAST GENERATOR: character spec (cspecs) -> head (species module, hkit) + body (cbody, ctail, cgear)
 # on the shared skeleton (cskel) -> skinned meshes with face shape keys -> LOD0 / LOD1 glb with the contract's extras.
-#   <bpy python> tools/blender/cast/cbuild.py p_ox c1-04 ...      build these characters (LODs from cspecs.LODS)
-#   <bpy python> tools/blender/cast/cbuild.py --park 1             everyone in park 1 (+ umpire, Rocco's teammates)
-#   options: --lod 0,1 (override)  --no-cache  --out-dir assets/src  --list  --quiet
+#   <bpy python> tools/blender/cast/cbuild.py p_ox c1-04 ...      build these characters (LODs: cspecs.default_lods)
+#   <bpy python> tools/blender/cast/cbuild.py --park 1             a park's characters (--park 0 = extras: umpire,
+#                                                                  Rocco's teammates, derby pitchers)
+#   <bpy python> tools/blender/cast/cbuild.py --list               every character (park, species, role, LODs, status)
+#   options: --lod 0,1 (override)  --no-cache  --out-dir assets/src  --report file.json
+# Parallel-safe: several cbuild.py processes (different agents) may run at once - caches live per character and
+# every file is written to a process-unique temp name, then renamed into place.
 # Output: assets/src/char_<id>.glb (LOD0), assets/src/char_<id>_lod1.glb (LOD1); tools/pack-assets.js packs them.
 # Build cache: dist/cast-cache/ (head and body cached separately, keyed by the spec section they use and the source
 # of the modules they run; colours are applied at export, so recolouring never rebuilds geometry).
@@ -54,7 +58,14 @@ def _expand(n):
 
 
 RK = ['rk_geo.py', 'rk_sdf.py', 'rk_mesh.py', 'rk_rig.py']
-HEAD_SRC = RK + ['rk_head.py', 'rk_body.py', 'hkit.py', 'heads/', 'cast_common.py']
+HEAD_KIT = RK + ['rk_head.py', 'rk_body.py', 'hkit.py', 'heads/__init__.py', 'cast_common.py']
+
+
+def head_src(spec):
+    """Sources a head depends on: the kit, every family module and the species' own module (another agent editing
+    a different species never invalidates this cache)."""
+    fams = sorted('heads/' + f for f in os.listdir(os.path.join(HERE, 'heads')) if f.startswith('fam_') and f.endswith('.py'))
+    return HEAD_KIT + fams + ['heads/%s.py' % spec['species']]
 BODY_SRC = RK + ['rk_body.py', 'rk_parts.py', 'cbody.py', 'cgear.py', 'ctail.py', 'cskel.py', 'cast_common.py']
 HEAD_KEYS = ('species', 'family', 'seed', 'face', 'head', 'accessories', 'cap_back', 'cap_mats', 'cap_letter', 'boss', 'role')
 BODY_KEYS = ('build', 'body', 'tail', 'hands', 'gear', 'seed', 'role', 'species')
@@ -65,13 +76,18 @@ def cached(kind, spec, lod, keys, srcs, fn, use_cache=True, extra=None):
     sub['_lod'] = lod
     sub['_extra'] = extra
     key = hashlib.sha1((json.dumps(sub, sort_keys=True, default=str) + _src_hash(srcs)).encode()).hexdigest()[:20]
-    path = os.path.join(CACHE, '%s_%s_lod%d_%s.pkl' % (spec['id'], kind, lod, key))
+    d = os.path.join(CACHE, spec['id'])
+    path = os.path.join(d, '%s_lod%d_%s.pkl' % (kind, lod, key))
     if use_cache and os.path.exists(path):
-        return pickle.load(open(path, 'rb')), True
+        try:
+            return pickle.load(open(path, 'rb')), True
+        except Exception:              # noqa: BLE001 - a stale / truncated cache entry: rebuild it
+            pass
     res = fn()
-    os.makedirs(CACHE, exist_ok=True)
-    tmp = path + '.tmp'
-    pickle.dump(res, open(tmp, 'wb'))
+    os.makedirs(d, exist_ok=True)
+    tmp = '%s.%d.tmp' % (path, os.getpid())
+    with open(tmp, 'wb') as fh:
+        pickle.dump(res, fh)
     os.replace(tmp, path)
     return res, False
 
@@ -196,7 +212,7 @@ def lod0_fit(fixed, parts, budget):
 # ------------------------------------------------------------------------------------------- assemble + export
 def assemble(spec, lod, use_cache=True, log=print):
     t0 = time.time()
-    head, hit_h = cached('head', spec, lod, HEAD_KEYS, HEAD_SRC, lambda: build_head(spec, lod), use_cache)
+    head, hit_h = cached('head', spec, lod, HEAD_KEYS, head_src(spec), lambda: build_head(spec, lod), use_cache)
     t1 = time.time()
     build = dict(SK.DEFAULT_BUILD)
     build.update(spec['build'])
@@ -263,10 +279,41 @@ def out_path(out_dir, cid, lod):
     return os.path.join(out_dir, 'char_%s%s.glb' % (cid, '' if lod == 0 else '_lod1'))
 
 
+def write_report(path, rows):
+    """Merge rows into a JSON report under an exclusive lock (parallel builds share one report file)."""
+    import fcntl
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    with open(path + '.lock', 'w') as lk:
+        fcntl.flock(lk, fcntl.LOCK_EX)
+        old = json.load(open(path)) if os.path.exists(path) else {}
+        for r in rows:
+            old['%s_lod%d' % (r['id'], r['lod'])] = {k: v for k, v in r.items() if k != 'out'}
+        tmp = '%s.%d.tmp' % (path, os.getpid())
+        json.dump(old, open(tmp, 'w'), indent=1, sort_keys=True)
+        os.replace(tmp, path)
+        fcntl.flock(lk, fcntl.LOCK_UN)
+
+
+def list_characters(out_dir):
+    import specs as SP
+    S = CS.specs()
+    print('%-14s %4s %-10s %-9s %-6s %-8s %s' % ('id', 'park', 'species', 'role', 'lods', 'family', 'files'))
+    for cid in sorted(S, key=lambda k: (S[k].get('park', 0), k)):
+        s = S[cid]
+        lods = CS.default_lods(s)
+        have = ['lod%d' % l for l in lods if os.path.exists(out_path(out_dir, cid, l))]
+        print('%-14s %4s %-10s %-9s %-6s %-8s %s' % (cid, s.get('park'), s['species'], s['role'], ','.join(map(str, lods)),
+                                                     s.get('family'), ' '.join(have) or '-'))
+    for cid, sp in sorted(SP.PENDING.items()):
+        print('%-14s pending: no heads/%s.py yet' % (cid, sp))
+    for m, e in sorted(SP.ERRORS.items()):
+        print('specs/%s.py FAILED: %s' % (m, e))
+
+
 def main(argv):
     ap = argparse.ArgumentParser()
     ap.add_argument('ids', nargs='*')
-    ap.add_argument('--park', type=int, default=0)
+    ap.add_argument('--park', type=int, action='append', default=[])
     ap.add_argument('--lod', default='')
     ap.add_argument('--no-cache', action='store_true')
     ap.add_argument('--out-dir', default=CC.ASSET_SRC)
@@ -274,27 +321,32 @@ def main(argv):
     ap.add_argument('--report', default='')
     args = ap.parse_args(argv)
     if args.list:
-        for k, v in CS.specs().items():
-            print(k, v['species'], v['role'], CS.LODS.get(k))
+        list_characters(args.out_dir)
         return
     ids = list(args.ids)
-    if args.park == 1:
-        ids += [i for i in CS.PARK1 if i not in ids]
+    for park in args.park:
+        ids += [i for i in CS.park_ids(park) if i not in ids]
+    if not ids:
+        ap.error('no characters (give ids or --park N; --list shows them)')
     rep = []
     t0 = time.time()
+    failed = []
     for cid in ids:
         spec = CS.get(cid)
-        lods = [int(x) for x in args.lod.split(',')] if args.lod else list(CS.LODS.get(cid, (0, 1)))
+        lods = [int(x) for x in args.lod.split(',')] if args.lod else list(CS.default_lods(spec))
         for lod in lods:
-            rep.append(export_character(spec, lod, out_path(args.out_dir, cid, lod), not args.no_cache))
+            try:
+                rep.append(export_character(spec, lod, out_path(args.out_dir, cid, lod), not args.no_cache))
+            except Exception as e:      # noqa: BLE001 - report, keep building the others
+                import traceback
+                traceback.print_exc()
+                failed.append('%s lod%d: %s' % (cid, lod, e))
     print('built %d files in %.1fs' % (len(rep), time.time() - t0))
-    if args.report:
-        old = json.load(open(args.report)) if os.path.exists(args.report) else {}
-        for r in rep:
-            old['%s_lod%d' % (r['id'], r['lod'])] = {k: v for k, v in r.items() if k != 'out'}
-        tmp = args.report + '.tmp'
-        json.dump(old, open(tmp, 'w'), indent=1, sort_keys=True)
-        os.replace(tmp, args.report)
+    if args.report and rep:
+        write_report(args.report, rep)
+    if failed:
+        print('FAILED:\n  ' + '\n  '.join(failed))
+        sys.exit(1)
 
 
 if __name__ == '__main__':

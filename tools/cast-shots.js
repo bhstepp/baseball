@@ -4,8 +4,9 @@
 //   node tools/cast-shots.js --park 1                 every sheet for park 1 (turnarounds, faces, lineups, game views)
 //   node tools/cast-shots.js p_ox c1-04 --only turn,face
 //   node tools/cast-shots.js --dir <glb dir> --out <dir>
-// Sheets (qa/cast/, gitignored): turn-<id>.png, face-<id>.png, lod-<id>.png, lineup-*.png, game-bat-*.png,
-// game-field.png, plus info.json (per-character triangles, materials, morphs, extras).
+// Sheets (qa/cast/, gitignored): turn-<id>.png, face-<id>.png, lod-<id>.png, lineup-park<N>-*.png, game-bat-park<N>.png,
+// game-bat-pitchers-park<N>.png, game-plate-park<N>.png, game-field-park<N>.png, plus info-park<N>.json (per-character
+// triangles, sizes, materials, morphs, extras).
 let pw;
 try { pw = require('playwright'); } catch (e) { pw = require('/opt/node22/lib/node_modules/playwright'); }
 const path = require('path'), fs = require('fs');
@@ -22,16 +23,27 @@ const IDS = args.filter((a, i) => !a.startsWith('--') && !skipNext.has(args[i - 
 const GL_ARGS = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--allow-file-access-from-files'];
 const PI = Math.PI;
 const SHAPES = ['blink', 'smile', 'grin', 'frown', 'mouth_open', 'brows_up', 'brows_angry', 'brows_sad', 'squint', 'cheeks_puff', 'smirk'];
+// the park's cast comes from the generator's specs (python3 tools/blender/cast/cspecs.py --roster N)
+function roster(n) {
+  const r = require('child_process').spawnSync('python3', [path.join(ROOT, 'tools', 'blender', 'cast', 'cspecs.py'), '--roster', String(n)], { encoding: 'utf8' });
+  if (r.status !== 0) throw new Error('roster: ' + (r.stderr || r.error));
+  return JSON.parse(r.stdout.trim().split('\n').pop());
+}
+const ROSTER = PARK > 0 ? roster(PARK) : { pitchers: [], catcher: null, fielders: {}, team: null, windup: {}, throws: {} };
+const SIDE = (() => { const f = path.join(ROOT, 'assets', 'anim_pitcher.json'); return fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : null; })();
+const windupOf = (p) => 'p_windup_' + ((ROSTER.windup || {})[p] || 'classic');
+const legLift = (clip) => { const c = SIDE && SIDE.clips && SIDE.clips[clip]; return (c && c.markers && (c.markers.legLift || c.markers.release)) || 0.54; };
+const lefty = (p) => (ROSTER.throws || {})[p] === 'L';
 const PARK1 = {
-  pitchers: ['p_hank', 'p_dottie', 'p_clem', 'p_ox'],
-  catcher: 'c1-04', ump: 'ump',
-  fielders: { '1B': 'c1-05', '2B': 'c1-06', SS: 'c1-07', '3B': 'c1-08', LF: 'c1-09', CF: 'c1-10', RF: 'c1-11' },
+  pitchers: ROSTER.pitchers, catcher: ROSTER.catcher, ump: 'ump', fielders: ROSTER.fielders,
   mates: ['mate_otter', 'mate_fox', 'mate_beaver'],
-  team: { team_a: '#2E5AAC', team_b: '#D9483B', cap: '#2E5AAC', cap_brim: '#2E5AAC', letter: 'H', letterColor: '#2E5AAC' },
+  team: ROSTER.team || { team_a: '#2E5AAC', team_b: '#D9483B', cap: '#2E5AAC', cap_brim: '#2E5AAC', letter: 'H', letterColor: '#2E5AAC' },
 };
 const FIELD_POS = { C: [0, -4], '1B': [66, 86], '2B': [34, 142], SS: [-34, 142], '3B': [-64, 86], LF: [-150, 252], CF: [0, 312], RF: [150, 252] };
 const ROCCO_TEAM = { team_a: '#2E5AAC', team_b: '#D9483B', cap: '#2E5AAC', cap_brim: '#2E5AAC', letter: 'R', letterColor: '#2E5AAC' };
 const want = (name) => !ONLY.length || ONLY.some((w) => name.startsWith(w));
+// sheet / info names carry the park so agents working on different parks never overwrite each other's sheets
+const TAG = PARK > 0 ? 'park' + PARK : (LINEUP.length ? 'adhoc' : 'ids');
 const faceYaw = (x, y) => Math.atan2(-x, y);          // yaw that turns a character at (x, y) to face home plate
 
 function file(id, lod) { return path.join(DIR, `char_${id}${lod ? '_lod1' : ''}.glb`); }
@@ -71,7 +83,7 @@ function file(id, lod) { return path.join(DIR, `char_${id}${lod ? '_lod1' : ''}.
   const rocco = await load('rocco', path.join(ROOT, 'assets', 'src', 'rocco.glb'), ROCCO_TEAM);
 
   let ids = IDS.slice().concat(LINEUP.map((k) => k.split('@')[0]));
-  if (PARK === 1) ids = ids.concat(PARK1.pitchers, [PARK1.catcher, PARK1.ump], Object.values(PARK1.fielders), PARK1.mates);
+  if (PARK > 0) ids = ids.concat(PARK1.pitchers, PARK1.catcher ? [PARK1.catcher] : [], [PARK1.ump], Object.values(PARK1.fielders), PARK1.mates);
   ids = [...new Set(ids)];
   const info = {};
   for (const id of ids) {
@@ -128,11 +140,12 @@ function file(id, lod) { return path.join(DIR, `char_${id}${lod ? '_lod1' : ''}.
     const step = 3.1, w = (keys.length - 1) * step;
     await shot('lineup-adhoc-34', { cols: 1, cellW: Math.max(900, keys.length * 190), cellH: 620, cells: [{ label: 'q34', view: { az: 30, el: 6, dist: 120, target: [0, 0, 3.0], fov: 3.6 * Math.max(1, keys.length / 4.2) }, actors: keys.map((k, i) => ({ id: k, x: -w / 2 + i * step, yaw: 0 })) }] });
   }
-  if (PARK === 1 || (IDS.length && !LINEUP.length)) {
+  if (PARK > 0 || (IDS.length && !LINEUP.length)) {
     const has = (k) => info[k] && info[k].lod0;
-    await lineup('lineup-park1-close', ['rocco'].concat(PARK1.pitchers, [PARK1.catcher, PARK1.ump]).filter((k) => k === 'rocco' || has(k)), 'Park 1 close-up cast (LOD0): Rocco for scale, the Hayseeds pitchers, catcher, umpire');
-    await lineup('lineup-park1-team', ['rocco'].concat(PARK1.pitchers.map((k) => k + '@1'), [PARK1.catcher + '@1'], Object.values(PARK1.fielders).map((k) => k + '@1')),
-      'Haybale Junction Hayseeds (LOD1): pitchers, catcher, 1B 2B SS 3B LF CF RF');
+    const P = 'park' + (PARK || 'x'), tn = (PARK1.team && PARK1.team.name) || 'the home team';
+    await lineup(`lineup-${P}-close`, ['rocco'].concat(PARK1.pitchers, [PARK1.catcher, PARK1.ump]).filter((k) => k === 'rocco' || has(k)), `Park ${PARK} close-up cast (LOD0): Rocco for scale, ${tn} pitchers, catcher, umpire`);
+    await lineup(`lineup-${P}-team`, ['rocco'].concat(PARK1.pitchers.map((k) => k + '@1'), PARK1.catcher ? [PARK1.catcher + '@1'] : [], ['1B', '2B', 'SS', '3B', 'LF', 'CF', 'RF'].filter((p) => PARK1.fielders[p]).map((p) => PARK1.fielders[p] + '@1')),
+      `${tn} (LOD1): pitchers, catcher, 1B 2B SS 3B LF CF RF`);
     await lineup('lineup-runners', ['rocco'].concat(PARK1.mates.map((k) => k + '@1'), ['ump@1']), "Rocco's teammates (LOD1) and the umpire (LOD1)");
     // ---- the bat camera (390 x 844): each pitcher on the mound, the catcher and umpire behind the plate, Rocco at bat
     // behind the plate as the game stages it (35-scene.js CATCHER / UMP spots): the catcher a step back, the umpire
@@ -140,14 +153,15 @@ function file(id, lod) { return path.join(DIR, `char_${id}${lod ? '_lod1' : ''}.
     const cat = has(PARK1.catcher) ? [{ id: PARK1.catcher, x: 0.6, y: -4.3, yaw: PI, clip: 'c_crouch', t: 0 }] : [];
     const ump = has(PARK1.ump) ? [{ id: PARK1.ump, x: 2.1, y: -5.6, yaw: PI, clip: 'u_stance', t: 0 }] : [];
     const hero = rocco ? [{ id: 'rocco', x: -2.35, y: 0.9, yaw: PI / 2, clip: 'stance', t: 0 }] : [];
-    const cells = PARK1.pitchers.filter(has).map((p) => ({ label: p, field: true, view: { game: 'bat' }, actors: [{ id: p, x: 0, y: 60.5, z: 0.83, clip: 'p_idle', t: 0, scale: 1.08 }].concat(cat, ump, hero) }));
+    const cells = PARK1.pitchers.filter(has).map((p) => ({ label: p, field: true, view: { game: 'bat' }, actors: [{ id: p, x: 0, y: 60.5, z: 0.83, clip: 'p_idle', t: 0, scale: 1.08, mirror: lefty(p) }].concat(cat, ump, hero) }));
     if (cells.length) {
-      cells.push({ label: 'p_ox: set', field: true, view: { game: 'bat' }, actors: [{ id: 'p_ox', x: 0, y: 60.5, z: 0.83, clip: 'p_set', t: 0.7, scale: 1.08 }].concat(cat, ump, hero) });
-      await shot('game-bat', { cols: cells.length, cellW: 390, cellH: 844, cells });
+      const boss = PARK1.pitchers.filter(has).slice(-1)[0];
+      cells.push({ label: boss + ': set', field: true, view: { game: 'bat' }, actors: [{ id: boss, x: 0, y: 60.5, z: 0.83, clip: 'p_set', t: 0.7, scale: 1.08, mirror: lefty(boss) }].concat(cat, ump, hero) });
+      await shot('game-bat-' + TAG, { cols: cells.length, cellW: 390, cellH: 844, cells });
       // pitcher close-ups as the bat camera frames them (crop round the mound)
-      await shot('game-bat-pitchers', { cols: 4, cellW: 360, cellH: 420, cells: PARK1.pitchers.filter(has).map((p) => ({ label: p + ' from the plate', field: true, view: { cam: [-0.6, -28, 9.6], look: [0, 60.5, 3.6], fov: 7.5 }, actors: [{ id: p, x: 0, y: 60.5, z: 0.83, clip: 'p_windup_classic', t: 0.54, scale: 1.08 }] })) });
+      await shot('game-bat-pitchers-' + TAG, { cols: 4, cellW: 360, cellH: 420, cells: PARK1.pitchers.filter(has).map((p) => ({ label: `${p} ${windupOf(p).slice(9)} leg lift${lefty(p) ? ' (L)' : ''}`, field: true, view: { cam: [-0.6, -28, 9.6], look: [0, 60.5, 3.6], fov: 7.5 }, actors: [{ id: p, x: 0, y: 60.5, z: 0.83, clip: windupOf(p), t: legLift(windupOf(p)), scale: 1.08, mirror: lefty(p) }] })) });
       if (has(PARK1.catcher) || has(PARK1.ump)) {
-        await shot('game-plate', { cols: 3, cellW: 420, cellH: 420, cells: [
+        await shot('game-plate-' + TAG, { cols: 3, cellW: 420, cellH: 420, cells: [
           { label: 'catcher + umpire (bat camera side)', field: true, view: { cam: [-0.6, -24, 7.5], look: [0.4, -4, 2.0], fov: 22 }, actors: cat.concat(ump) },
           { label: 'from the mound', field: true, view: { cam: [0, 45, 6], look: [0.4, -4.5, 2.0], fov: 14 }, actors: cat.concat(ump) },
           { label: 'side', field: true, view: { cam: [14, -5, 4], look: [0.6, -4.8, 2.0], fov: 26 }, actors: cat.concat(ump) },
@@ -162,9 +176,9 @@ function file(id, lod) { return path.join(DIR, `char_${id}${lod ? '_lod1' : ''}.
       fa.push({ id: id + '@1', x, y, yaw: faceYaw(x, y), clip: 'f_ready', t: 0 });
     }
     if (info[PARK1.catcher] && info[PARK1.catcher].lod1) fa.push({ id: PARK1.catcher + '@1', x: 0.25, y: -3.9, yaw: PI, clip: 'c_crouch', t: 0 });
-    PARK1.pitchers.slice(3).forEach((p) => { if (info[p] && info[p].lod1) fa.push({ id: p + '@1', x: 0, y: 60.5, z: 0.83, yaw: 0, clip: 'p_idle', t: 0 }); });
+    PARK1.pitchers.slice(-1).forEach((p) => { if (info[p] && info[p].lod1) fa.push({ id: p + '@1', x: 0, y: 60.5, z: 0.83, yaw: 0, clip: 'p_idle', t: 0, mirror: lefty(p) }); });
     if (fa.length) {
-      await shot('game-field', { cols: 2, cellW: 700, cellH: 520, cells: [
+      await shot('game-field-' + TAG, { cols: 2, cellW: 700, cellH: 520, cells: [
         { label: 'field view (LOD1 fielders)', field: true, view: { cam: [0, -70, 75], look: [0, 150, 0], fov: 46 }, actors: fa },
         { label: 'infield from behind the plate', field: true, view: { cam: [0, -40, 22], look: [0, 100, 0], fov: 36 }, actors: fa },
         { label: 'middle infield (2B, SS) from the mound', field: true, view: { cam: [0, 66, 9], look: [0, 142, 3], fov: 34 }, actors: fa },
@@ -172,6 +186,6 @@ function file(id, lod) { return path.join(DIR, `char_${id}${lod ? '_lod1' : ''}.
       ] });
     }
   }
-  fs.writeFileSync(path.join(OUT, 'info.json'), JSON.stringify(info, null, 1));
+  fs.writeFileSync(path.join(OUT, 'info-' + TAG + '.json'), JSON.stringify(info, null, 1));
   await browser.close();
 })().catch((e) => { console.error(e); process.exit(1); });

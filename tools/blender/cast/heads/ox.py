@@ -6,6 +6,14 @@ from heads import fam_mammal as M
 import rk_sdf as SD
 
 FAMILY = 'mammal'
+# species registry entry (read by cspecs without importing this module: keep it a plain literal)
+SPECIES = {
+    'family': 'mammal',
+    'tail': 'tufted',
+    'build': 'stocky',
+    'colors': {'horn': '#F2E8D2', 'nose': '#3A2620'},
+    'body_over': {'tail_tip_mat': 'fur_dark'},
+}
 HORNS = {
     'ox': ([(0.42, 0.05, 4.50), (0.74, 0.02, 4.57), (0.98, -0.04, 4.76), (1.06, -0.12, 5.02)], 0.12, 0.03, 0),
     'ox_boss': ([(0.44, 0.06, 4.50), (0.86, 0.03, 4.53), (1.20, -0.04, 4.72), (1.34, -0.14, 5.06), (1.33, -0.26, 5.24)], 0.16, 0.035, 0),

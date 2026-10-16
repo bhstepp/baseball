@@ -6,6 +6,13 @@ import hkit as K
 import rk_sdf as SD
 
 FAMILY = 'mammal'
+# species registry entry (read by cspecs without importing this module: keep it a plain literal)
+SPECIES = {
+    'family': 'mammal',
+    'tail': 'stub',
+    'build': 'round',
+    'colors': {'nose': '#E8A9A0', 'skin': '#F2D8CC'},
+}
 WOOL_C = np.array([0.0, 0.14, 4.22])
 WOOL_R = np.array([0.66, 0.62, 0.62])
 

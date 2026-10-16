@@ -46,34 +46,57 @@ BUILDS = {
                      arm_r=1.9, forearm=1.55, neck_r=1.7, cuff=1.3)),
 }
 
-# ------------------------------------------------------------------------------------------- species defaults
-SPECIES = {
-    'dog': dict(family='mammal', tail='dog', build='average', colors={'nose': INK}),
-    'goat': dict(family='mammal', tail='stub', build='lanky', colors={'nose': '#E8A9A0', 'horn': '#D9CBB0', 'skin': '#F0B4AC'}),
-    'ox': dict(family='mammal', tail='tufted', build='stocky', colors={'horn': '#F2E8D2', 'nose': '#3A2620'},
-               body_over=dict(tail_tip_mat='fur_dark')),
-    'cow': dict(family='mammal', tail='tufted', build='stout', colors={'horn': '#F2E8D2', 'nose': '#E8A9A0', 'skin': '#F2B4B0'},
-                body_over=dict(tail_tip_mat='fur_dark')),
-    'horse': dict(family='mammal', tail='hair', build='tall', build_over=dict(neck=1.35), colors={'nose': '#3A2620', 'skin': '#F4ECE0'},
-                  body_over=dict(tail_mat='fur_dark')),
-    'sheep': dict(family='mammal', tail='stub', build='round', colors={'nose': '#E8A9A0', 'skin': '#F2D8CC'}),
-    'mole': dict(family='mammal', tail='thin', build='round', colors={'nose': '#F29AA6', 'skin': '#F2B4B4'},
-                 body_over=dict(hand_mat='skin', tail_mat='skin')),
-    'otter': dict(family='mammal', tail='thick', build='average', build_over=dict(leg=0.9, torso=1.08), colors={'nose': INK}),
-    'fox': dict(family='mammal', tail='bushy', build='lanky', colors={'nose': INK}, body_over=dict(tail_tip_mat='fur_light')),
-    'beaver': dict(family='mammal', tail='flat', build='round', colors={'nose': INK, 'skin': '#5A4A44', 'teeth': '#F6E7B8'},
-                   body_over=dict(tail_mat='skin')),
-    'lizard': dict(family='reptile', tail='lizard', build='lanky', colors={'skin': '#7DB04E', 'fur_light': '#EBDFA0', 'mask': '#2F4A2A'},
-                   body_over=dict(hand_mat='skin', tail_mat='skin', tail_tip_mat='mask')),
-    'moose': dict(family='mammal', tail='stub', build='tall', colors={'horn': '#E8D2A8', 'nose': '#3A2620'}),
-    'walrus': dict(family='mammal', tail='none', build='round', colors={'nose': INK, 'teeth': '#F6EED8'}),
-    'tortoise': dict(family='reptile', tail='lizard', build='round', colors={'shell': '#8DAA5E', 'fur_dark': '#5E6E3A'},
-                     body_over=dict(hand_mat='skin', tail_mat='skin', tail_len=0.4)),
-    'hen': dict(family='bird', tail='fan', build='lanky', colors={'beak': '#F2B632', 'skin': '#D9483B'},
-                body_over=dict(hand_mat='feather', tail_mat='feather', tail_tip_mat='feather_accent')),
-    'rooster': dict(family='bird', tail='fan', build='small', colors={'beak': '#F2B632', 'skin': '#D9483B'},
-                    body_over=dict(hand_mat='feather', tail_mat='feather', tail_tip_mat='feather_accent')),
-}
+# ------------------------------------------------------------------------------------------- species registry
+# Every heads/<species>.py declares a literal SPECIES dict: family, tail type, default build (a BUILDS name),
+# build_over / body_over tweaks and fixed colours. Read with ast (no import, no Blender needed), so a new species is
+# one new file and nobody edits a shared table.
+HEADS_DIR = os.path.join(HERE, 'heads')
+_SPECIES = None
+
+
+def _read_species(path):
+    import ast
+    tree = ast.parse(open(path).read(), path)
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == 'SPECIES' for t in node.targets):
+            d = ast.literal_eval(node.value)
+            for k in ('family', 'tail', 'build'):
+                if k not in d:
+                    raise ValueError('%s: SPECIES needs %r' % (path, k))
+            if d['build'] not in BUILDS:
+                raise ValueError('%s: unknown build %r (cspecs.BUILDS)' % (path, d['build']))
+            return d
+    return None
+
+
+def species_registry(refresh=False):
+    """{species: entry} for every heads/<species>.py with a SPECIES literal."""
+    global _SPECIES
+    if _SPECIES is None or refresh:
+        reg = {}
+        for f in sorted(os.listdir(HEADS_DIR)):
+            if not f.endswith('.py') or f.startswith(('_', 'fam_')):
+                continue
+            d = _read_species(os.path.join(HEADS_DIR, f))
+            if d is not None:
+                reg[f[:-3]] = d
+        _SPECIES = reg
+    return _SPECIES
+
+
+class _SpeciesView(dict):
+    """SPECIES[name] -> the registry entry (kept for older callers)."""
+    def __getitem__(self, k):
+        return species_registry()[k]
+
+    def get(self, k, d=None):
+        return species_registry().get(k, d)
+
+    def __contains__(self, k):
+        return k in species_registry()
+
+
+SPECIES = _SpeciesView()
 
 # team uniform colours (preview; the runtime recolours team_a / team_b / cap / cap_brim / decal_*)
 INKSET_UNIFORM = {'classic': dict(team_a='#2E5AAC', team_b='#D9483B')}
@@ -105,9 +128,12 @@ def lum(h):
 
 
 def team_colors(team_idx):
-    t = TEAMS[team_idx] if team_idx is not None else None
-    u = INKSET_UNIFORM.get((t or {}).get('inkset', 'classic'), INKSET_UNIFORM['classic'])
-    a, b = u['team_a'], u['team_b']
+    """Preview uniform colours from the team's ink set (BB.INKSETS: a = jersey / cap, b = trims); the runtime applies
+    the real team colours by material name."""
+    t = TEAMS[team_idx] if team_idx is not None and 0 <= team_idx < len(TEAMS) else None
+    ink = DATA.get('inksets', {}).get((t or {}).get('inkset', 'classic')) or {}
+    a = ink.get('a', INKSET_UNIFORM['classic']['team_a'])
+    b = ink.get('b', INKSET_UNIFORM['classic']['team_b'])
     return dict(team_a=a, team_b=b, cap=a, cap_brim=a, decal_chest=a, decal_back=a)
 
 
@@ -128,7 +154,9 @@ def palette_colors(species, pal, seed=0):
 
 # ------------------------------------------------------------------------------------------- characters
 def base_spec(id_, species, role, name, number, seed, face, team_idx, build=None):
-    sp = SPECIES[species]
+    if species not in species_registry():
+        raise KeyError('no species module heads/%s.py (with a SPECIES entry) for %s' % (species, id_))
+    sp = species_registry()[species]
     bname = build or sp['build']
     b, bp = BUILDS[bname]
     b = dict(b)
@@ -179,7 +207,8 @@ def pitcher_spec(pid, **over):
     team_idx = next((i for i, t in enumerate(TEAMS) if t['mascot'] == p.get('team')), 0)
     s = base_spec(pid, p['species'], 'pitcher', p['name'], look.get('number', 0), p['seed'], p['face'], team_idx, build)
     s['boss'] = bool(p.get('boss'))
-    s['throws'] = p.get('hand', 'R')
+    s['throws'] = p.get('hand', 'R')            # left-handers are mirrored at runtime (models are all right-handed)
+    s['windup'] = look.get('windup', 'classic')
     s['nick'] = p.get('nick')
     hair = look.get('hair')
     if hair and hair != 'none':
@@ -206,34 +235,27 @@ def _apply(s, over):
     return s
 
 
-def specs():
-    """Every character the generator knows (park 1 + the umpire + Rocco's teammates)."""
-    S = {}
-    # ---- Haybale Junction Hayseeds pitchers
-    S['p_hank'] = pitcher_spec('p_hank', head=dict(horns='swept', horn_len=1.0, beard=0.42, ears_droop=0.35, age=1),
-                               accessories=dict(hair='mustache', hair_mat='fur_dark'),
-                               colors=dict(fur_dark='#9A9286', horn='#CDBF9F'))
-    S['p_dottie'] = pitcher_spec('p_dottie', head=dict(comb='hen'), tail='fan')
-    S['p_clem'] = pitcher_spec('p_clem', head=dict(snout=1.08), accessories=dict(hair='sideburns', hair_mat='fur_dark'))
-    S['p_ox'] = pitcher_spec('p_ox', build_name='boss_ox', head=dict(horns='ox_boss', mean=1.0, tuft=True, boss=True),
-                             accessories=dict(hair='beard', hair_mat='fur_dark', nose_ring=1),
-                             colors=dict(accessory_b='#D9A441', fur_dark='#5E3418', mask='#2E1A10'))
-    # ---- the card catcher and fielders (LOD1; the catcher LOD0 too)
-    S['c1-04'] = card_spec('c1-04', gear=['catcher'], head=dict(marking='patch'), build_name='stocky', cap_back=True,
-                           colors=dict(accessory_a='#C9A27A'))
-    S['c1-05'] = card_spec('c1-05', head=dict(mane=True, blaze=True))
-    S['c1-06'] = card_spec('c1-06', head=dict(comb='rooster'))
-    S['c1-07'] = card_spec('c1-07', head=dict(horns='ox', tuft=True), build_name='athletic')
-    S['c1-08'] = card_spec('c1-08', head=dict(wool=True))
-    S['c1-09'] = card_spec('c1-09', head=dict(horns='scimitar', horn_len=1.15, beard=0.40, ears_droop=0.1))
-    S['c1-10'] = card_spec('c1-10', head=dict(horns='nub', spots=True))
-    S['c1-11'] = card_spec('c1-11', head=dict(horns='spike', horn_len=0.8, beard=0.22, ears_droop=0.45),
-                           build_name='stocky', colors=dict(fur='#E9E2D2', horn='#B9A27E'))
-    # ---- the umpire (a mole) and Rocco's teammates (runners)
-    S['ump'] = umpire_spec()
-    for sp, num, extra in (('otter', 8, {}), ('fox', 3, {}), ('beaver', 14, {})):
-        S['mate_' + sp] = mate_spec(sp, num, extra)
-    return S
+_SPECS = None
+
+
+def specs(refresh=False):
+    """Every character the generator knows: {id: spec} from specs/*.py (park1 ... park6, extras, tests)."""
+    global _SPECS
+    if _SPECS is None or refresh:
+        import specs as SP
+        _SPECS = SP.discover()
+    return _SPECS
+
+
+def default_lods(spec):
+    """Contract: pitchers, catchers and the umpire ship LOD0 + LOD1; fielders and runners LOD1 only."""
+    if 'lods' in spec:
+        return tuple(spec['lods'])
+    return (0, 1) if spec['role'] in ('pitcher', 'catcher', 'umpire') else (1,)
+
+
+def park_ids(park):
+    return [cid for cid, s in specs().items() if s.get('park') == park]
 
 
 def umpire_spec():
@@ -260,30 +282,55 @@ def mate_spec(species, number, extra):
     return _apply(s, extra)
 
 
-def test_specs():
-    """Head-kit test characters (not shipped): one per family not covered by park 1."""
-    S = {}
-    face = dict(pal=['#7DB04E', '#EBDFA0', '#2F4A2A'], acc={}, cap='fwd')
-    s = base_spec('test_lizard', 'lizard', 'fielder', 'Test Lizard', 7, 777, face, 4)
-    s['colors'].update(skin='#7DB04E', fur_light='#EBDFA0', mask='#2F4A2A')
-    S['test_lizard'] = s
-    for sp, num in (('moose', 38), ('walrus', 11), ('tortoise', 3)):
-        pal = (DATA['species'].get(sp, {}).get('pal') or [['#8A5A3A', '#D9B49A', '#4A2E20']])[0]
-        t = base_spec('test_' + sp, sp, 'pitcher', 'Test ' + sp, num, 900 + num, dict(pal=pal, acc={}, cap='fwd'), 2)
-        if sp == 'tortoise':
-            t['gear'] = ['shell']
-            t['colors'].update(skin=pal[0], fur_light=pal[1])
-        S['test_' + sp] = t
-    return S
-
-
 def get(cid):
-    allspecs = specs()
-    allspecs.update(test_specs())
-    return copy.deepcopy(allspecs[cid])
+    return copy.deepcopy(specs()[cid])
 
 
-PARK1 = ['p_hank', 'p_dottie', 'p_clem', 'p_ox', 'c1-04', 'c1-05', 'c1-06', 'c1-07', 'c1-08', 'c1-09', 'c1-10', 'c1-11',
-         'ump', 'mate_otter', 'mate_fox', 'mate_beaver']
-# which LODs each character ships (contract: fielders and runners LOD1 only)
-LODS = {cid: ((0, 1) if (cid.startswith('p_') or cid in ('c1-04', 'ump')) else (1,)) for cid in PARK1}
+class _Lods(dict):
+    def get(self, cid, d=None):
+        s = specs().get(cid)
+        return default_lods(s) if s else d
+
+    def __getitem__(self, cid):
+        return default_lods(specs()[cid])
+
+
+LODS = _Lods()
+PARK1 = None          # use park_ids(1)
+
+
+# ------------------------------------------------------------------------------------------- roster (for the QA tools)
+def roster(park):
+    """A park's cast for tools/cast-shots.js: pitchers, the catcher and the fielders by position, team preview colours."""
+    S = specs()
+    ids = park_ids(park)
+    out = dict(park=park, pitchers=[], catcher=None, fielders={}, others=[], team=None, windup={}, throws={})
+    for cid in ids:
+        s = S[cid]
+        if s['role'] == 'pitcher':
+            out['pitchers'].append(cid)
+            out['windup'][cid] = s.get('windup', 'classic')
+            out['throws'][cid] = s.get('throws', 'R')
+        elif s['role'] == 'catcher':
+            out['catcher'] = cid
+        elif s['role'] == 'fielder' and s.get('pos'):
+            out['fielders'][s['pos']] = cid
+        else:
+            out['others'].append(cid)
+        if out['team'] is None and s.get('team') is not None:
+            t = TEAMS[s['team']]
+            tc = team_colors(s['team'])
+            out['team'] = dict(team_a=tc['team_a'], team_b=tc['team_b'], cap=tc['cap'], cap_brim=tc['cap_brim'],
+                               letter=t['short'][0], letterColor=tc['team_a'], name=t['name'])
+    out['pitchers'].sort(key=lambda k: (S[k].get('boss', False), k))       # the boss last
+    return out
+
+
+if __name__ == '__main__':
+    import sys
+    a = sys.argv[1:]
+    if a[:1] == ['--roster']:
+        print(json.dumps(roster(int(a[1]))))
+    else:
+        for cid, s in sorted(specs().items(), key=lambda kv: (kv[1].get('park', 0), kv[0])):
+            print(cid, s.get('park'), s['species'], s['role'], default_lods(s))
