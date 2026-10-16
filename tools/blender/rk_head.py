@@ -40,8 +40,9 @@ MOUTH_Z0 = 3.700          # slit centre height at the middle
 MOUTH_W = 0.30            # half width (corners)
 MOUTH_CURVE = 0.62        # z rises by MOUTH_CURVE * x^2 toward the corners (a natural smirk line)
 MOUTH_HALF = 0.03         # half gap of the carved slit (closed to LIP_GAP in the basis)
-LIP_GAP = 0.02
+LIP_GAP = 0.010           # the closed mouth is a thin dark line; teeth only show when a shape opens the lips
 JAW_HINGE = RR.jd('jaw')
+JAW_OPEN = 31.0           # degrees the jaw drops at mouth_open = 1
 
 
 def mouth_z(x):
@@ -68,9 +69,9 @@ def slit_sdf():
 
 # ------------------------------------------------------------------------------------------- the head SDF
 # cheek tufts: (root, tip, root radius, tip radius, flatness) for the left side
-TUFTS = (((0.50, -0.12, -0.42), (0.98, 0.16, -0.66), 0.16, 0.012, 0.55),
-         ((0.55, -0.04, -0.28), (0.98, 0.26, -0.36), 0.14, 0.010, 0.55),
-         ((0.52, 0.06, -0.50), (0.80, 0.30, -0.70), 0.11, 0.010, 0.55))
+TUFTS = (((0.50, -0.10, -0.29), (0.85, 0.03, -0.40), 0.16, 0.055, 0.80),
+         ((0.50, -0.10, -0.43), (0.84, 0.05, -0.61), 0.16, 0.060, 0.80),
+         ((0.42, -0.06, -0.55), (0.67, 0.06, -0.77), 0.13, 0.050, 0.80))
 
 
 def cranium_sdf():
@@ -115,7 +116,7 @@ def head_sdf():
     base = SD.smooth_union(0.14, base, neck)
     base = SD.smooth_union(0.14, base, nape)
     tuf = SD.union(*tufts)
-    base = SD.smooth_union(0.06, base, tuf)
+    base = SD.smooth_union(0.085, base, tuf)
     rim = SD.union(*rims)
     base = SD.smooth_union(0.03, base, rim)
     socks = []
@@ -440,7 +441,7 @@ def jaw_weight(P):
     """1 for the lower jaw (below the mouth slit, front of the head), 0 above / behind."""
     P = np.asarray(P, float)
     x, y, z = P[:, 0], P[:, 1], P[:, 2]
-    below = G.smoothstep(0.004, -0.010, z - mouth_z(np.clip(x, -MOUTH_W, MOUTH_W)))
+    below = G.smoothstep(0.001, -0.004, z - mouth_z(np.clip(x, -MOUTH_W, MOUTH_W)))
     front = G.smoothstep(-0.10, -0.42, y)                     # fades out behind the mouth
     side = G.smoothstep(MOUTH_W + 0.16, MOUTH_W - 0.02, np.abs(x))
     low = G.smoothstep(3.30, 3.42, z)                         # not the neck
@@ -465,40 +466,56 @@ def mouth_keys(V, head_f, is_skin=True):
     zc = mouth_z(np.clip(x, -MOUTH_W, MOUTH_W))
     near = G.smoothstep(0.16, 0.0, np.abs(z - zc)) * G.smoothstep(-0.25, -0.5, y)
     corner = G.smoothstep(MOUTH_W - 0.17, MOUTH_W + 0.02, np.abs(x)) * G.smoothstep(MOUTH_W + 0.2, MOUTH_W + 0.02, np.abs(x))
-    above = G.smoothstep(-0.004, 0.012, z - zc)
+    above = G.smoothstep(-0.001, 0.004, z - zc)
     belowm = 1 - above
     lipband_up = above * G.smoothstep(0.10, 0.0, z - zc) * G.smoothstep(-0.3, -0.55, y)
     lipband_lo = belowm * G.smoothstep(0.10, 0.0, zc - z) * G.smoothstep(-0.3, -0.55, y)
     sgn = np.sign(x)
-    # mouth_open: the jaw drops (rotation about the hinge), corners pull in to an O, upper lip lifts a little
-    ang = np.radians(24) * wj
+    # mouth_open: a wide shout - the jaw drops, the corners stretch out and down, the upper lip lifts off the teeth
+    ang = np.radians(JAW_OPEN) * wj
     Pj = rot_about(V, JAW_HINGE, (1, 0, 0), ang)
     d = Pj - V
-    d[:, 0] += -sgn * 0.05 * corner * near
-    d[:, 2] += 0.02 * lipband_up * G.smoothstep(MOUTH_W, 0.0, np.abs(x))
-    ks['mouth_open'] = d
-    # grin: lips peel back wide showing teeth, corners up and out
-    d = np.zeros_like(V)
-    d[:, 2] += 0.05 * lipband_up * G.smoothstep(MOUTH_W + 0.05, 0.05, np.abs(x)) - 0.042 * lipband_lo * G.smoothstep(MOUTH_W + 0.05, 0.05, np.abs(x))
-    d[:, 1] += 0.012 * (lipband_up + lipband_lo)
-    d[:, 2] += 0.07 * corner * near
     d[:, 0] += sgn * 0.035 * corner * near
-    d[:, 1] += 0.03 * corner * near
+    d[:, 2] += -0.03 * corner * near
+    d[:, 2] += 0.035 * lipband_up * G.smoothstep(MOUTH_W, 0.0, np.abs(x))
+    ks['mouth_open'] = d
+    # grin: a wide toothy crescent - lips peel well back off both rows of teeth, corners up and out
+    d = np.zeros_like(V)
+    mid = G.smoothstep(MOUTH_W + 0.05, 0.04, np.abs(x))
+    d[:, 2] += 0.075 * lipband_up * mid - 0.060 * lipband_lo * mid
+    d[:, 1] += 0.016 * (lipband_up + lipband_lo)
+    d[:, 2] += 0.085 * corner * near
+    d[:, 0] += sgn * 0.045 * corner * near
+    d[:, 1] += 0.035 * corner * near
+    ch = np.exp(-(((np.abs(x) - 0.36) / 0.16) ** 2 + ((z - 3.82) / 0.12) ** 2 + ((y + 0.42) / 0.2) ** 2))
+    d[:, 2] += 0.03 * ch
     ks['grin'] = d
     # smile: corners up and back, cheeks lift
     d = np.zeros_like(V)
     d[:, 2] += 0.10 * corner * near + 0.05 * (x / MOUTH_W) ** 2 * near * G.smoothstep(MOUTH_W + 0.1, 0.0, np.abs(x))
     d[:, 1] += 0.04 * corner * near
     d[:, 0] += sgn * 0.025 * corner * near
-    ch = np.exp(-(((np.abs(x) - 0.36) / 0.16) ** 2 + ((z - 3.82) / 0.12) ** 2 + ((y + 0.42) / 0.2) ** 2))
     d[:, 2] += 0.025 * ch
     ks['smile'] = d
-    # frown: corners down, the lower lip pouts up a touch
+    # frown: a bold upside-down U that reads small - corners well down and in, the middle of the lips arches up
     d = np.zeros_like(V)
-    d[:, 2] += -0.11 * corner * near - 0.05 * (x / MOUTH_W) ** 2 * near * G.smoothstep(MOUTH_W + 0.1, 0.0, np.abs(x))
-    d[:, 2] += 0.02 * lipband_lo * G.smoothstep(MOUTH_W, 0.0, np.abs(x))
-    d[:, 0] += -sgn * 0.02 * corner * near
+    d[:, 2] += -0.20 * corner * near - 0.26 * (x / MOUTH_W) ** 2 * near * G.smoothstep(MOUTH_W + 0.1, 0.0, np.abs(x))
+    d[:, 2] += 0.045 * near * G.smoothstep(MOUTH_W * 0.8, 0.0, np.abs(x))
+    # the lips part a crack along the arch so the frown reads as a dark upside-down U even when small
+    d[:, 2] += (0.006 * lipband_up - 0.008 * lipband_lo) * G.smoothstep(MOUTH_W + 0.02, MOUTH_W * 0.5, np.abs(x))
+    d[:, 0] += -sgn * 0.03 * corner * near
+    d[:, 2] += -0.02 * ch
     ks['frown'] = d
+    # smirk: lopsided cocky half-smile on his right (the side the game camera sees), the right cheek bunches up
+    d = np.zeros_like(V)
+    sr = G.smoothstep(0.06, -0.16, x)
+    d[:, 2] += (0.17 * corner * near + 0.08 * (x / MOUTH_W) ** 2 * near * G.smoothstep(MOUTH_W + 0.1, 0.0, np.abs(x))) * sr
+    d[:, 1] += 0.05 * corner * near * sr
+    d[:, 0] += sgn * 0.03 * corner * near * sr
+    d[:, 2] += 0.022 * lipband_up * G.smoothstep(MOUTH_W, 0.06, np.abs(x)) * sr
+    d[:, 2] += 0.06 * ch * sr
+    d[:, 2] += -0.012 * corner * near * (1 - sr)
+    ks['smirk'] = d
     # cheeks_puff: sides of the muzzle inflate along the normal
     N = SD.normals(head_f, V)
     pw = np.exp(-(((np.abs(x) - 0.38) / 0.2) ** 2 + ((z - 3.72) / 0.15) ** 2 + ((y + 0.48) / 0.22) ** 2))
@@ -564,9 +581,13 @@ def build(quality=1.0):
     x, y, z = V[:, 0], V[:, 1], V[:, 2]
     zc = mouth_z(np.clip(x, -MOUTH_W, MOUTH_W))
     lip_front = -0.86 + 0.30 * (np.clip(np.abs(x), 0, MOUTH_W) / MOUTH_W) ** 2 * 0.9
-    inslit = G.smoothstep(MOUTH_HALF + 0.03, MOUTH_HALF - 0.004, np.abs(z - zc)) * G.smoothstep(MOUTH_W + 0.08, MOUTH_W - 0.06, np.abs(x)) * G.smoothstep(lip_front + 0.13, lip_front + 0.06, y)
-    close = (MOUTH_HALF - LIP_GAP) * inslit
-    skin.V[:, 2] -= np.sign(z - zc) * np.minimum(close, np.maximum(np.abs(z - zc) - LIP_GAP * 0.5, 0))
+    # close the carved slit at the front of the mouth to a thin line: lip edges come together, the lip surfaces
+    # just above / below roll in after them; the cavity behind stays open for the shapes that part the lips
+    dz = z - zc
+    w = G.smoothstep(0.078, 0.050, np.abs(dz)) * G.smoothstep(MOUTH_W + 0.06, MOUTH_W - 0.04, np.abs(x)) * G.smoothstep(-0.50, -0.60, y)
+    half = LIP_GAP * 0.5
+    newdz = np.sign(dz) * (half + np.maximum(np.abs(dz) - half, 0) * (1 - w))
+    skin.V[:, 2] = zc + np.where(np.abs(dz) < 0.078, newdz, dz)
     # weights
     zz = skin.V[:, 2]
     wn = G.smoothstep(3.42, 3.12, zz)              # neck
@@ -590,11 +611,18 @@ def build(quality=1.0):
     parts.append(nose_part())
     for p in teeth_tongue():
         if p.jaw > 0:
-            Pj = rot_about(p.V, JAW_HINGE, (1, 0, 0), np.full(p.n, np.radians(24)))
-            p.sk['mouth_open'] = Pj - p.V + np.array([0, -0.03, 0])
-            p.sk['grin'] = np.tile([0, -0.04, -0.006], (p.n, 1))
+            Pj = rot_about(p.V, JAW_HINGE, (1, 0, 0), np.full(p.n, np.radians(JAW_OPEN)))
+            p.sk['mouth_open'] = Pj - p.V + np.array([0, -0.035, 0])
+            zc_ = mouth_z(p.V[:, 0]) - 0.040                    # grin: forward, up and taller to fill the smile
+            p.sk['grin'] = np.stack([np.zeros(p.n), np.full(p.n, -0.080), 0.020 + 0.45 * (p.V[:, 2] - zc_)], 1)
+            p.sk['smirk'] = np.tile([0, -0.02, 0.0], (p.n, 1))
+            if p.name == 'tongue':
+                p.sk['grin'] = np.tile([0, -0.01, -0.02], (p.n, 1))
+                p.sk['smirk'] = np.zeros((p.n, 3))
         else:
-            p.sk['mouth_open'] = np.tile([0, -0.035, 0.004], (p.n, 1))
-            p.sk['grin'] = np.tile([0, -0.045, 0.006], (p.n, 1))
+            p.sk['mouth_open'] = np.tile([0, -0.045, 0.006], (p.n, 1))
+            zc_ = mouth_z(p.V[:, 0]) + 0.040
+            p.sk['grin'] = np.stack([np.zeros(p.n), np.full(p.n, -0.082), -0.008 + 0.45 * (p.V[:, 2] - zc_)], 1)
+            p.sk['smirk'] = np.tile([0, -0.03, 0.006], (p.n, 1))
         parts.append(p)
     return parts, pupils, head_f

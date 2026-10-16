@@ -199,7 +199,7 @@ def build(args):
     clips = CL.all_clips()
     if args.clips:
         keep = set(args.clips.split(','))
-        clips = [c for c in clips if c.name in keep]
+        clips = [c for c in clips + CL.debug_clips() if c.name in keep]
     if args.clips == 'none':
         clips = []
     report = {}

@@ -154,7 +154,12 @@
     else {
       const v = typeof view === 'string' ? { name: view } : (view || { name: 'q34' });
       const p = VIEWS[v.name] || VIEWS.q34;
-      c = sheetCam(v.az != null ? v.az : p[0], v.el != null ? v.el : p[1], v.dist || p[2], v.target, v.fov);
+      let tg = v.target;
+      if (v.targetBone) {    // aim at a bone of the posed character (+ optional world offset)
+        const b = boneWorld(v.targetBone), o = v.toff || [0, 0, 0];
+        if (b) tg = [b.x + o[0], b.y + o[1], b.z + o[2]];
+      }
+      c = sheetCam(v.az != null ? v.az : p[0], v.el != null ? v.el : p[1], v.dist || p[2], tg, v.fov);
     }
     c.aspect = aspect; c.updateProjectionMatrix(); return c;
   }
@@ -175,8 +180,9 @@
     renderer.setClearColor(CREAM, 1);
     renderer.setViewport(0, 0, cols * cw, rows * ch); renderer.setScissor(0, 0, cols * cw, rows * ch); renderer.clear();
     const out = [];
-    R.meshes.forEach((m) => { m.visible = !(spec.hide || []).includes(m.material.name); });
     spec.cells.forEach((cell, i) => {
+      const hide = cell.hide || spec.hide || [];
+      R.meshes.forEach((m) => { m.visible = !hide.includes(m.material.name); });
       const cx = (i % cols) * cw, cy = Math.floor(i / cols) * ch;
       const pl = cell.place || spec.place || { x: 0, y: 0, yaw: 0 };
       R.root.position.set(pl.x || 0, pl.y || 0, 0); R.root.rotation.z = pl.yaw || 0; R.root.scale.setScalar(pl.size || 1);

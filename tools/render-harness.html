@@ -23,24 +23,30 @@ canvas#game { display: block; position: fixed; left: 0; top: 0; }
 <script src="../src/00-const.js"></script>
 <script>
 // load the sim + render modules (missing optional ones are fine)
-var MODS = ['10-pitch.js', '15-bat.js', '20-content.js', '31-toon.js', '32-cast.js', '33-park.js', '34-anim.js', '35-scene.js', '36-rocco.js', '37-ink.js', '38-cards.js'];
-// the hero model: window.BB_ASSETS (injected by tools/render-shots.js) or ../assets/rocco.glb, or ?glb=<path> (e.g. the
-// integration proxy). Needs --allow-file-access-from-files for file:// XHR; without it the procedural Rocco is used.
+var MODS = ['10-pitch.js', '15-bat.js', '20-content.js', '30-assets.js', '31-toon.js', '32-cast.js', '33-park.js', '34-anim.js', '35-scene.js', '36-actors.js', '36-rocco.js', '37-ink.js', '38-cards.js'];
+// the hero model: ?glb=<path> (tools/render-shots.js passes what the build ships: the packed model, or e.g. the
+// integration proxy), else ../assets/rocco.glb; ?lod1=<path> adds his level of detail. Handed to BB.Assets before the
+// renderer boots. Needs --allow-file-access-from-files for file:// XHR; without it the procedural Rocco is used.
+var GLB = {};
 (function () {
-  var m = /[?&]glb=([^&]*)/.exec(location.search), url = m ? decodeURIComponent(m[1]) : '../assets/rocco.glb';
+  function arg(k) { var m = new RegExp('[?&]' + k + '=([^&]*)').exec(location.search); return m ? decodeURIComponent(m[1]) : null; }
+  var want = [['rocco', arg('glb') || '../assets/rocco.glb']];
+  if (arg('lod1')) want.push(['rocco.lod1', arg('lod1')]);
   function go() { (function next(i) {
     if (i >= MODS.length) return boot();
     var s = document.createElement('script'); s.src = '../src/' + MODS[i];
     s.onload = s.onerror = function () { next(i + 1); };
     document.head.appendChild(s);
   })(0); }
-  if (window.BB_ASSETS && window.BB_ASSETS.rocco && !m) return go();
-  try {
-    var x = new XMLHttpRequest(); x.open('GET', url); x.responseType = 'arraybuffer';
-    x.onload = function () { if ((x.status === 200 || x.status === 0) && x.response && x.response.byteLength) { var buf = x.response; BB.assetBuffer = function (n) { return n === 'rocco' ? buf.slice(0) : null; }; } go(); };
-    x.onerror = function () { go(); };
-    x.send();
-  } catch (e) { go(); }
+  (function fetchOne(i) {
+    if (i >= want.length) return go();
+    try {
+      var x = new XMLHttpRequest(); x.open('GET', want[i][1]); x.responseType = 'arraybuffer';
+      x.onload = function () { if ((x.status === 200 || x.status === 0) && x.response && x.response.byteLength) GLB[want[i][0]] = x.response; fetchOne(i + 1); };
+      x.onerror = function () { fetchOne(i + 1); };
+      x.send();
+    } catch (e) { fetchOne(i + 1); }
+  })(0);
 })();
 
 var Q = {};
@@ -102,13 +108,16 @@ function boot() {
   if (Q.scene === 'cards') return cards();
   var w = +(Q.w || window.innerWidth), h = +(Q.h || window.innerHeight);
   canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+  if (BB.Assets) for (var gn in GLB) BB.Assets.provide(gn, GLB[gn]);
   BB.Render.init(canvas);
   BB.Render._S.noAdapt = true;
   BB.Render.resize(w, h, Math.min(window.devicePixelRatio || 1, 2));
   var fontsP = (document.fonts && document.fonts.load) ? Promise.all([document.fonts.load('20px "Luckiest Guy"'), document.fonts.load('700 12px "Fredoka"')]).catch(function () {}) : Promise.resolve();
   // wait for the hero model to parse (or to fail / be missing) before the first shot
   var modelP = new Promise(function (res) { var n = 0; (function poll() { var st = BB.Rocco && BB.Rocco.status ? BB.Rocco.status() : 'none'; if (st !== 'loading' && st !== 'idle' || n++ > 400) return res(st); setTimeout(poll, 15); })(); });
-  Promise.all([fontsP, modelP]).then(function () {
+  // the game parses a match's models during the briefing (BB.Render.prepare): here, before the first shot
+  var castP = modelP.then(function () { return BB.Render.prepare ? BB.Render.prepare(null, null) : null; }).catch(function () {});
+  Promise.all([fontsP, modelP, castP]).then(function () {
     window.__rocco = BB.Rocco && BB.Rocco.info ? BB.Rocco.info() : null;
     window.setup = setup;
     setup(location.search);
@@ -155,6 +164,7 @@ function buildView(q) {
     if (q.play === 'ground') v.hud.bases = [false, true, false];
   }
   if (q.stamp) v.stamp = { text: q.stamp, sub: q.sub || '', t: +(q.stt || 0.5), kind: q.kind || 'good' };
+  v.pre = q.pre ? { kind: q.pre, t: +(q.pret || 0.8) } : null;   // pre-pitch acting, said outright (the game infers it)
   return v;
 }
 function setup(search) {

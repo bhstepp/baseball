@@ -78,10 +78,27 @@ for (let i = 0; i < 6; i++) SHOTS.push(['fieldpark-' + i, `scene=field&play=hr&f
 for (let i = 0; i < 6; i++) SHOTS.push(['titlepark-' + i, `scene=title&park=${i}&time=2`]);
 
 const ARG = k => { const a = process.argv.find(x => x.startsWith('--' + k + '=')); return a ? a.slice(k.length + 3) : null; };
-// --glb=<file>  use another hero model (e.g. the integration proxy) instead of assets/rocco.glb
+// the hero model the build ships (tools/build.js): the packed copy of assets/rocco.glb when tools/pack-assets.js made
+// one for this exact file, else assets/rocco.glb itself (packed in place, or raw); plus its LOD1 when there is one
+function shipped() {
+  const raw = path.join(ROOT, 'assets', 'rocco.glb'), P = path.join(ROOT, 'dist', 'packed');
+  if (!fs.existsSync(raw)) return {};
+  try {
+    const m = JSON.parse(fs.readFileSync(path.join(P, 'rocco.pack.json'), 'utf8'));
+    if (m.source === require('crypto').createHash('sha1').update(fs.readFileSync(raw)).digest('hex') && fs.existsSync(path.join(P, 'rocco.glb')))
+      return { glb: path.join(P, 'rocco.glb'), lod1: fs.existsSync(path.join(P, 'rocco.lod1.glb')) ? path.join(P, 'rocco.lod1.glb') : null };
+  } catch (e) {}
+  const lod = path.join(ROOT, 'assets', 'rocco.lod1.glb');
+  return { glb: raw, lod1: fs.existsSync(lod) ? lod : null };
+}
+// --glb=<file>  use another hero model (e.g. the integration proxy) instead of the shipped one; --lod1=<file> its LOD1
+// --raw         assets/rocco.glb as exported (no packing, no LOD1)
 // --old         the game before the Rocco pilot (?rocco=old: procedural Rocco, old staging)
 // --size=WxH    viewport (default 390x844)
-const EXTRA = (ARG('glb') ? '&glb=' + encodeURIComponent(path.resolve(ARG('glb'))) : '') + (process.argv.includes('--old') ? '&rocco=old' : '') + (ARG('q') ? '&' + ARG('q') : '');
+const SHIP = process.argv.includes('--raw') ? { glb: path.join(ROOT, 'assets', 'rocco.glb') } : ARG('glb') ? { glb: path.resolve(ARG('glb')), lod1: ARG('lod1') ? path.resolve(ARG('lod1')) : null } : shipped();
+const EXTRA = (SHIP.glb ? '&glb=' + encodeURIComponent(SHIP.glb) : '') + (SHIP.lod1 ? '&lod1=' + encodeURIComponent(SHIP.lod1) : '') +
+  (process.argv.includes('--old') ? '&rocco=old' : '') + (ARG('q') ? '&' + ARG('q') : '');
+if (SHIP.glb) console.log('hero model:', path.relative(ROOT, SHIP.glb) + (SHIP.lod1 ? ' + ' + path.relative(ROOT, SHIP.lod1) : ''));
 const SIZE = (ARG('size') || '390x844').split('x').map(Number);
 // --pilot: matched before/after pairs for the Rocco pilot -> qa/pilot/<name>-old.png, -new.png and <name>.png (side by side)
 //   old = ?rocco=old&ink=0 (procedural Rocco, old staging, no ink pass); new = the model, new staging, ink pass on
@@ -108,6 +125,11 @@ const PILOT = [
   ['18-title', 'scene=title&time=4.1'],
   ['19-title-swing', 'scene=title&time=4.78'],
   ['20-fire', 'scene=bat&state=windup&w=0.4&fire=1'],
+  ['21-bat-swing-ghosts', 'scene=bat&state=contact&st=0.05&pz=2.5&px=0'],
+  ['22-bat-ritual', 'scene=bat&state=idle&time=3.3&pre=ritual&pret=1.25'],
+  ['23-bat-glance', 'scene=bat&state=windup&w=0.3&pre=glance&pret=0.5'],
+  ['24-field-hr-zip', 'scene=field&play=hr&pt=1.62'],
+  ['25-field-hr-home-stretch', 'scene=field&play=hr&f=1&extra=0.35'],
 ];
 // face / gaze close-ups of the model (new only): --faces
 const FACES = [

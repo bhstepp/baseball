@@ -14,7 +14,8 @@ from rk_geo import rot_axis, nrm
 FPS = 40
 D2R = math.pi / 180.0
 
-SHAPE_KEYS = ['blink', 'smile', 'grin', 'frown', 'mouth_open', 'brows_up', 'brows_angry', 'brows_sad', 'squint', 'cheeks_puff']
+SHAPE_KEYS = ['blink', 'smile', 'grin', 'frown', 'mouth_open', 'brows_up', 'brows_angry', 'brows_sad', 'squint', 'cheeks_puff',
+              'smirk']
 
 
 # ------------------------------------------------------------------------------------------- rotations
@@ -80,8 +81,13 @@ def rest_channels():
         c['hand%s.rel' % s] = 0.0          # 1: hand target / elbow pole given in the rest body frame, carried by the chest
         c['hand%s.relh' % s] = 0.0         # 1: hand target given in the rest frame of the head (carried by the head)
         c['roll' + s] = 0.0
+        # free-hand shape (the grip overrides it by gripX): fing = finger curl (0 relaxed open glove, 1 fist,
+        # <0 straight / bent back), thumb = 0 relaxed, 1 tucked over the fingers, <0 sticking out; spread = fan the
+        # fingers; point = straighten the index out of the curl
         c['fing' + s] = 0.0
         c['thumb' + s] = 0.0
+        c['spread' + s] = 0.0
+        c['point' + s] = 0.0
         b = RR.jv('toe.' + s)
         c['foot%s.x' % s], c['foot%s.y' % s], c['foot%s.z' % s] = b
         for k in ('rx', 'ry', 'rz'):
@@ -94,6 +100,23 @@ def rest_channels():
 
 
 CHANNELS = list(rest_channels().keys())
+
+
+def grip_wrist(c, s):
+    """Where the solver will put hand `s` (wrist position, rest->posed rotation) when it grips the bat posed by
+    the channels of c (same maths as Solver.solve; lets clips aim the other hand at a gripping hand)."""
+    A = np.array([0.0, -1.0, 0.0])
+    P = RR.HAND_N * np.array([-1, 1, 1])
+    mir = np.array([RR.SIDE[s], 1, 1])
+    G_rest = frame3(RR.HAND_T * mir, RR.HAND_N * mir)
+    G_bat = frame3(A, P if s == 'R' else -P)
+    d = np.array([c['bat.dx'], c['bat.dy'], c['bat.dz']])
+    pal = np.array([c['bat.px'], c['bat.py'], c['bat.pz']])
+    Rb = frame3(d, pal) @ frame3(A, P).T
+    Q = Rb @ G_bat @ G_rest.T
+    along = RR.GRIP_R if s == 'R' else RR.GRIP_L
+    gc_w = Rb @ (A * along) + np.array([c['bat.x'], c['bat.y'], c['bat.z']])
+    return gc_w + Q @ (RR.jv('hand.' + s) - RR.GRIP_C * mir), Q
 
 
 # ------------------------------------------------------------------------------------------- solver
@@ -120,6 +143,59 @@ class Solver:
                                 wrist_off=RR.jv('hand.' + s) - gc)
         self.bat_frame_local = frame3(A, P)
         self.warn = []
+        self._init_fingers()
+
+    def _init_fingers(self):
+        """Local (basis) rotations of the finger bones for the bat grip, and the spread directions."""
+        def rot_between(a, b):
+            a, b = nrm(a), nrm(b)
+            ax = np.cross(a, b)
+            sn = np.linalg.norm(ax)
+            if sn < 1e-9:
+                return np.eye(3)
+            return rot_axis(ax / sn, math.atan2(sn, float(np.dot(a, b))))
+        self.fgrip, self.fspread = {}, {}
+        for s in ('L', 'R'):
+            mir = np.array([RR.SIDE[s], 1, 1])
+            for a, b in RR.FINGER_CHAINS:
+                A_, B_ = a + '.' + s, b + '.' + s
+                Mg, Tg = (np.asarray(p) * mir for p in RR.GRIP_TARGETS[a])
+                ha, hb, he = RR.jv(A_), RR.jv(B_), RR.jv(b.replace('_2', '_end') + '.' + s)
+                Q1 = rot_between(hb - ha, Mg - ha)
+                Q2 = rot_between(Q1 @ (he - hb), Tg - Mg)
+                R1, R2 = self.rest[A_][:3, :3], self.rest[B_][:3, :3]
+                self.fgrip[A_] = R1.T @ Q1 @ R1
+                self.fgrip[B_] = R2.T @ Q1.T @ Q2 @ Q1 @ R2
+                # which way does +rotation about local Z fan this finger? (+1: toward the index side)
+                idx = RR.HAND_T * mir
+                dy = R1 @ (rot_axis((0, 0, 1), 0.1) @ np.array([0, 1.0, 0]) - np.array([0, 1.0, 0]))
+                self.fspread[A_] = 1.0 if np.dot(dy, idx) > 0 else -1.0
+
+    def _hand_shape(self, c, s, gw):
+        """Basis rotations (3x3) of the finger bones: free shape from the channels, blended to the grip by gw."""
+        out = {}
+        curl, th, sp, pt = c['fing' + s], c['thumb' + s], c['spread' + s], c['point' + s]
+        fan = {'index': 11.0, 'middle': 1.5, 'pinky': -13.0, 'thumb': 0.0}
+        for a, b in RR.FINGER_CHAINS:
+            A_, B_ = a + '.' + s, b + '.' + s
+            cv = th if a == 'thumb' else curl * ((1.0 - pt) if a == 'index' else 1.0) - (0.25 * pt if a == 'index' else 0.0)
+            for nm, extra in ((A_, 8.0), (B_, 22.0)):
+                Rg = self.fgrip[nm]
+                if cv >= 0:
+                    tgt = Rg if a == 'thumb' else Rg @ rot_axis((1, 0, 0), extra * D2R)
+                    Rf = slerp_mat(np.eye(3), tgt, min(cv, 1.0))
+                else:
+                    Rf = rot_axis((1, 0, 0), cv * (22.0 if nm == A_ else 16.0) * D2R)
+                if nm == A_:
+                    if a == 'thumb':
+                        if cv < 0:          # thumb out: swing away from the palm and the index
+                            Rf = rot_axis((0, 0, 1), -cv * 30.0 * D2R * self.fspread[A_]) @ rot_axis((1, 0, 0), cv * 18.0 * D2R)
+                    elif abs(sp) > 1e-6:
+                        Rf = rot_axis((0, 0, 1), sp * fan[a] * D2R * self.fspread[A_]) @ Rf
+                out[nm] = Rf if gw <= 1e-4 else (Rg if gw >= 1 - 1e-4 else slerp_mat(Rf, Rg, gw))
+        cup = 12.0 * max(curl, 0.0) * (1.0 - gw)
+        out['fingers.' + s] = rot_axis((1, 0, 0), cup * D2R)
+        return out
 
     def _local_rest(self, name):
         p = self.parent[name]
@@ -254,13 +330,12 @@ class Solver:
             else:
                 Rt = slerp_mat(Rfree, Rgrip, gw)
             set_world('hand.' + sd, M4(Rt, Wr[:3, 3]))
-            # fingers / thumb: curl about the fist's tunnel axis (positive = open)
-            tw = Rt @ rest['hand.' + sd][:3, :3].T @ (RR.HAND_T * np.array([sx, 1, 1]))
-            nw = Rt @ rest['hand.' + sd][:3, :3].T @ (RR.HAND_N * np.array([sx, 1, 1]))
-            aw = np.cross(tw, nw)   # along the hand
-            Rh = Rt @ rest['hand.' + sd][:3, :3].T
-            world_delta('fingers.' + sd, rot_axis(tw * sx, -g('fing' + sd) * D2R) @ Rh)
-            world_delta('thumb.' + sd, rot_axis(aw * sx, g('thumb' + sd) * D2R) @ Rh)
+            # fingers and thumb (open glove): free shape from the channels, wrapped round the handle when gripping
+            shp = self._hand_shape(c, sd, float(gw))
+            fk('fingers.' + sd, M4(shp['fingers.' + sd]))
+            for a, b in RR.FINGER_CHAINS:
+                fk(a + '.' + sd, M4(shp[a + '.' + sd]))
+                fk(b + '.' + sd, M4(shp[b + '.' + sd]))
         # legs
         for sd in ('L', 'R'):
             Rf = euler(0, 0, g('foot%s.rz' % sd)) @ euler(g('foot%s.rx' % sd), g('foot%s.ry' % sd), 0)

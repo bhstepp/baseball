@@ -11,10 +11,13 @@ PLATE_D = 2.4
 CONTACT = {'high': 3.3, 'mid': 2.5, 'low': 1.8}
 T_CONTACT = 0.25
 PITCHER = np.array([54.0, -2.4, 5.6])          # release point, seen from the batter's box
-MITT = np.array([-4.2, -2.3, 2.4])               # catcher's mitt
-UMP = np.array([-6.5, -1.4, 5.2])                # umpire's face
+CATCHER = np.array([-3.5, -2.4, 2.7])            # catcher's mask: ~56 deg to his right-front
+MITT = np.array([-3.3, -2.2, 2.3])               # catcher's mitt
+UMP = np.array([-4.7, -4.7, 5.0])                # umpire's face: ~45 deg to his right-front
+CAM = np.array([-18.0, -1.5, 8.0])               # the game's bat-scene camera: on his right, a touch in front, above
 FLIGHT = np.array([40.0, -6.0, 22.0])            # where a well-hit ball is heading
 D2R = math.pi / 180
+TURN_CAM = math.degrees(math.atan2(CAM[0], -CAM[1]))   # body yaw that faces the camera (about -85 deg)
 
 
 # ------------------------------------------------------------------------------------------- pose helpers
@@ -42,6 +45,29 @@ def V(c, key, xyz):
 
 def lerp_pose(a, b, t):
     return {k: (a[k] * (1 - t) + b.get(k, a[k]) * t) if isinstance(a[k], float) else a[k] for k in a}
+
+
+def turn_pose(c, deg, pivot=(0.0, -0.25)):
+    """Rotate a whole pose about a vertical axis through pivot (model x, y): body yaw, feet, bat and the
+    world-space hand targets and poles (chest- or head-carried targets turn with the body anyway)."""
+    Rz = euler(0, 0, deg)
+    pv = np.array([pivot[0], pivot[1], 0.0])
+    rp = lambda q: pv + Rz @ (np.asarray(q, float) - pv)
+    hips = RR.jv('hips')
+    h = rp(hips + np.array([c['hip.x'], c['hip.y'], c['hip.z']]))
+    c['hip.x'], c['hip.y'] = h[0] - hips[0], h[1] - hips[1]
+    c['hip.rz'] += deg
+    for sd in ('L', 'R'):
+        V(c, 'foot' + sd, rp([c['foot%s.%s' % (sd, k)] for k in 'xyz']))
+        c['foot%s.rz' % sd] += deg
+        V(c, 'knee' + sd, Rz @ np.array([c['knee%s.%s' % (sd, k)] for k in 'xyz']))
+        if c['hand%s.rel' % sd] < 1e-4 and c['hand%s.relh' % sd] < 1e-4:
+            V(c, 'hand' + sd, rp([c['hand%s.%s' % (sd, k)] for k in 'xyz']))
+            V(c, 'elbow' + sd, Rz @ np.array([c['elbow%s.%s' % (sd, k)] for k in 'xyz']))
+    V(c, 'bat', rp([c['bat.x'], c['bat.y'], c['bat.z']]))
+    c['bat.dx'], c['bat.dy'], c['bat.dz'] = Rz @ np.array([c['bat.dx'], c['bat.dy'], c['bat.dz']])
+    c['bat.px'], c['bat.py'], c['bat.pz'] = Rz @ np.array([c['bat.px'], c['bat.py'], c['bat.pz']])
+    return c
 
 
 def nrm(v):
@@ -80,6 +106,28 @@ def hand(c, side, pos, rx=0.0, ry=0.0, rz=0.0, grip=0.0, rel=None, relh=None):
         c['hand%s.rel' % side] = float(rel)
     if relh is not None:
         c['hand%s.relh' % side] = float(relh)
+    return c
+
+
+# free-hand shapes (fing: finger curl, thumb, spread: fan, point: index out of the curl); the grip overrides them
+HAND_SHAPES = {
+    'relaxed': dict(fing=0.12, thumb=0.1, spread=0.12, point=0.0),
+    'open': dict(fing=-0.2, thumb=-0.6, spread=0.75, point=0.0),        # palm shown, fingers fanned (shrug, "what?")
+    'jazz': dict(fing=-0.35, thumb=-0.9, spread=1.0, point=0.0),        # big splayed "ta-da"
+    'knife': dict(fing=-0.25, thumb=0.45, spread=0.0, point=0.0),       # flat running hand
+    'fist': dict(fing=1.0, thumb=1.0, spread=0.0, point=0.0),
+    'loose': dict(fing=0.45, thumb=0.15, spread=0.4, point=0.0),        # dangling, limp
+    'tip': dict(fing=0.30, thumb=0.30, spread=0.0, point=0.0),          # fingers together on the cap brim
+    'point': dict(fing=1.0, thumb=0.85, spread=0.0, point=1.0),
+    'claw': dict(fing=0.55, thumb=-0.3, spread=0.8, point=0.0),         # tense, frustrated
+}
+
+
+def hshape(c, side, name, k=1.0):
+    """Set a hand to a named shape (k blends it from the relaxed hand)."""
+    a, b = HAND_SHAPES['relaxed'], HAND_SHAPES[name]
+    for ch in ('fing', 'thumb', 'spread', 'point'):
+        c[ch + side] = a[ch] * (1 - k) + b[ch] * k
     return c
 
 
@@ -148,6 +196,8 @@ def pose_neutral():
     put(c, hip__z=-0.03, tail__rx=10, tail__curl=6)
     c['bat.vis'] = 0.0
     c['gripR'] = 0.0
+    hshape(c, 'L', 'relaxed')
+    hshape(c, 'R', 'relaxed')
     face(c, smile=0.3)
     return c
 
@@ -198,7 +248,7 @@ def pose_coil():
     return c
 
 
-def pose_dizzy():
+def pose_dizzy(turn=True):
     c = pose_neutral()
     put(c, hip__z=-0.12, hip__ry=5, hip__rx=4, spine__rx=6, chest__rx=3, neck__rx=2, head__ry=-18, head__rx=-2,
         tail__rx=-45, tail__curl=-12)
@@ -210,8 +260,11 @@ def pose_dizzy():
     c['bat.vis'] = 1.0
     c['gripL'], c['gripR'] = 1.0, 0.0
     hand(c, 'R', (-0.58, 0.02, 1.55), rx=-5, rel=1)
+    hshape(c, 'R', 'loose')
     V(c, 'elbowL', (0.5, 0.8, 0))
     face(c, mouth_open=0.32, brows_sad=0.65, blink=0.32)
+    if turn:                                          # the whiff spins him round to face the game camera
+        turn_pose(c, TURN_CAM, pivot=(0.0, -0.30))
     return c
 
 
@@ -228,6 +281,8 @@ def follow_pose(height, settle=True):
     V(c, 'elbowL', (0.7, 0.2, -1))
     V(c, 'elbowR', (-0.2, -0.6, -1))
     put(c, tail__rx=20, tail__rz=-25, tail__curl=10)
+    hshape(c, 'L', 'relaxed')
+    hshape(c, 'R', 'relaxed')
     look_at(c, FLIGHT, tilt=4)
     face(c, smile=0.8, brows_up=0.35, squint=0.15)
     return c
@@ -568,12 +623,15 @@ def clip_whiff():
     look_at(k, np.array([0.0, -2.4, 2.4]))
     face(k, mouth_open=0.7, brows_up=0.9, grin=0.0)
     c.key(0.25, k, mode='lin')
-    # corkscrew: momentum spins him right round, legs twisting
+    # corkscrew: momentum spins him three-quarters round, legs twisting, and leaves him facing his right - the
+    # game camera - for the dizzy spell
+    D = pose_dizzy()
+    END = D['hip.rz'] + 360.0
     s1 = P(k)
-    put(s1, hip__rz=170, hip__z=-0.30, hip__x=0.05, chest__rz=50, root__s=0.92, tail__rz=60)
+    put(s1, hip__rz=160, hip__z=-0.30, hip__x=0.05, chest__rz=46, root__s=0.92, tail__rz=60)
     bat(s1, (0.45, 0.35, 2.55), (0.55, 0.80, 0.15), palm=(0, 0, -1))
-    foot(s1, 'L', (0.78, -0.25, 0.11), rz=110)
-    foot(s1, 'R', (0.10, -0.62, 0.40), rz=150, rx=20)
+    foot(s1, 'L', (0.74, -0.25, 0.11), rz=104)
+    foot(s1, 'R', (0.08, -0.62, 0.40), rz=146, rx=20)
     c.key(0.42, s1)
     s2 = P(s1)
     put(s2, hip__rz=300, hip__z=-0.24, hip__x=0.10, chest__rz=40, root__s=1.04, tail__rz=40)
@@ -583,22 +641,19 @@ def clip_whiff():
     V(s2, 'kneeL', (0.4, 1, 0))
     V(s2, 'kneeR', (-0.4, 0.4, 0))
     face(s2, mouth_open=0.5, brows_sad=0.5, blink=0.25)
+    turn_pose(s2, (END - 26) - 300, pivot=(0.0, -0.30))
     c.key(0.62, s2)
-    D = pose_dizzy()
-    d1 = P(D)                                         # overshoot the unwind, teeter
-    put(d1, hip__rz=372, hip__ry=12, head__ry=-24, hip__x=0.08)
-    foot(d1, 'L', (0.42, -0.28, 0.11), rz=332)
-    foot(d1, 'R', (-0.38, -0.28, 0.11), rz=390)
+
+    def on_dizzy(k, drz, **kw):
+        put(k, hip__rz=END + drz, **kw)
+        for sd in ('L', 'R'):
+            k['foot%s.rz' % sd] = D['foot%s.rz' % sd] + 360.0
+        return k
+    d1 = on_dizzy(P(D), 13, hip__ry=12, head__ry=-24)  # overshoot the unwind, teeter
     c.key(0.86, d1)
-    d2 = P(D)
-    put(d2, hip__rz=356, hip__ry=-4, head__ry=-8)
-    foot(d2, 'L', (0.40, -0.30, 0.11), rz=332)
-    foot(d2, 'R', (-0.40, -0.30, 0.11), rz=390)
+    d2 = on_dizzy(P(D), -5, hip__ry=-4, head__ry=-8)
     c.key(1.1, d2)
-    d3 = P(D)
-    put(d3, hip__rz=360)
-    foot(d3, 'L', (0.40, -0.30, 0.11), rz=332)
-    foot(d3, 'R', (-0.40, -0.30, 0.11), rz=390)
+    d3 = on_dizzy(P(D), 0)
     c.key(1.4, d3)
 
     def into_dizzy(t):          # fade in dizzy's wobble, phase-locked so the whiff ends on dizzy's first frame
@@ -617,12 +672,15 @@ DIZZY_L = 1.6
 
 def dizzy_wobble(t):
     a = 2 * math.pi * t / DIZZY_L
-    return {'hip.x': 0.10 * math.sin(a), 'hip.y': 0.07 * math.cos(a), 'hip.ry': 9 * math.sin(a), 'hip.rx': 5 * math.cos(a),
+    cz, sz = math.cos(TURN_CAM * D2R), math.sin(TURN_CAM * D2R)
+    hx_, hy_ = 0.10 * math.sin(a), 0.07 * math.cos(a)
+    bx_, by_ = 0.07 * math.sin(a + 0.5), 0.04 * math.cos(a)
+    return {'hip.x': cz * hx_ - sz * hy_, 'hip.y': sz * hx_ + cz * hy_, 'hip.ry': 9 * math.sin(a), 'hip.rx': 5 * math.cos(a),
             'chest.ry': -7 * math.sin(a + 0.6), 'head.ry': -16 * math.sin(a + 1.2), 'head.rx': 9 * math.cos(a + 1.2),
             'head.rz': 10 * math.sin(a + 2.0), 'chest.rz': 5 * math.sin(a + 0.3),
             'eyeL.rx': 13 * math.sin(2 * a), 'eyeL.rz': 8 * math.cos(2 * a),
             'eyeR.rx': -13 * math.sin(2 * a + 0.9), 'eyeR.rz': 8 * math.cos(2 * a + 0.9),
-            'bat.x': 0.07 * math.sin(a + 0.5), 'bat.y': 0.04 * math.cos(a), 'tail.rz': 22 * math.sin(a + 1.2),
+            'bat.x': cz * bx_ - sz * by_, 'bat.y': sz * bx_ + cz * by_, 'tail.rz': 22 * math.sin(a + 1.2),
             'sk.mouth_open': 0.1 * math.sin(2 * a), 'sk.blink': 0.1 * math.sin(a), 'hip.z': 0.02 * math.cos(2 * a)}
 
 
@@ -642,6 +700,7 @@ def clip_watch():
     F = follow_pose('mid')
     F['gripR'] = 0.0
     hand(F, 'R', (-0.55, -0.20, 1.85), rx=-20, rel=1)
+    hshape(F, 'R', 'relaxed')
     V(F, 'elbowR', (-0.5, 0.6, -0.6))
     look_at(F, FLIGHT + np.array([0, 0, 6.0]), tilt=6)
     face(F, smile=1.0, brows_up=0.45, squint=0.25)
@@ -657,11 +716,14 @@ def clip_watch():
 
 
 def clip_bat_flip():
+    """Homer: admires the ball out toward the outfield, flicks the bat away end over end (open hand), then struts
+    with his hands on his hips and throws a cocky look back over his right shoulder at the camera."""
     L = 1.3
     c = Clip('bat_flip', L)
     F = follow_pose('mid')
     F['gripR'] = 0.0
     hand(F, 'R', (-0.55, -0.20, 1.85), rx=-20, rel=1)
+    hshape(F, 'R', 'relaxed')
     V(F, 'elbowR', (-0.5, 0.6, -0.6))
     look_at(F, FLIGHT + np.array([0, 0, 6.0]), tilt=6)
     face(F, smile=1.0, brows_up=0.45, squint=0.25)
@@ -670,13 +732,17 @@ def clip_bat_flip():
     bat(a, (0.62, -0.50, 2.20), (0.55, -0.35, -0.76), palm=(0, -1, 0))
     put(a, chest__rz=18, hip__rz=70)
     V(a, 'elbowL', (0.8, 0.3, -0.5))
+    look_at(a, FLIGHT + np.array([0, 0, 3.0]), tilt=6)
     c.key(0.16, a)
-    b = P(a)                                          # flick! the bat leaves the hand spinning
+    b = P(a)                                          # flick! the bat leaves the hand spinning, fingers fanned
     b['gripL'] = 0.0
     hand(b, 'L', (0.95, -0.55, 3.20), rx=-60, rel=1)
+    hshape(b, 'L', 'jazz')
     V(b, 'elbowL', (0.8, 0.4, -0.2))
     bat(b, (1.15, -0.95, 3.45), (0.40, 0.25, 0.88), palm=(0, -1, 0))
-    put(b, chest__rz=8, chest__rx=-8, fingL=50, thumbL=30)
+    put(b, chest__rz=8, chest__rx=-8)
+    look_at(b, FLIGHT, tilt=6)
+    face(b, smile=1.0, brows_up=0.6, squint=0.2)
     c.key(0.28, b)
     path = [(0.42, (1.7, -1.1, 4.9), 0.0), (0.56, (2.3, -1.25, 5.8), 1.0), (0.70, (2.9, -1.4, 6.1), 2.0),
             (0.84, (3.5, -1.55, 5.7), 3.0), (0.98, (4.1, -1.7, 4.5), 4.0), (1.12, (4.6, -1.8, 2.6), 5.0), (1.3, (5.0, -1.9, 0.3), 5.6)]
@@ -687,29 +753,40 @@ def clip_bat_flip():
         d = (0.35 * math.sin(ang), -0.25 * math.sin(ang), math.cos(ang))
         bat(k, p, d, palm=(0, -1, 0))
         prev = k
-        if t == 0.56:                                 # chin up, chest out: the strut begins
-            put(k, chest__rx=-14, hip__rz=40, chest__rz=-4, hip__z=-0.06, hip__x=0.02, hip__rx=-2, fingL=0, thumbL=0)
+        if t == 0.42:
+            hshape(k, 'L', 'open')
+        if t == 0.56:                                 # chin up, chest out: the strut begins, hands on hips
+            put(k, chest__rx=-14, hip__rz=40, chest__rz=-4, hip__z=-0.06, hip__x=0.02, hip__rx=-2)
             hand(k, 'L', (0.54, 0.06, 2.02), rx=-40, rz=-20, rel=1)
             hand(k, 'R', (-0.54, 0.06, 2.02), rx=-40, rz=20, rel=1)
+            hshape(k, 'L', 'knife')
+            hshape(k, 'R', 'knife')
             V(k, 'elbowL', (0.9, 0.6, 0.0))
             V(k, 'elbowR', (-0.9, 0.6, 0.0))
             foot(k, 'R', (-0.50, -0.33, 0.11), rz=40)
-            look_at(k, np.array([6.0, -12.0, 9.0]), tilt=8)
+            look_at(k, FLIGHT + np.array([0, 0, -6.0]), tilt=8)
             face(k, smile=1.0, squint=0.5, brows_up=0.2)
-        if t == 0.70:
-            put(k, hip__z=-0.02, chest__ry=-6, hip__ry=4, head__ry=6)
-        if t == 0.84:                                 # strut step
+        if t == 0.70:                                 # still admiring it...
+            put(k, hip__z=-0.02, chest__ry=-6, hip__ry=4)
+            look_at(k, FLIGHT + np.array([-6, 0, -10.0]), tilt=8)
+        if t == 0.84:                                 # strut step - and a cocky look back over the right shoulder
             foot(k, 'L', (0.70, -0.50, 0.36), rz=30, rx=-10)
-            put(k, hip__z=0.02, hip__ry=-6, chest__ry=8, head__rx=-24, head__ry=-6)
+            put(k, hip__z=0.02, hip__ry=-6, chest__ry=8, chest__rz=-24, spine__rz=-8)
+            look_at(k, CAM, tilt=-10, gaze=-6)
+            face(k, smirk=1.0, squint=0.45, brows_up=0.35)
         if t == 0.98:
             put(k, hip__z=-0.10, chest__ry=-4)
             foot(k, 'L', (0.66, -0.58, 0.11), rz=24)
+            look_at(k, CAM, tilt=-12, gaze=-6)
+            face(k, smirk=1.0, squint=0.55, brows_up=0.15)
         if t == 1.12:
             foot(k, 'R', (-0.40, -0.52, 0.30), rz=20, rx=-10)
-            put(k, hip__z=-0.02, hip__ry=5, chest__ry=-8, head__rx=-18, head__ry=6)
+            put(k, hip__z=-0.02, hip__ry=5, chest__ry=-8)
+            look_at(k, CAM, tilt=-8, gaze=-6)
         if t == 1.3:
             foot(k, 'R', (-0.36, -0.62, 0.11), rz=14)
             put(k, hip__z=-0.08, hip__ry=0, chest__ry=0)
+            look_at(k, CAM, tilt=-10, gaze=-6)
         c.key(t, k)
     return c
 
@@ -832,6 +909,7 @@ def clip_run():
             fwd = 0.5 - 0.5 * math.cos(2 * math.pi * (ph + off))
             fs = fwd * fwd * (3 - 2 * fwd)
             hand(q, side, (sg * (0.50 - 0.16 * fs), 0.52 - 1.22 * fs, 1.98 + 0.86 * fs), rx=-35 - 40 * fs, rel=1)
+            hshape(q, side, 'knife')
             V(q, 'elbow' + side, (0.35 * sg, 1.0, -0.7 + 0.6 * fs))
         cy = math.cos(2 * math.pi * ph)
         put(q, hip__z=run_hz(ph), hip__rz=-10 * cy, chest__rz=16 * cy, hip__ry=-3 * math.sin(2 * math.pi * ph),
@@ -875,6 +953,8 @@ def clip_trot():
             V(q, 'knee' + side, (0.12 * sg, -1, 0.3))
         brim = RR.hx(np.array([-0.40, -0.70, 4.50]))          # right front edge of the brim (design space)
         hand(q, 'R', tuple(brim + np.array([-0.05, 0.16, -0.24 + 0.02 * math.sin(2 * u0)])), rx=-80, rz=35, rel=0, relh=1)
+        hshape(q, 'R', 'tip')
+        hshape(q, 'L', 'relaxed')
         V(q, 'elbowR', (-1.0, 0.1, -0.2))
         hand(q, 'L', (0.60, 0.05 - 0.32 * math.cos(u0), 1.80 + 0.10 * max(0.0, -math.cos(u0))), rx=-20 * math.cos(u0) - 15, rel=1)
         V(q, 'elbowL', (0.5, 1.0, -0.2))
@@ -902,6 +982,8 @@ def clip_cheer():
     V(a, 'kneeL', (0.25, -1, 0))
     V(a, 'kneeR', (-0.25, -1, 0))
     face(a, grin=0.6, squint=0.6, brows_angry=0.3)
+    hshape(a, 'L', 'fist')
+    hshape(a, 'R', 'fist')
     c.key(0.16, a)
     t_ = P(a)                                         # launch: stretch, toes still pushing, arms whip up
     put(t_, hip__z=0.22, hip__rx=-4, chest__rx=-10, head__rx=-14, root__s=1.10)
@@ -924,6 +1006,8 @@ def clip_cheer():
     hand(j, 'L', (0.68, -0.42, 2.45), rx=-50, rel=1)
     V(j, 'elbowL', (0.6, 1.0, -0.4))
     face(j, grin=1.0, brows_up=0.9, mouth_open=0.35)
+    hshape(j, 'L', 'fist')
+    hshape(j, 'R', 'fist')
     c.key(0.46, j)
     p2 = P(j)                                         # falling: legs reach for the ground
     put(p2, hip__z=0.46, root__s=1.02)
@@ -939,44 +1023,69 @@ def clip_cheer():
     V(l, 'kneeL', (0.25, -1, 0))
     V(l, 'kneeR', (-0.25, -1, 0))
     face(l, grin=1.0, squint=0.55, brows_angry=0.2)
+    hshape(l, 'R', 'fist')
+    hshape(l, 'L', 'open')
     c.key(0.72, l)
     r = P(n)
     put(r, hip__z=-0.02, root__s=1.02)
     hand(r, 'R', (-0.50, -0.46, 2.55), rx=-70, rel=1)
     V(r, 'elbowR', (-1, 0.6, -0.2))
-    face(r, smile=1.0, brows_up=0.4, squint=0.3)
+    face(r, grin=0.8, brows_up=0.5, squint=0.3)
+    hshape(r, 'L', 'jazz')
+    hshape(r, 'R', 'jazz')
+    hand(r, 'L', (0.98, -0.34, 2.78), rx=0, ry=-120, rel=1)
+    hand(r, 'R', (-0.98, -0.34, 2.78), rx=0, ry=120, rel=1)
+    V(r, 'elbowL', (0.7, 0.3, -1.0))
+    V(r, 'elbowR', (-0.7, 0.3, -1.0))
     c.key(0.88, r)
     e = P(r)
     put(e, root__s=1.0, hip__z=-0.04)
+    hshape(e, 'L', 'open', 0.7)
+    hshape(e, 'R', 'open', 0.7)
+    face(e, smile=1.0, brows_up=0.3, squint=0.3)
     c.key(1.2, e, mode='stop')
     return c
 
 
 def clip_take():
+    """Taking a pitch: eyes the ball all the way into the mitt, a smug palm-up shrug at the catcher with the free
+    top hand (toward the camera), a glance back at the umpire, then settles into STANCE."""
     L = 0.8
     c = Clip('take', L)
     T, S = pose_set(), pose_stance()
     c.key(0.0, T)
     a = P(T)                                          # watches the ball all the way into the mitt
-    put(a, hip__x=-0.13, chest__rx=0)
-    look_at(a, MITT, tilt=4)
+    put(a, hip__x=-0.13, chest__rx=0, chest__rz=-16)
+    look_at(a, MITT, tilt=4, gaze=-4)
     face(a, brows_up=0.35, squint=0.2)
-    c.key(0.18, a)
-    b = P(a)                                          # little lean back, a smug shrug
-    put(b, chest__ry=-6, shL__ry=-10, shR__ry=10, hip__z=-0.17)
-    look_at(b, MITT + np.array([0, 0, 1.0]), tilt=8)
-    face(b, smile=0.6, brows_up=0.6, squint=0.3)
-    bat(b, (-0.40, 0.0, 2.95), (-0.52, 0.42, 0.74), palm=(1.0, -0.3, 0.3))
-    c.key(0.42, b)
-    d = P(b)
-    put(d, shL__ry=0, shR__ry=0)
+    c.key(0.15, a)
+    b = P(a)                                          # little lean back, shoulders up, top hand off: "too low, pal"
+    put(b, chest__ry=-6, shL__ry=-8, shR__ry=12, hip__z=-0.16, chest__rz=-22)
+    look_at(b, CATCHER + np.array([0, 0, 0.6]), tilt=10, gaze=-6)
+    face(b, smirk=0.9, brows_up=0.7, squint=0.25)
+    bat(b, (-0.36, 0.02, 2.92), (-0.46, 0.40, 0.79), palm=(1.0, -0.3, 0.3))
+    b['gripR'] = 0.0
+    hand(b, 'R', (-1.06, -0.36, 2.46), rx=0, ry=125, rel=0)
+    V(b, 'elbowR', (-0.6, 0.3, -1.0))
+    hshape(b, 'R', 'open')
+    c.key(0.34, b)
+    b2 = P(b)                                         # holds the shrug, a glance at the umpire
+    put(b2, shL__ry=-6, shR__ry=9, hip__z=-0.17)
+    look_at(b2, UMP, tilt=6, gaze=-5)
+    hand(b2, 'R', (-1.03, -0.34, 2.40), rx=0, ry=120, rel=0)
+    face(b2, smirk=1.0, brows_up=0.55, squint=0.35)
+    c.key(0.52, b2)
+    d = P(S)                                          # back on the bat, eyes back out to the pitcher
     look_at(d, PITCHER, tilt=-6)
-    c.key(0.6, d)
+    face(d, smile=0.4, squint=0.3, brows_angry=0.2)
+    c.key(0.68, d)
     c.key(0.8, S, mode='stop')
     return c
 
 
 def clip_strike_react():
+    """Called strike: the back foot winds up, STOMP, he wheels round to glare back at the umpire (to his
+    right-front, toward the camera) with the top hand flung open - "C'mon!" - then slumps back into STANCE."""
     L = 1.4
     c = Clip('strike_react', L)
     T, S = pose_set(), pose_stance()
@@ -984,7 +1093,7 @@ def clip_strike_react():
     a = P(T)                                          # wind up: back foot lifts, fists clench, head snaps to the ump
     foot(a, 'R', (-0.66, -0.26, 0.62), rz=8, rx=-20)
     V(a, 'kneeR', (0.0, -1, 0.6))
-    put(a, hip__x=0.05, hip__z=-0.12, chest__rx=-6, root__s=1.05)
+    put(a, hip__x=0.05, hip__z=-0.12, chest__rx=-6, root__s=1.05, chest__rz=-16)
     look_at(a, UMP, tilt=-6)
     face(a, frown=0.8, brows_angry=1.0, mouth_open=0.2)
     c.key(0.16, a)
@@ -993,14 +1102,28 @@ def clip_strike_react():
     put(b, root__s=0.88, hip__z=-0.27, chest__rx=10)
     face(b, frown=1.0, brows_angry=1.0, mouth_open=0.55)
     c.key(0.26, b, mode='lin')
-    g = P(b)                                          # glare, leaning in at the ump
-    put(g, root__s=1.0, hip__z=-0.15, hip__x=-0.10, chest__rx=-4, chest__rz=-22)
+    g = P(b)                                          # wheels on the ump: chest round, top hand flung open at him
+    put(g, root__s=1.0, hip__z=-0.15, hip__x=-0.10, hip__rz=-34, chest__rx=-6, chest__rz=-26)
+    foot(g, 'R', (-0.74, -0.33, 0.11), rz=-10)
+    bat(g, (-0.05, 0.10, 2.40), (-0.10, 0.30, 0.95), palm=(1.0, -0.2, 0.2))
+    g['gripR'] = 0.0
+    hand(g, 'R', (-1.00, -0.76, 2.62), rx=0, ry=115, rel=0)
+    V(g, 'elbowR', (-0.6, 0.1, -1.0))
+    hshape(g, 'R', 'open')
     look_at(g, UMP, tilt=-8)
-    face(g, frown=0.9, brows_angry=1.0, squint=0.5, mouth_open=0.25)
-    c.key(0.45, g)
+    face(g, frown=0.9, brows_angry=1.0, squint=0.5, mouth_open=0.45)
+    c.key(0.44, g)
+    g1 = P(g)                                         # punctuates it: hand pumps once
+    hand(g1, 'R', (-0.94, -0.68, 2.46), rx=0, ry=115, rel=0)
+    put(g1, chest__rx=-2)
+    face(g1, frown=1.0, brows_angry=1.0, squint=0.6, mouth_open=0.2)
+    c.key(0.6, g1)
     g2 = P(g)
-    c.key(0.78, g2)
-    s = P(S)                                          # slump
+    hand(g2, 'R', (-0.86, -0.56, 2.34), rx=0, ry=95, rel=0)
+    hshape(g2, 'R', 'claw', 0.7)
+    face(g2, frown=0.9, brows_angry=1.0, squint=0.55, mouth_open=0.1)
+    c.key(0.8, g2)
+    s = P(S)                                          # slump: top hand back on the bat
     put(s, chest__rx=20, spine__rx=10, hip__z=-0.20, shL__ry=8, shR__ry=-8)
     look_at(s, np.array([1.5, -3.2, 1.6]), tilt=-8)
     face(s, frown=0.7, brows_sad=0.85, blink=0.35)
@@ -1010,7 +1133,165 @@ def clip_strike_react():
     return c
 
 
+def clip_glance():
+    """Between pitches, from STANCE back to STANCE: a quick look back over his right shoulder at the catcher, a
+    smirk and an eyebrow, then eyes back out to the mound."""
+    L = 1.2
+    c = Clip('glance', L)
+    S = pose_stance()
+    c.key(0.0, S)
+    a = P(S)                                          # anticipation: a tiny dip of the head the other way
+    look_at(a, PITCHER + np.array([0, 0, -1.5]), tilt=-4)
+    put(a, chest__rz=-8)
+    c.key(0.14, a)
+    g = P(S)                                          # snap round to the catcher, eyes leading
+    put(g, chest__rz=-22, spine__rz=-6, hip__rz=-18)
+    look_at(g, CATCHER + np.array([0, 0, 0.4]), tilt=8, gaze=-6)
+    face(g, smirk=1.0, brows_up=0.4, squint=0.3)
+    put(g, browR__z=0.035)
+    c.key(0.34, g)
+    g2 = P(g)                                         # one eyebrow up, hold the smirk
+    look_at(g2, CATCHER + np.array([0, 0, 0.5]), tilt=10, gaze=-6)
+    face(g2, smirk=1.0, brows_up=0.15, squint=0.4)
+    put(g2, browR__z=0.06, browL__z=-0.01)
+    c.key(0.52, g2)
+    g3 = P(g2)
+    c.key(0.72, g3)
+    b = P(S)                                          # back to business
+    look_at(b, PITCHER + np.array([0, 0, 0.6]), tilt=-8)
+    face(b, smile=0.5, squint=0.35, brows_angry=0.35)
+    c.key(0.94, b)
+    c.key(1.2, S, mode='stop')
+    c.layers.append(blink_at([0.30, 0.98]))
+    return c
+
+
+def clip_ritual():
+    """Between pitches, STANCE to STANCE: steps out with the back foot, tugs his batting-glove strap, tugs the cap
+    brim, taps the plate twice with the bat, digs the back foot in and settles."""
+    L = 2.5
+    c = Clip('ritual', L)
+    S = pose_stance()
+    c.key(0.0, S)
+    a = P(S)                                          # anticipation: sink a touch
+    put(a, hip__z=-0.23)
+    c.key(0.12, a)
+    o = P(S)                                          # step out with the back foot, bat down in the left hand
+    foot(o, 'R', (-1.05, 0.05, 0.11), rz=24)
+    put(o, hip__x=-0.30, hip__y=0.06, hip__z=-0.08, hip__rz=-6, hip__rx=6, chest__rz=-4, chest__rx=2, spine__rx=2)
+    bat(o, (0.30, -0.35, 1.95), (0.15, -0.35, 0.92), palm=(1.0, 0.0, 0.0))
+    o['gripR'] = 0.0
+    hand(o, 'R', (-0.50, -0.30, 1.95), rx=-20, rel=1)
+    V(o, 'elbowR', (-0.6, 0.6, -0.6))
+    look_at(o, np.array([0.5, -2.6, 2.6]), tilt=-4)
+    face(o, smile=0.2, squint=0.2, brows_angry=0.2)
+    c.key(0.34, o)
+    t1 = P(o)                                         # tug the strap on the left glove (twice)
+    bat(t1, (0.28, -0.42, 2.05), (0.10, -0.30, 0.95), palm=(1.0, 0.0, 0.0))
+    hand(t1, 'L', (0.20, -0.62, 2.18), rx=-60, rel=1)
+    V(t1, 'elbowL', (0.8, 0.4, -0.6))
+    t1['gripL'] = 1.0
+    wl, Ql = A.grip_wrist(t1, 'L')                    # pinch the strap on the back of the left wrist
+    strap = wl + Ql @ (RR.GLOVE_U * 0.04 + RR.GLOVE_V * 0.07)
+    hand(t1, 'R', tuple(strap + np.array([-0.30, -0.06, 0.10])), rx=-30, ry=60, rel=0)
+    V(t1, 'elbowR', (-0.8, 0.5, -0.6))
+    hshape(t1, 'R', 'tip')
+    look_at(t1, np.array([0.4, -3.0, 2.9]), tilt=-6)
+    t1['eye.rx'] = 6.0
+    face(t1, squint=0.3, brows_angry=0.3)
+    c.key(0.56, t1)
+    t2 = P(t1)
+    hand(t2, 'R', tuple(strap + np.array([-0.38, -0.08, 0.06])), rx=-30, ry=60, rel=0)
+    c.key(0.68, t2)
+    t3 = P(t1)
+    c.key(0.80, t3)
+    k = P(t1)                                         # tug the cap brim, a little nod
+    hand(k, 'R', tuple(RR.hx(np.array([-0.40, -0.70, 4.50])) + np.array([-0.02, 0.20, -0.30])), rx=-80, rz=35, rel=0, relh=1)
+    V(k, 'elbowR', (-1.0, 0.1, -0.2))
+    hshape(k, 'R', 'tip')
+    put(k, cap__rx=6, head__rx=12, head__ry=-8, chest__rx=6)
+    look_at(k, np.array([2.0, -4.0, 3.0]), tilt=-6)
+    face(k, smile=0.5, squint=0.4)
+    c.key(1.0, k)
+    k2 = P(k)
+    put(k2, cap__rx=-2, head__rx=-4)
+    c.key(1.16, k2)
+    tap_tip = np.array([0.0, -PLATE_D, 0.10])        # taps the plate: bat tip on the plate's centre
+    def tap_pose(base_, lift):
+        q = P(base_)
+        d = nrm(np.array([0.10, -1.45, -1.25 + lift]))
+        bat(q, tap_tip + np.array([0, 0, lift]) - d * RR.BAT_TIP, d, palm=(1.0, 0.0, 0.3))
+        q['gripL'], q['gripR'] = 1.0, 1.0
+        q['handR.rel'] = q['handL.rel'] = 0.0
+        q['handR.relh'] = q['handL.relh'] = 0.0
+        V(q, 'elbowL', (0.6, 0.4, -0.8))
+        V(q, 'elbowR', (-0.6, 0.4, -0.8))
+        put(q, hip__rx=16, spine__rx=8, chest__rx=10, hip__z=-0.16, cap__rx=0, head__rx=0, chest__rz=-2)
+        look_at(q, tap_tip + np.array([0, -1.2, 1.4]), tilt=-4)
+        face(q, squint=0.3, brows_angry=0.35, smile=0.15)
+        return q
+    p1 = tap_pose(o, 0.45)
+    c.key(1.30, p1)
+    c.key(1.42, tap_pose(o, 0.0), mode='lin')
+    c.key(1.52, tap_pose(o, 0.30))
+    c.key(1.62, tap_pose(o, 0.0), mode='lin')
+    dg = tap_pose(o, 0.25)                            # step back in and dig the back foot
+    foot(dg, 'R', (-0.80, -0.30, 0.13), rz=-6, rx=12, toe=-10)
+    put(dg, hip__x=-0.16, hip__y=0.04, hip__rz=-10, hip__z=-0.20)
+    c.key(1.82, dg)
+    dg2 = P(dg)
+    foot(dg2, 'R', (-0.78, -0.32, 0.11), rz=14)
+    put(dg2, hip__ry=-3)
+    c.key(1.96, dg2)
+    dg3 = P(dg)
+    foot(dg3, 'R', (-0.77, -0.33, 0.12), rz=-2, rx=8, toe=-6)
+    c.key(2.08, dg3)
+    up = P(S)                                         # bat back up, eyes out to the mound
+    put(up, hip__z=-0.21)
+    look_at(up, PITCHER + np.array([0, 0, 0.8]), tilt=-8)
+    face(up, smile=0.45, squint=0.35, brows_angry=0.3)
+    c.key(2.3, up)
+    c.key(2.5, S, mode='stop')
+    c.layers.append(blink_at([0.40, 1.20, 2.20]))
+    return c
+
+
+def clip_handtest():
+    """Debug: both hands held up in front, cycling through the hand shapes (not exported by default)."""
+    names = list(HAND_SHAPES)
+    c = Clip('handtest', len(names))
+    for i, nm in enumerate(names):
+        k = pose_neutral()
+        hand(k, 'L', (0.70, -0.70, 2.70), rx=-60, ry=0, rel=1)
+        hand(k, 'R', (-0.70, -0.70, 2.70), rx=-60, ry=0, rel=1)
+        V(k, 'elbowL', (0.6, 0.6, -0.4))
+        V(k, 'elbowR', (-0.6, 0.6, -0.4))
+        hshape(k, 'L', nm)
+        hshape(k, 'R', nm)
+        c.key(i, k, mode='stop')
+        c.key(i + 0.9, k, mode='stop')
+    return c
+
+
+def clip_handrot():
+    """Debug: right hand out to the side in world space, open, stepping through hand.ry / rx values."""
+    vals = [(0, 0), (0, -45), (0, -90), (0, -135), (0, 45), (0, 90), (-40, -90), (40, -90)]
+    c = Clip('handrot', len(vals))
+    for i, (rx, ry) in enumerate(vals):
+        k = pose_neutral()
+        hand(k, 'R', (-1.05, -0.40, 2.45), rx=rx, ry=ry, rel=0)
+        V(k, 'elbowR', (-0.6, 0.3, -1.0))
+        hshape(k, 'R', 'open')
+        c.key(i, k, mode='stop')
+        c.key(i + 0.9, k, mode='stop')
+    return c
+
+
+def debug_clips():
+    return [clip_handtest(), clip_handrot()]
+
+
 def all_clips():
     return [clip_stance(), clip_stride(), clip_power_load(), clip_coil_hold(), clip_swing('high'), clip_swing('mid'),
             clip_swing('low'), clip_whiff(), clip_dizzy(), clip_watch(), clip_bat_flip(), clip_run(), clip_trot(),
-            clip_cheer(), clip_take(), clip_strike_react()]
+            clip_cheer(), clip_take(), clip_strike_react(), clip_glance(), clip_ritual()]

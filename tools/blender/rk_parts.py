@@ -31,108 +31,143 @@ def sdf_part(f, lo, hi, h, tris, mat, name):
 
 
 # =========================================================================================== gloves
-HANDLE_R = 0.048
+HANDLE_R = RR.HANDLE_R
 
 
 def glove_frame(s):
-    """Left-hand frame mirrored for the right: origin = wrist; x_g = tunnel axis (pinky -> index),
-    y_g = along the hand, z_g = back of the hand. Returns (W, X, Y, Z, GC)."""
+    """Left-hand frame mirrored for the right: origin = wrist; x_g = pinky -> index, y_g = along the hand,
+    z_g = back of the hand. Returns (W, X, Y, Z, GC)."""
     mir = np.array([s, 1.0, 1.0])
     W = RR.jv('hand.' + side_name(s))
-    X = RR.HAND_T * mir
-    Y = RR.ARM_DIR * mir
-    Z = -RR.HAND_N * mir
-    GC = RR.GRIP_C * mir
-    return W, X, Y, Z, GC
+    return W, RR.GLOVE_T * mir, RR.GLOVE_U * mir, RR.GLOVE_V * mir, RR.GRIP_C * mir
+
+
+def _ring_weights(p, seg, wfun):
+    """Per-vertex weights for a sweep from per-ring weights (wfun(s) -> {bone: w}); caps copy their end ring."""
+    W = {}
+    n = p.nside
+    m = len(seg)
+    for k, sv in enumerate(seg):
+        for b, w in wfun(sv).items():
+            W.setdefault(b, np.zeros(p.n))
+            i0 = p.ring_index[k]
+            W[b][i0:i0 + n] = w
+    for b in W:
+        if p.n > m * n:
+            W[b][m * n] = W[b][0]
+            W[b][m * n + 1] = W[b][(m - 1) * n]
+    return W
 
 
 def glove_parts(s):
+    """Open cartoon glove: a puffy palm, three fat fingers and a thumb on their own bone chains (they curl round
+    the bat handle in the grip), a rolled cuff and a team-colour wrist strap."""
     sd = side_name(s)
-    W, X, Y, Z, GC = glove_frame(s)
+    W0, X, Y, Z, GC = glove_frame(s)
 
-    def P(t, u, v):          # glove coordinates -> world
-        return W + X * t + Y * u + Z * v
-    gu = np.dot(GC - W, Y)
-    gv = np.dot(GC - W, Z)
+    def tuv(Q):
+        q = np.asarray(Q, float) - W0
+        return q @ X, q @ Y, q @ Z
     parts = []
-    # palm / back of the hand: a soft block from the wrist to the knuckles
+    # palm: puffy rounded slab, wider across the knuckles, domed a touch on the back
     def palm_f(Q):
-        Q = np.asarray(Q, float)
-        q = Q - W
-        t, u, v = q @ X, q @ Y, q @ Z
-        c = np.stack([t / 0.118, (u - 0.115) / 0.125, (v - 0.022) / 0.062], -1)
-        k = np.sum(np.abs(c) ** 3.2, axis=-1) ** (1 / 3.2)
-        return (k - 1.0) * 0.06
-    lo = W - 0.35
-    hi = W + 0.35
-    palm = sdf_part(palm_f, lo, hi, 0.006, 110, 'glove', 'palm_' + sd)
-    palm.rigid('hand.' + sd)
+        t, u, v = tuv(Q)
+        wt = 0.137 * (0.86 + 0.14 * np.clip(u / 0.23, 0, 1))
+        dome = 0.013 * (1 - np.clip(t / 0.14, -1, 1) ** 2)
+        c = np.stack([t / wt, (u - 0.126) / 0.136, (v - 0.006 - dome) / 0.053], -1)
+        k = np.sum(np.abs(c) ** 2.6, axis=-1) ** (1 / 2.6)
+        return (k - 1.0) * 0.05
+    palm = sdf_part(palm_f, W0 - 0.4, W0 + 0.4, 0.006, 210, 'glove', 'palm_' + sd)
+    _, pu, _ = tuv(palm.V)
+    wf = G.smoothstep(0.18, 0.25, pu)
+    palm.set_weights({'hand.' + sd: 1 - wf, 'fingers.' + sd: wf})
     parts.append(palm)
-    # three fingers curling round the handle (index at +x)
-    for k, (t0, rad) in enumerate(((0.072, 0.043), (0.0, 0.045), (-0.072, 0.041))):
-        knuckle = np.array([0.215, 0.028])
-        c = np.array([gu, gv])
-        d0 = knuckle - c
-        a0 = math.atan2(d0[1], d0[0])
-        r0 = np.linalg.norm(d0)
-        rf = HANDLE_R + rad - 0.004
-        pts = []
-        n = 8
-        sweep_ang = math.radians(235 - 12 * k)
-        for i in range(n):
-            w = i / (n - 1)
-            a = a0 - sweep_ang * w
-            r = r0 + (rf - r0) * min(1.0, w / 0.3)
-            uv = c + r * np.array([math.cos(a), math.sin(a)])
-            pts.append(P(t0 * (1 - 0.15 * w), uv[0], uv[1]))
-        # start inside the palm so the knuckle blends
-        pts.insert(0, P(t0, 0.17, 0.03))
-        radii = [rad * 0.95] + [rad * (1 - 0.12 * (i / (n - 1))) for i in range(n)]
-        fp = G.sweep(pts, radii, 6, 'glove', up=tuple(X))
+    # fingers and thumb: tubes along their rest chains, dense rings at the joints, round puffy tips
+    chains = [(f[0], f[3], 'fingers.' + sd) for f in RR.FINGERS] + [('thumb', RR.THUMB['r'], 'hand.' + sd)]
+    for name, r, base_bone in chains:
+        K, M, T = (RR.jv(name + k + '.' + sd) for k in ('', '_2', '_end'))
+        d1, d2 = nrm(M - K), nrm(T - M)
+        L1, L2 = np.linalg.norm(M - K), np.linalg.norm(T - M)
+        pts, rad, seg = [], [], []
+
+        def add(p_, rr, sv):
+            pts.append(p_)
+            rad.append(rr)
+            seg.append(sv)
+        add(K - d1 * 0.075, r * 0.90, -0.075)
+        add(K - d1 * 0.035, r * 0.96, -0.035)
+        add(K, r * 0.99, 0.0)
+        add(K + d1 * 0.028, r, 0.028)
+        for w in (0.32, 0.58, 0.82):
+            add(K + d1 * L1 * w, r * (1.0 + 0.035 * math.sin(w * math.pi)), L1 * w)
+        add(M - d1 * 0.017, r * 0.955, L1 - 0.017)
+        add(M, r * 0.945, L1)
+        add(M + d2 * 0.017, r * 0.955, L1 + 0.017)
+        for w in (0.36, 0.72):
+            add(M + d2 * L2 * w, r * (0.99 + 0.04 * math.sin(w * math.pi)), L1 + L2 * w)
+        rt = r * (1.04 if name != 'thumb' else 0.98)
+        add(T, rt, L1 + L2)
+        for ang in (34, 60, 80):
+            a_ = math.radians(ang)
+            add(T + d2 * rt * math.sin(a_), rt * math.cos(a_), L1 + L2 + rt * math.sin(a_))
+        fp = G.sweep(pts, rad, 8, 'glove', up=tuple(Z), name=name + '_' + sd)
         orient_outward(fp)
-        # weights: base blends into the hand
-        u_ = np.array([np.dot(v - W, Y) for v in fp.V])
-        wf = np.ones(fp.n)
-        wf[: 6] = 0.5
-        fp.set_weights({'fingers.' + sd: wf, 'hand.' + sd: 1 - wf})
+        b1, b2 = name + '.' + sd, name + '_2.' + sd
+
+        def wfun(sv, L1=L1, b1=b1, b2=b2, base_bone=base_bone, name=name):
+            w0 = 1 - G.smoothstep(-0.035, 0.022, sv) if name != 'thumb' else 0.5 * (1 - G.smoothstep(-0.05, 0.02, sv))
+            w2 = G.smoothstep(L1 - 0.024, L1 + 0.024, sv)
+            return {base_bone: float(w0), b1: float((1 - w0) * (1 - w2)), b2: float((1 - w0) * w2)}
+        fp.set_weights(_ring_weights(fp, seg, wfun))
         parts.append(fp)
-    # thumb: from the heel of the palm on the index side, wrapping the handle and resting over the index finger
-    c = np.array([gu, gv])
-    pts = [P(0.10, 0.05, 0.0), P(0.125, 0.09, -0.035)]
-    for i in range(5):
-        w = i / 4
-        a = math.radians(-160 + 125 * w)
-        r = HANDLE_R + 0.05
-        uv = c + r * np.array([math.cos(a), math.sin(a)])
-        pts.append(P(0.118 - 0.03 * w, uv[0], uv[1]))
-    th = G.sweep(pts, [0.046, 0.047, 0.046, 0.045, 0.043, 0.04, 0.036], 6, 'glove', up=tuple(Y))
-    orient_outward(th)
-    wt = np.ones(th.n)
-    wt[:6] = 0.3
-    th.set_weights({'thumb.' + sd: wt, 'hand.' + sd: 1 - wt})
-    parts.append(th)
-    # rolled cuff: flared bell over the wrist with a rolled lip
-    prof = [(0.088, -0.02), (0.118, -0.075), (0.140, -0.130), (0.149, -0.155), (0.132, -0.170), (0.108, -0.14), (0.078, -0.05)]
-    # lathe around the hand axis: local z = -Y (pointing up the forearm)
-    R = G.zframe(-Y)
+    # rolled cuff: flares from the wrist up the forearm and rolls over at the top
+    R = G.zframe(-Y)                                   # local z points up the forearm
+    prof = [(0.088, -0.035), (0.095, 0.010), (0.103, 0.044), (0.112, 0.069)]
+    cz, cr, tr = 0.088, 0.123, 0.022
+    for ang in (-80, -40, 0, 40, 80, 120, 160, 200):
+        a_ = math.radians(ang)
+        prof.append((cr + tr * math.cos(a_), cz + tr * math.sin(a_)))
+    prof += [(0.097, 0.075), (0.082, 0.020)]
     V, F = [], []
-    nseg = 11
-    for (r, z) in prof:
+    nseg = 12
+    for (rr, zz) in prof:
         for i in range(nseg):
-            a = 2 * math.pi * i / nseg
-            V.append(W + R @ np.array([r * math.cos(a), r * math.sin(a), -z]))
+            a_ = 2 * math.pi * (i + 0.5) / nseg
+            V.append(W0 + R @ np.array([rr * math.cos(a_), rr * math.sin(a_), zz]))
     m = len(prof)
     for j in range(m):
         for i in range(nseg):
-            a = j * nseg + i
-            b = j * nseg + (i + 1) % nseg
-            cc = ((j + 1) % m) * nseg + (i + 1) % nseg
-            dd = ((j + 1) % m) * nseg + i
-            F.append([a, b, cc, dd])
+            q0 = j * nseg + i
+            q1 = j * nseg + (i + 1) % nseg
+            q2 = ((j + 1) % m) * nseg + (i + 1) % nseg
+            q3 = ((j + 1) % m) * nseg + i
+            F.append([q0, q1, q2, q3])
     cuff = Part(np.array(V), F, 'glove', 'cuff_' + sd)
     orient_outward(cuff)
     cuff.rigid('hand.' + sd)
     parts.append(cuff)
+    # wrist strap (team colour) across the heel of the glove
+    Vs, Fs = [], []
+    npth = 16
+    for i in range(npth):
+        th_ = 2 * math.pi * i / npth
+        tt, vv = math.cos(th_), math.sin(th_)
+        base = np.array([0.110 * tt, 0.036, 0.009 + 0.050 * vv])
+        nn = nrm(np.array([tt / 0.110, 0.0, vv / 0.050]))
+        for du, dn in ((-0.024, 0.0), (0.024, 0.0), (0.024, 0.014), (-0.024, 0.014)):
+            q = base + np.array([0, du, 0]) + nn * dn
+            Vs.append(W0 + X * q[0] + Y * q[1] + Z * q[2])
+    for i in range(npth):
+        for k in range(4):
+            a0 = i * 4 + k
+            a1 = i * 4 + (k + 1) % 4
+            b1_ = ((i + 1) % npth) * 4 + (k + 1) % 4
+            b0 = ((i + 1) % npth) * 4 + k
+            Fs.append([a0, a1, b1_, b0])
+    strap = Part(np.array(Vs), Fs, 'team_a', 'strap_' + sd)
+    orient_outward(strap)
+    strap.rigid('hand.' + sd)
+    parts.append(strap)
     return parts
 
 

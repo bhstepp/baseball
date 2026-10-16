@@ -221,6 +221,9 @@ def orient_outward(p):
 # ------------------------------------------------------------------------------------------- parts
 def torso_part(f):
     V, F = MS.sdf_mesh(f, (-0.95, -0.75, 0.55), (0.95, 0.80, 3.20), 0.014, quads=1250, seed=3)
+    # extra edge loops round the knees so deep bends stay round
+    knee = lambda P: (P[:, 2] > 0.80) & (P[:, 2] < 1.36) & (np.abs(P[:, 0]) > 0.08)
+    V, F = MS.refine_region(V, F, knee, f)
     p = Part(V, F, 'uniform', 'torso')
     p.set_weights(torso_weights(V, F))
     return p
@@ -231,14 +234,16 @@ def arm_part(s):
     d = ARM * np.array([s, 1, 1])
     sh, el, wr = jl('upper_arm', s), jl('forearm', s), jl('hand', s)
     L1, L2 = np.linalg.norm(el - sh), np.linalg.norm(wr - el)
-    ts = np.concatenate([np.linspace(0.06, 1.0, 8), 1.0 + np.linspace(0.12, 1.0, 8) * (L2 / L1)])
+    # rings bunch up round the elbow so the bend arcs like a hose instead of kinking
+    ts = np.concatenate([[0.06, 0.20, 0.35, 0.50, 0.62, 0.72, 0.80, 0.86, 0.91, 0.955, 1.0],
+                         1.0 + np.array([0.045, 0.09, 0.14, 0.20, 0.28, 0.40, 0.55, 0.70, 0.85, 1.0]) * (L2 / L1)])
     path = [sh + d * (t * L1) for t in ts]
     path.append(wr + d * 0.04)
     u = np.linspace(0, 1, len(path))
     rad = 0.108 - 0.040 * u - 0.01 * np.sin(u * math.pi) + 0.012 * np.exp(-((u - 0.18) / 0.15) ** 2)
     p = G.sweep(path, rad, 9, 'team_a', up=(0, 1, 0))
     chain = [('upper_arm.' + sd, sh, el), ('forearm.' + sd, el, wr), ('hand.' + sd, wr, wr + d * 0.2)]
-    W, _ = RR.chain_weights(p.V, chain, 0.16)
+    W, _ = RR.chain_weights(p.V, chain, 0.21)
     p.set_weights(W)
     return p
 

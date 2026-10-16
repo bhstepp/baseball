@@ -1,9 +1,8 @@
-// 36-rocco.js — BB.Rocco: the modelled hero (assets/rocco.glb, built by tools/blender/rocco.py; the asset contract is
-// docs/PILOT-ROCCO.md). Owned by the integration agent.
-// Parses the glb once at boot (async), turns it into a toon character (cel materials chosen by material name, team
-// colours from the uniform scheme, ink hulls that deform with the skeleton and the face shapes, layer 1 for the ink
-// pass), owns an AnimationMixer and maps game state to clips, shape keys and gaze. BB.Render (35-scene) places him and
-// calls poseBat / poseHome / poseRun / poseTitle once per frame.
+// 36-rocco.js — BB.Rocco: the modelled hero, a batter driver on top of BB.Actors (36-actors.js). Owned by the
+// integration agent. The asset contract is docs/PILOT-ROCCO.md; the asset is 'rocco' in BB.Assets (inlined in the
+// page) plus an optional 'rocco.lod1' file for the field scene.
+// The driver maps game state to clips, shape keys and gaze; BB.Render (35-scene) places him and calls poseBat /
+// poseHome / poseRun / poseTitle once per frame.
 // If the asset is missing, fails to load, breaks the contract, or the page has ?rocco=old, ready() stays false and
 // BB.Render keeps the procedural Rocco (BB.Cast / BB.Anim) exactly as before.
 //
@@ -17,30 +16,39 @@ BB.Rocco = (function () {
   var T = (typeof THREE !== 'undefined') ? THREE : null;
   var R = { status: 'idle', error: null, warnings: [] };
   function no() { return false; }
-  var API = { ready: no, status: function () { return R.status; }, boot: function () {}, loadBuffer: function (b, cb) { if (cb) cb('unavailable'); }, R: R };
-  if (!T || !T.GLTFLoader || !BB.Toon || !BB.U) { R.status = 'unavailable'; return API; }
-  var TN = BB.Toon, U = BB.U, K = BB.K, PI = Math.PI;
-  var clamp = U.clamp, lerp = U.lerp, smooth = U.smooth;
+  var API = { ready: no, status: function () { return R.status; }, boot: function (cb) { if (cb) cb(R.status); }, loadBuffer: function (b, cb) { if (cb) cb('unavailable'); }, R: R,
+    whenReady: function () { return Promise.resolve(false); }, actor: function () { return null; } };
+  if (!T || !BB.Actors || !BB.Actors.available || !BB.U) { R.status = 'unavailable'; return API; }
+  var U = BB.U, K = BB.K, PI = Math.PI, AC = BB.Actors;
+  var clamp = U.clamp, smooth = U.smooth, L = AC.L, mixL = AC.mixL, twos = AC.twos, onTwos = AC.onTwos;
 
   // ------------------------------------------------------------------ contract tables
   var PALETTE = { fur: '#9A97A6', fur_light: '#F2EDE3', mask: '#2E2A38', nose: '#1B1420', eye_white: '#FFFFFF', pupil: '#1B1420', mouth: '#5A1F2A', tongue: '#E0605A',
     uniform: '#FFF6E6', team_a: '#2E5AAC', team_b: '#D9483B', belt: '#3B2F2A', sock: '#FFFFFF', shoe: '#1E1A22', sole: '#4A3F3A', lace: '#FFFFFF', glove: '#FFFFFF',
     bat_wood: '#D9A066', bat_tape: '#2E5AAC', decal_chest: '#2E5AAC', decal_back: '#2E5AAC' };
-  var TEAM = { team_a: 'a', team_b: 'b', bat_tape: 'a', decal_chest: 'a', decal_back: 'a' };   // recoloured from the uniform scheme
-  var OW = { pupil: 0, tongue: 0, mouth: 0.4, nose: 0.6, eye_white: 0.55, lace: 0.45, sole: 0.9, glove: 0.95, decal_chest: 0, decal_back: 0 }; // hull weight (1 = full)
-  var DECAL = { decal_chest: 1, decal_back: 1 };
-  var INKW = { pupil: 0.55, eye_white: 0.7, nose: 0.8, mouth: 0.7, tongue: 0.6, lace: 0.6 };   // BB.Ink line weight per material
-  var BAT = { bat_wood: 1, bat_tape: 1 };
   var CLIPS = ['stance', 'stride', 'power_load', 'coil_hold', 'swing_high', 'swing_mid', 'swing_low', 'whiff', 'dizzy', 'watch', 'bat_flip', 'run', 'trot', 'cheer', 'take', 'strike_react'];
   var BONES = ['root', 'hips', 'spine', 'chest', 'neck', 'head', 'jaw', 'ear.L', 'ear.R', 'eye.L', 'eye.R', 'brow.L', 'brow.R', 'tail.1', 'tail.2', 'tail.3', 'tail.4', 'tail.5',
     'shoulder.L', 'shoulder.R', 'upper_arm.L', 'upper_arm.R', 'forearm.L', 'forearm.R', 'hand.L', 'hand.R', 'thigh.L', 'thigh.R', 'shin.L', 'shin.R', 'foot.L', 'foot.R',
     'toe.L', 'toe.R', 'bat', 'bat_sweet', 'bat_tip'];
   var SHAPES = ['blink', 'smile', 'grin', 'frown', 'mouth_open', 'brows_up', 'brows_angry', 'brows_sad', 'squint', 'cheeks_puff'];
+  AC.define('rocco', {
+    palette: PALETTE,
+    team: { team_a: 'a', team_b: 'b', bat_tape: 'a', decal_chest: 'a', decal_back: 'a' },     // recoloured from the uniform scheme
+    hull: { pupil: 0, tongue: 0, mouth: 0.4, nose: 0.6, eye_white: 0.55, lace: 0.45, sole: 0.9, glove: 0.95, decal_chest: 0, decal_back: 0 },
+    ink: { pupil: 0.55, eye_white: 0.7, nose: 0.8, mouth: 0.7, tongue: 0.6, lace: 0.6 },   // BB.Ink line weight per material
+    decals: { decal_chest: { text: 'R', side: 'front' }, decal_back: { text: '7', side: 'back' } },
+    props: { bat_wood: 'bat', bat_tape: 'bat' },
+    emissive: { eye_white: '#3A3A3A' },
+    bones: BONES, need: ['root', 'head', 'bat'], clips: CLIPS, needClips: ['stance'], shapes: SHAPES,
+    idle: 'stance', eyeSquash: true, inkBase: 7000, strictMaterials: true,
+  });
   var CONTACT_T = 0.25;   // contract: the contact frame of every swing clip
   var FLIP_AT = 0.18;     // a homer: the bat flip starts this long after contact (end of the follow-through wrap)
-  var HOT = '#F28C38';
+  var HOT = { color: '#F28C38', emissive: '#6A2200' };
+  var RITUAL_EVERY = 4;   // the plate-tap ritual: before the first pitch of a game, then about every 4th windup
 
   function warn(msg) { R.warnings.push(msg); }
+  var A = null;           // the actor
 
   // ------------------------------------------------------------------ boot / load
   function wanted() {
@@ -49,402 +57,101 @@ BB.Rocco = (function () {
   }
   function boot(cb) {
     if (R.status !== 'idle') { if (cb) cb(R.status); return; }
-    if (!wanted()) { R.status = 'off'; if (cb) cb(R.status); return; }
-    var buf = null;
-    try { buf = BB.assetBuffer && BB.assetBuffer('rocco'); } catch (e) { buf = null; }
-    if (!buf) { R.status = 'missing'; if (cb) cb(R.status); return; }
-    loadBuffer(buf, cb);
+    if (!wanted()) { R.status = 'off'; waiters.splice(0).forEach(function (f) { f(false); }); if (cb) cb(R.status); return; }
+    if (!BB.Assets.has('rocco')) {   // an older harness may still hand the buffer over through BB.assetBuffer
+      var buf = null;
+      try { buf = BB.assetBuffer && BB.assetBuffer('rocco'); } catch (e) { buf = null; }
+      if (buf) BB.Assets.provide('rocco', buf);
+    }
+    if (!BB.Assets.has('rocco')) { R.status = 'missing'; waiters.splice(0).forEach(function (f) { f(false); }); if (cb) cb(R.status); return; }
+    load(cb);
   }
   function loadBuffer(buf, cb) {
+    if (A) { try { A.dispose(); } catch (e) {} A = null; }
+    BB.Assets.provide('rocco', buf);
+    R.status = 'idle';
+    load(cb);
+  }
+  var waiters = [];
+  // resolves true once the model is in, false if the procedural Rocco stays
+  function whenReady() {
+    return new Promise(function (res) {
+      if (R.status === 'ready') return res(true);
+      if (R.status !== 'loading' && R.status !== 'idle') return res(false);
+      waiters.push(res);
+    });
+  }
+  function load(cb) {
     R.status = 'loading'; R.error = null; R.warnings = [];
     var t0 = (typeof performance !== 'undefined') ? performance.now() : 0;
-    function done() { if (cb) { try { cb(R.status); } catch (e) { console.warn(e); } } }
-    try {
-      new T.GLTFLoader().parse(buf, '', function (gltf) {
-        try { build(gltf); R.status = 'ready'; R.loadMs = ((typeof performance !== 'undefined') ? performance.now() : 0) - t0; }
-        catch (e) { fail(e); }
-        done();
-      }, function (e) { fail(e); done(); });
-    } catch (e) { fail(e); done(); }
+    function done() {
+      waiters.splice(0).forEach(function (f) { f(R.status === 'ready'); });
+      if (cb) { try { cb(R.status); } catch (e) { console.warn(e); } }
+    }
+    AC.create('rocco').then(function (actor) {
+      try { build(actor); R.status = 'ready'; R.loadMs = ((typeof performance !== 'undefined') ? performance.now() : 0) - t0; }
+      catch (e) { fail(e); }
+      done();
+    }, function (e) { fail(e); done(); });
   }
   function fail(e) {
     R.status = 'failed'; R.error = String((e && e.message) || e);
     console.warn('BB.Rocco: keeping the procedural Rocco (' + R.error + ')');
   }
-
-  // ------------------------------------------------------------------ materials & colours
-  var _c1 = new T.Color(), _c2 = new T.Color();
-  function near(a, b) { return Math.max(Math.abs(a.r - b.r), Math.abs(a.g - b.g), Math.abs(a.b - b.b)); }
-  // the glb stores linear base colours (Blender converts its sRGB swatches); the game paints with sRGB hex values
-  function baseHex(name, json, mat) {
-    var def = null, f = null;
-    if (json && json.materials) for (var i = 0; i < json.materials.length; i++) if (json.materials[i].name === name) { def = json.materials[i]; break; }
-    if (def && def.pbrMetallicRoughness && def.pbrMetallicRoughness.baseColorFactor) f = def.pbrMetallicRoughness.baseColorFactor;
-    var pal = PALETTE[name];
-    if (!f) return pal || (mat && mat.color ? '#' + mat.color.getHexString() : '#CCCCCC');
-    _c1.setRGB(f[0], f[1], f[2]).convertLinearToSRGB();
-    if (!pal) return '#' + _c1.getHexString();
-    _c2.set(pal);
-    if (near(_c1, _c2) < 0.16) return '#' + _c1.getHexString();      // the modeller's tweak of the contract colour
-    _c1.setRGB(f[0], f[1], f[2]);
-    if (near(_c1, _c2) < 0.16) { warn('material ' + name + ' stores sRGB values in a linear slot'); return '#' + _c1.getHexString(); }
-    warn('material ' + name + ' colour is far from the contract (' + pal + '); using the contract colour');
-    return pal;
+  // the field scene's distant runner: LOD1 if the build ships one (parsed on demand, see BB.Render.prepare)
+  function prepareLod() {
+    if (!A) return Promise.resolve(false);
+    return AC.loadLod(A, 1).then(function (ok) { if (ok) { R.lod1 = true; R.lod1Tris = A.info().lod1Triangles; } return ok; }, function (e) { warn('lod1: ' + (e.message || e)); return false; });
   }
+  function releaseLod() { if (A) A.dropLod(1); R.lod1 = false; }
 
-  // ------------------------------------------------------------------ ink hull that deforms with skin + morphs
-  var HU = { uRes: TN.OU.uRes, uWorld: TN.OU.uWorld, uMin: TN.OU.uMin, uMax: TN.OU.uMax, uColor: TN.OU.uColor, uScale: { value: 1.12 } };
-  var HULL = new T.ShaderMaterial({
-    uniforms: HU, side: T.BackSide,
-    vertexShader: [
-      '#include <common>',
-      '#include <morphtarget_pars_vertex>',
-      '#include <skinning_pars_vertex>',
-      'attribute vec3 onormal; attribute float ow;',
-      'uniform vec2 uRes; uniform float uWorld; uniform float uMin; uniform float uMax; uniform float uScale;',
-      'void main() {',
-      '  vec3 objectNormal = onormal;',
-      '  #include <morphnormal_vertex>',
-      '  #include <skinbase_vertex>',
-      '  #include <skinnormal_vertex>',
-      '  #include <begin_vertex>',
-      '  #include <morphtarget_vertex>',
-      '  #include <skinning_vertex>',
-      '  vec4 clip = projectionMatrix * modelViewMatrix * vec4(transformed, 1.0);',
-      '  vec3 n = normalize(normalMatrix * objectNormal);',
-      '  vec2 d = (projectionMatrix * vec4(n, 0.0)).xy * uRes;',
-      '  float L = length(d); d = L > 1e-6 ? d / L : vec2(0.0);',
-      '  float f = projectionMatrix[1][1] * uRes.y * 0.5;',
-      '  float px = clamp(uWorld * f / max(clip.w, 0.05), uMin, uMax) * uScale;',
-      '  px *= ow * (0.84 + 0.28 * sin(position.x * 5.3 + position.y * 3.9 + position.z * 4.7));',
-      '  clip.xy += d * px * 2.0 / uRes * clip.w;',
-      '  gl_Position = clip;',
-      '}'].join('\n'),
-    fragmentShader: 'uniform vec3 uColor; void main() { gl_FragColor = vec4(uColor, 1.0); }',
-  });
-  HULL.userData.rocco = true; HULL.userData.inkHull = true;   // BB.Ink keeps hulls out of its normals pass and hides them under its lines
-
-  // ------------------------------------------------------------------ geometry helpers
-  // smooth hull normals, welded by position across all primitives of one glTF mesh (same bind space), so creases,
-  // seams and material borders never crack the ink line
-  function weldGroup(list) {
-    var acc = {}, keys = [], a = new T.Vector3(), b = new T.Vector3(), c = new T.Vector3(), e2 = new T.Vector3();
-    function q(x) { return Math.round(x * 1500); }
-    list.forEach(function (m) {
-      var g = m.geometry, P = g.attributes.position, n = P.count, I = g.index, key = new Array(n), i;
-      for (i = 0; i < n; i++) key[i] = q(P.getX(i)) + ',' + q(P.getY(i)) + ',' + q(P.getZ(i));
-      keys.push(key);
-      var cnt = I ? I.count : n;
-      for (i = 0; i + 2 < cnt; i += 3) {
-        var ia = I ? I.getX(i) : i, ib = I ? I.getX(i + 1) : i + 1, ic = I ? I.getX(i + 2) : i + 2;
-        a.fromBufferAttribute(P, ia); b.fromBufferAttribute(P, ib); c.fromBufferAttribute(P, ic);
-        b.sub(a); e2.subVectors(c, a); b.cross(e2);                  // area-weighted face normal
-        [ia, ib, ic].forEach(function (v) { var s = acc[key[v]] || (acc[key[v]] = [0, 0, 0]); s[0] += b.x; s[1] += b.y; s[2] += b.z; });
-      }
-    });
-    list.forEach(function (m, gi) {
-      var key = keys[gi], n = key.length, out = new Float32Array(n * 3);
-      for (var i = 0; i < n; i++) {
-        var s = acc[key[i]] || [0, 1, 0], l = Math.hypot(s[0], s[1], s[2]) || 1;
-        out[3 * i] = s[0] / l; out[3 * i + 1] = s[1] / l; out[3 * i + 2] = s[2] / l;
-      }
-      m.geometry.setAttribute('onormal', new T.BufferAttribute(out, 3));
-    });
-  }
-  function constAttr(g, name, v) { var a = new Float32Array(g.attributes.position.count); a.fill(v); g.setAttribute(name, new T.BufferAttribute(a, 1)); }
-  function makeHull(src, scale) {
-    var h = src.isSkinnedMesh ? new T.SkinnedMesh(src.geometry, HULL) : new T.Mesh(src.geometry, HULL);
-    if (src.isSkinnedMesh) { h.bind(src.skeleton, src.bindMatrix); h.bindMode = src.bindMode; }
-    if (src.morphTargetInfluences) { h.morphTargetInfluences = src.morphTargetInfluences; h.morphTargetDictionary = src.morphTargetDictionary; }
-    h.renderOrder = 1; h.frustumCulled = false; h.userData.isOutline = true; h.name = src.name + '_ink';
-    src.add(h); src.userData.outline = h;
-    return h;
-  }
-
-  // ------------------------------------------------------------------ build the character from the parsed glTF
-  function build(gltf) {
-    var model = gltf.scene || (gltf.scenes && gltf.scenes[0]);
-    if (!model) throw new Error('no scene in rocco.glb');
-    var json = gltf.parser && gltf.parser.json;
-    model.updateMatrixWorld(true);
-    // bones by contract name (GLTFLoader sanitises node names: 'eye.L' -> 'eyeL'; the original is in userData.name)
-    var bones = {}, byName = {};
-    model.traverse(function (o) { byName[o.name] = o; if (o.isBone || o.type === 'Object3D' || o.isGroup) { var nm = (o.userData && o.userData.name) || o.name; if (!bones[nm]) bones[nm] = o; } });
-    var missingBones = BONES.filter(function (b) { return !bones[b]; });
-    if (missingBones.length) warn('missing bones: ' + missingBones.join(', '));
-    ['root', 'head', 'bat'].forEach(function (b) { if (!bones[b]) throw new Error('rocco.glb has no "' + b + '" bone'); });
-    // materials -> one shared cel material per material name; primitives stay separate meshes so the ink pass sees
-    // every paint region as its own object (BB.Ink draws lines where object ids change; same material = same id)
-    var meshes = [];
-    model.traverse(function (o) { if (o.isMesh) meshes.push(o); });
-    if (!meshes.length) throw new Error('rocco.glb has no meshes');
-    var colors = {};
-    meshes.forEach(function (m) {
-      var mat = Array.isArray(m.material) ? m.material[0] : m.material, nm = (mat && mat.name) || 'unnamed';
-      if (!(nm in colors)) { colors[nm] = baseHex(nm, json, mat); if (!PALETTE[nm]) warn('unexpected material ' + nm); }
-      if (mat && mat.dispose) mat.dispose();
-      m.userData.mname = nm;
-    });
-    R.colors = colors; R.base = Object.assign({}, colors); R.mats = {};
-    var groups = {};
-    meshes.forEach(function (m) { var key = (m.parent ? m.parent.uuid : '-') + '|' + (m.skeleton ? m.skeleton.uuid : '-'); (groups[key] = groups[key] || []).push(m); });
-    Object.keys(groups).forEach(function (k) { weldGroup(groups[k]); });
-    var names = Object.keys(colors).sort();
-    // decal lettering must read from outside: seen from the front (+Z) the chest letter runs toward +X (his left),
-    // seen from behind the back number runs toward -X; v runs up (+Y)
-    R.decalFlip = {};
-    meshes.forEach(function (m) {
-      var nm = m.userData.mname; if (!DECAL[nm]) return;
-      var ax = decalAxes(m); if (!ax) { warn(nm + ' has no uvs'); return; }
-      var right = nm === 'decal_back' ? -1 : 1;
-      R.decalFlip[nm] = { u: ax.du.x * right < 0, v: ax.dv.y < 0 };
-    });
-    meshes.forEach(function (m) {
-      var nm = m.userData.mname, decal = !!DECAL[nm], w = OW[nm] != null ? OW[nm] : 1;
-      m.material = matFor(nm);
-      constAttr(m.geometry, 'ow', w);
-      if (w > 0 && !decal) makeHull(m);
-      m.frustumCulled = false;
-      m.castShadow = m.receiveShadow = false;
-      if (!decal) m.layers.enable(1);
-      m.userData.inkId = 7000 + names.indexOf(nm);
-      if (INKW[nm] != null) m.userData.inkWeight = INKW[nm];
-      m.userData.kind = BAT[nm] ? 'bat' : decal ? 'decal' : 'body';
-    });
-    R.meshes = meshes;
-    R.bat = meshes.filter(function (m) { return m.userData.kind === 'bat'; });
+  function build(actor) {
+    if (!(actor.clips.swing_mid || actor.clips.swing_high || actor.clips.swing_low)) throw new Error('rocco.glb needs at least one swing clip');
+    A = actor;
+    R.actor = A; R.root = A.root; R.model = A.model; R.up = A.up; R.bones = A.bones; R.meshes = A.meshes; R.clips = A.clips;
+    R.warnings = R.warnings.concat(A.warnings);
+    R.bat = A.ofKind('bat');
     if (!R.bat.length) warn('no bat_wood / bat_tape meshes');
-    if (BB.Ink && BB.Ink.registerHull) BB.Ink.registerHull(HULL);
-    paintAll();
-    // face shapes
-    R.face = meshes.filter(function (m) { return m.morphTargetDictionary && m.morphTargetInfluences; });
-    var haveShapes = {};
-    R.face.forEach(function (m) { for (var k in m.morphTargetDictionary) haveShapes[k] = true; });
-    var missingShapes = SHAPES.filter(function (s) { return !haveShapes[s]; });
-    if (missingShapes.length) warn('missing shape keys: ' + missingShapes.join(', '));
-    // clips: drop tracks that would bind to nothing (PropertyBinding would fall back to the root or log errors)
-    var nodeNames = {};
-    model.traverse(function (o) { nodeNames[o.name] = true; });
-    R.clips = {}; R.actions = {}; R.mixer = new T.AnimationMixer(model);
-    (gltf.animations || []).forEach(function (clip) {
-      var seen = {}, tracks = [];
-      clip.tracks.forEach(function (tr) {
-        var pp = T.PropertyBinding.parseTrackName(tr.name), node = pp.nodeName;
-        if (!nodeNames[node] || seen[tr.name]) { R.dropped = (R.dropped || 0) + 1; return; }
-        seen[tr.name] = true; tracks.push(tr);
-      });
-      clip.tracks = tracks;
-      R.clips[clip.name] = clip;
-      var a = R.mixer.clipAction(clip);
-      a.setLoop(T.LoopRepeat, Infinity); a.play(); a.setEffectiveWeight(0);
-      R.actions[clip.name] = a;
-    });
-    var missingClips = CLIPS.filter(function (c) { return !R.clips[c]; });
-    if (missingClips.length) warn('missing clips: ' + missingClips.join(', '));
-    if (!R.clips.stance || !(R.clips.swing_mid || R.clips.swing_high || R.clips.swing_low)) throw new Error('rocco.glb needs at least "stance" and one swing clip');
-    // world wrapper: Y-up model -> Z-up world, like BB.Cast's "up" group
-    R.model = model;
-    R.up = new T.Group(); R.up.rotation.x = PI / 2; R.up.add(model);
-    R.root = new T.Group(); R.root.name = 'rocco_glb'; R.root.add(R.up);
-    var sh = new T.Mesh(SHADOW_G, SHADOW_M); sh.renderOrder = -1; sh.scale.set(1.25, 1.0, 1); R.root.add(sh); R.shadow = sh;
-    R.bones = bones; R.byName = byName;
-    R.allBones = []; model.traverse(function (o) { if (o.isBone) R.allBones.push(o); });
-    R.saved = R.allBones.map(function () { return { p: new T.Vector3(), q: new T.Quaternion(), s: new T.Vector3(1, 1, 1) }; });
-    R.final = R.allBones.map(function () { return { p: new T.Vector3(), q: new T.Quaternion(), s: new T.Vector3(1, 1, 1) }; });
-    R.fadeFrom = R.allBones.map(function () { return { p: new T.Vector3(), q: new T.Quaternion(), s: new T.Vector3(1, 1, 1) }; });
-    R.allBones.forEach(function (b, i) { R.saved[i].p.copy(b.position); R.saved[i].q.copy(b.quaternion); R.saved[i].s.copy(b.scale); });
-    R.morphSaved = R.face.map(function (m) { return m.morphTargetInfluences.slice(); });
-    R.batProp = makeBatProp();
-    R.size = 1; R.yaw = 0;
+    R.batProp = A.makeProp('bat', 'bat');
+    if (R.batProp) {   // its axis: bat bone -> bat_tip, in bat space
+      R.batProp.userData.len = 2.8; R.batProp.userData.axis = new T.Vector3(0, 1, 0);
+      var tipB = A.bones.bat_tip;
+      if (tipB && tipB.parent === A.bones.bat) { R.batProp.userData.axis.copy(tipB.position).normalize(); R.batProp.userData.len = tipB.position.length(); }
+    }
+    R.size = 1;
+    if (R.team) A.setColors(R.team);
     measure();
   }
-  var SHADOW_G = new T.CircleGeometry(1, 20);
-  var SHADOW_M = new T.MeshBasicMaterial({ color: 0x1B1420, transparent: true, opacity: 0.22, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -12, polygonOffsetUnits: -40 });
+  var has = function (c) { return !!(A && A.clips[c]); };
+  var dur = function (c) { return A ? A.dur(c) : 1; };
+  var first = function () { return A.first.apply(A, arguments); };
+  var looped = function (c, t) { return A.looped(c, t); };
 
   // ------------------------------------------------------------------ colours
-  // chest letter and back number: UV-mapped quads painted with the same canvas lettering as BB.Cast's uniforms
-  var DECAL_TEXT = { decal_chest: 'R', decal_back: '7' };
-  function decalMap(name) {
-    var fill = R.colors[name] || PALETTE[name] || '#2E5AAC';
-    var base = BB.Cast && BB.Cast.decalTex ? BB.Cast.decalTex(DECAL_TEXT[name] || '?', fill, TN.INK) : null;
-    if (!base) return null;
-    var key = name + fill, cache = R.decalTex || (R.decalTex = {});
-    if (cache[key]) return cache[key];
-    // a private copy (the canvas is shared with BB.Cast) flipped so the lettering reads from outside the body
-    var t = base.clone(), f = R.decalFlip && R.decalFlip[name];
-    t.wrapS = t.wrapT = T.ClampToEdgeWrapping;
-    if (f && f.u) { t.repeat.x = -1; t.offset.x = 1; }
-    if (f && f.v) { t.repeat.y = -1; t.offset.y = 1; }
-    t.needsUpdate = true;
-    return (cache[key] = t);
-  }
-  // which way the decal quad's u and v run in model space (tangent frame from positions + uvs)
-  function decalAxes(m) {
-    var g = m.geometry, P = g.attributes.position, UV = g.attributes.uv, I = g.index;
-    if (!UV) return null;
-    var du = new T.Vector3(), dv = new T.Vector3(), p0 = new T.Vector3(), p1 = new T.Vector3(), p2 = new T.Vector3(), e1 = new T.Vector3(), e2 = new T.Vector3();
-    var cnt = I ? I.count : P.count;
-    for (var i = 0; i + 2 < cnt; i += 3) {
-      var a = I ? I.getX(i) : i, b = I ? I.getX(i + 1) : i + 1, c = I ? I.getX(i + 2) : i + 2;
-      p0.fromBufferAttribute(P, a); p1.fromBufferAttribute(P, b); p2.fromBufferAttribute(P, c);
-      e1.subVectors(p1, p0); e2.subVectors(p2, p0);
-      var s1 = UV.getX(b) - UV.getX(a), t1 = UV.getY(b) - UV.getY(a), s2 = UV.getX(c) - UV.getX(a), t2 = UV.getY(c) - UV.getY(a), d = s1 * t2 - s2 * t1;
-      if (Math.abs(d) < 1e-12) continue;
-      du.addScaledVector(e1, t2 / d).addScaledVector(e2, -t1 / d);
-      dv.addScaledVector(e2, s1 / d).addScaledVector(e1, -s2 / d);
-    }
-    return { du: du, dv: dv };
-  }
-  function matFor(name) {
-    if (R.mats[name]) return R.mats[name];
-    var o = { color: new T.Color(R.colors[name] || '#CCCCCC'), gradientMap: TN.GRAD };
-    if (DECAL[name]) {
-      var map = decalMap(name);
-      Object.assign(o, { polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -8, transparent: true, depthWrite: false, side: T.DoubleSide });
-      if (map) Object.assign(o, { map: map, alphaTest: 0.35, color: new T.Color('#FFFFFF') });
-    }
-    if (name === 'eye_white') o.emissive = new T.Color('#3A3A3A');          // whites stay white on the shaded side
-    var m = new T.MeshToonMaterial(o); m.name = 'rocco_' + name;
-    R.mats[name] = m;
-    return m;
-  }
-  function paintAll() {
-    for (var name in R.mats) {
-      if (DECAL[name]) { var mp = decalMap(name); if (mp && R.mats[name].map !== mp) { R.mats[name].map = mp; R.mats[name].needsUpdate = true; } if (mp) continue; }
-      var hex = R.colors[name] || '#CCCCCC';
-      if (name === 'bat_wood' && R.hot) hex = HOT;
-      R.mats[name].color.set(hex);
-      if (name === 'bat_wood' && R.mats[name].emissive) R.mats[name].emissive.set(R.hot ? '#6A2200' : '#000000');
-    }
-  }
-  function setColors(c) {
-    if (!c) return;
-    R.team = c;
-    if (R.status !== 'ready') return;
-    for (var name in TEAM) if (name in R.base) R.colors[name] = c[TEAM[name]] || R.base[name];
-    paintAll();
-  }
-  function setHot(on) {
-    on = !!on;
-    if (R.hot === on || R.status !== 'ready') return;
-    R.hot = on; paintAll();
-  }
-
-  // a static copy of the bat in bat-bone space (it lies in the dirt while Rocco runs the bases)
-  function makeBatProp() {
-    if (!R.bat.length || !R.bones.bat) return null;
-    var grp = new T.Group(); grp.name = 'rocco_bat_prop';
-    R.bat.forEach(function (src) {
-      var g = src.geometry.clone(), bi = -1, M = new T.Matrix4();
-      if (src.isSkinnedMesh) bi = src.skeleton.bones.indexOf(R.bones.bat);
-      if (bi >= 0) M.multiplyMatrices(src.skeleton.boneInverses[bi], src.bindMatrix);
-      else { src.updateWorldMatrix(true, false); R.bones.bat.updateWorldMatrix(true, false); M.copy(R.bones.bat.matrixWorld).invert().multiply(src.matrixWorld); }
-      ['skinIndex', 'skinWeight'].forEach(function (a) { if (g.attributes[a]) g.deleteAttribute(a); });
-      g.morphAttributes = {};
-      g.applyMatrix4(M);
-      var on = g.attributes.onormal;
-      if (on) { var nm = new T.Matrix3().getNormalMatrix(M), v = new T.Vector3(); for (var i = 0; i < on.count; i++) { v.fromBufferAttribute(on, i).applyMatrix3(nm).normalize(); on.setXYZ(i, v.x, v.y, v.z); } }
-      var m = new T.Mesh(g, src.material);
-      m.frustumCulled = false; m.layers.enable(1); m.userData.inkId = src.userData.inkId;
-      var h = new T.Mesh(g, TN.OUTLINE); h.renderOrder = 1; h.userData.isOutline = true; m.add(h); m.userData.outline = h;
-      grp.add(m);
-    });
-    // its axis: bat bone -> bat_tip, in bat space
-    grp.userData.len = 2.8; grp.userData.axis = new T.Vector3(0, 1, 0);
-    if (R.bones.bat_tip && R.bones.bat_tip.parent === R.bones.bat) { grp.userData.axis.copy(R.bones.bat_tip.position).normalize(); grp.userData.len = R.bones.bat_tip.position.length(); }
-    grp.visible = false;
-    return grp;
-  }
-
-  // ------------------------------------------------------------------ evaluating poses
-  function has(c) { return !!R.clips[c]; }
-  function dur(c) { return R.clips[c] ? R.clips[c].duration : 1; }
-  function first() { for (var i = 0; i < arguments.length; i++) if (has(arguments[i])) return arguments[i]; return 'stance'; }
-  function twos(t) { return (BB.Ink && BB.Ink.twos) ? BB.Ink.twos(t) : t; }
-  // an event-relative time held on twos in step with the global 12 fps grid
-  function onTwos(rel, t) { return Math.max(0, rel - (t - twos(t))); }
-  function restore() {
-    for (var i = 0; i < R.allBones.length; i++) { var b = R.allBones[i], s = R.saved[i]; b.position.copy(s.p); b.quaternion.copy(s.q); b.scale.copy(s.s); }
-    R.face.forEach(function (m, j) { var a = m.morphTargetInfluences, s = R.morphSaved[j]; for (var k = 0; k < a.length; k++) a[k] = s[k]; });
-  }
-  function save() {
-    for (var i = 0; i < R.allBones.length; i++) { var b = R.allBones[i], s = R.saved[i]; s.p.copy(b.position); s.q.copy(b.quaternion); s.s.copy(b.scale); }
-    R.face.forEach(function (m, j) { var a = m.morphTargetInfluences, s = R.morphSaved[j]; for (var k = 0; k < a.length; k++) s[k] = a[k]; });
-  }
-  // layers: [{c: clip, t: seconds, w: weight}] -> bones (the mixer only writes values that changed since its last
-  // update, so everything we touch afterwards is put back first)
-  function evaluate(layers) {
-    restore();
-    var acts = R.actions, w = {}, tm = {}, tot = 0, i, l;
-    for (i = 0; i < layers.length; i++) {
-      l = layers[i];
-      if (!acts[l.c] || !(l.w > 1e-4)) continue;
-      if (w[l.c] == null || l.w > w[l.c]) { tm[l.c] = l.t; }
-      w[l.c] = (w[l.c] || 0) + l.w; tot += l.w;
-    }
-    if (tot <= 0) { w = { stance: 1 }; tm = { stance: 0 }; tot = 1; }
-    for (var n in acts) {
-      var a = acts[n];
-      if (w[n]) { a.enabled = true; a.time = clamp(tm[n], 0, a.getClip().duration); a.setEffectiveWeight(w[n] / tot); }
-      else { a.setEffectiveWeight(0); a.enabled = false; }
-    }
-    R.mixer.update(0);
-    save();
-  }
-  function looped(c, t) { var d = dur(c); return ((t % d) + d) % d; }
-  function mixL(a, b, k) { // blend two layer lists
-    if (k <= 0) return a; if (k >= 1) return b;
-    var o = [], i;
-    for (i = 0; i < a.length; i++) o.push({ c: a[i].c, t: a[i].t, w: a[i].w * (1 - k) });
-    for (i = 0; i < b.length; i++) o.push({ c: b[i].c, t: b[i].t, w: b[i].w * k });
-    return o;
-  }
-  function L(c, t, w) { return { c: c, t: t, w: w == null ? 1 : w }; }
+  function setColors(c) { if (!c) return; R.team = c; if (A) A.setColors(c); }
+  function setHot(on) { if (A) A.override('bat_wood', on ? HOT : null); }
 
   // ------------------------------------------------------------------ measurements made once after loading
-  var V = new T.Vector3(), V2 = new T.Vector3(), V3 = new T.Vector3(), Q = new T.Quaternion(), Q2 = new T.Quaternion(), M4 = new T.Matrix4();
-  function modelPoint(b, out) { // bone position in model space (glTF, unscaled)
-    b.updateWorldMatrix(true, false);
-    out.setFromMatrixPosition(b.matrixWorld);
-    M4.copy(R.model.matrixWorld).invert(); out.applyMatrix4(M4);
-    return out;
-  }
+  var V = new T.Vector3(), V3 = new T.Vector3();
+  function modelPoint(b, out) { return A.modelPoint(b, out); }
   function measure() {
-    var B = R.bones, info = { swings: {} };
-    R.model.updateMatrixWorld(true);
+    var B = A.bones, info = { swings: {} };
+    A.model.updateMatrixWorld(true);
     ['swing_high', 'swing_mid', 'swing_low'].forEach(function (c) {
       if (!has(c)) return;
-      evaluate([L(c, CONTACT_T)]); R.model.updateMatrixWorld(true);
+      A.evaluate([L(c, CONTACT_T)]); A.model.updateMatrixWorld(true);
       var sweet = B.bat_sweet ? modelPoint(B.bat_sweet, new T.Vector3()) : null, tip = B.bat_tip ? modelPoint(B.bat_tip, new T.Vector3()) : null, grip = modelPoint(B.bat, new T.Vector3());
       info.swings[c] = { sweet: sweet || tip || grip, tip: tip, grip: grip };
     });
     if (!B.bat_sweet) warn('no bat_sweet bone: aiming with ' + (B.bat_tip ? 'bat_tip' : 'the bat bone'));
-    // stance: height, feet, head
-    evaluate([L('stance', 0)]); R.model.updateMatrixWorld(true);
+    A.evaluate([L('stance', 0)]); A.model.updateMatrixWorld(true);
     var box = new T.Box3();
-    R.meshes.forEach(function (m) { if (m.userData.kind === 'body') box.expandByObject(m); });
+    A.lods[0].forEach(function (m) { if (m.userData.kind === 'body') box.expandByObject(m); });
     info.stanceBox = box;
     info.head = modelPoint(B.head, new T.Vector3());
     info.feet = [B['foot.L'], B['foot.R']].filter(Boolean).map(function (b) { return modelPoint(b, new T.Vector3()); });
-    // rest height (bind pose of the skinned body), for the report
-    var hb = new T.Box3();
-    R.meshes.forEach(function (m) { if (m.userData.kind === 'body') { m.geometry.computeBoundingBox(); hb.union(m.geometry.boundingBox); } });
-    info.restBox = hb;
-    // head centre and crown in head-bone space, from the vertices skinned (mostly) to the head
-    var sum = new T.Vector3(), cnt = 0, top = null;
-    R.meshes.forEach(function (m) {
-      if (!m.isSkinnedMesh || m.userData.kind !== 'body') return;
-      var bi = m.skeleton.bones.indexOf(B.head); if (bi < 0) return;
-      var P = m.geometry.attributes.position, SI = m.geometry.attributes.skinIndex, SW = m.geometry.attributes.skinWeight;
-      var toBone = new T.Matrix4().multiplyMatrices(m.skeleton.boneInverses[bi], m.bindMatrix);
-      for (var i = 0; i < P.count; i++) {
-        var w = (SI.getX(i) === bi ? SW.getX(i) : 0) + (SI.getY(i) === bi ? SW.getY(i) : 0) + (SI.getZ(i) === bi ? SW.getZ(i) : 0) + (SI.getW(i) === bi ? SW.getW(i) : 0);
-        if (w < 0.6) continue;
-        V.fromBufferAttribute(P, i).applyMatrix4(toBone);
-        sum.add(V); cnt++;
-      }
-    });
-    R.headLocal = cnt ? sum.multiplyScalar(1 / cnt) : new T.Vector3(0, 0.6, 0);
+    info.restBox = A.restBox;
+    R.headLocal = A.headLocal;
     R.info = info;
     samplePaths();
     // the bat's flight in bat_flip (bat bone in model space), so the prop can keep flying once Rocco trots off
@@ -453,14 +160,36 @@ BB.Rocco = (function () {
       R.flipPath = [];
       var inv = new T.Matrix4();
       for (var fi = 0, fn = Math.ceil(dur('bat_flip') / 0.025); fi <= fn; fi++) {
-        evaluate([L('bat_flip', Math.min(fi * 0.025, dur('bat_flip')))]); R.model.updateMatrixWorld(true);
-        inv.copy(R.model.matrixWorld).invert();
+        A.evaluate([L('bat_flip', Math.min(fi * 0.025, dur('bat_flip')))]); A.model.updateMatrixWorld(true);
+        inv.copy(A.model.matrixWorld).invert();
         R.flipPath.push(new T.Matrix4().multiplyMatrices(inv, B.bat.matrixWorld));
       }
     }
-    evaluate([L('stance', 0)]);
+    R.gaits = {};
+    ['run', 'trot'].forEach(function (c) { if (has(c)) R.gaits[c] = gaitOf(c); });
+    A.evaluate([L('stance', 0)]);
   }
-
+  // a run cycle played in place: how far the planted foot slides back per cycle (the ground it covers), so the legs
+  // can be played at the rate that keeps the feet from skating
+  function gaitOf(c) {
+    var feet = ['foot.L', 'foot.R'].map(function (n) { return A.bones[n]; }).filter(Boolean), d = dur(c), n = 48, out = { stride: 0, speeds: [] };
+    if (feet.length < 2) return out;
+    var tr = feet.map(function () { return []; });
+    for (var i = 0; i <= n; i++) {
+      A.evaluate([L(c, d * i / n)]); A.model.updateMatrixWorld(true);
+      feet.forEach(function (f, k) { tr[k].push(modelPoint(f, new T.Vector3())); });
+    }
+    var back = [];
+    tr.forEach(function (p) {
+      var lo = Math.min.apply(null, p.map(function (q) { return q.y; }));
+      for (var i = 0; i < n; i++) if (p[i].y < lo + 0.12 && p[i + 1].y < lo + 0.12) back.push(-(p[i + 1].z - p[i].z) / (d / n));   // ft per clip-second, toward -Z (behind him)
+    });
+    back.sort(function (a, b) { return a - b; });
+    var med = back.length ? back[back.length >> 1] : 0;
+    out.treadmill = med;                 // ground speed at 1x playback
+    out.stride = med * d;                // ft of ground per cycle
+    return out;
+  }
   // where to put the root so the contact frame of the middle swing meets a point in the world (yaw = PI/2: model
   // +Z -> world +x, model +X -> world +y, model +Y -> world +z)
   function solvePlacement(target, size) {
@@ -473,77 +202,9 @@ BB.Rocco = (function () {
     var mid = (K.ZONE.zMin + K.ZONE.zMax) / 2;
     return clamp(mid / Math.max(0.5, sw.sweet.y), 0.92, 1.3);
   }
-
-  // ------------------------------------------------------------------ placement in the world
-  function place(x, y, z, yaw, size) {
-    if (!R.root) return;
-    R.root.position.set(x, y, z || 0); R.root.rotation.set(0, 0, yaw || 0);
-    if (size != null && size !== R.size) { R.size = size; R.up.scale.setScalar(size); }
-    R.yaw = yaw || 0;
-    R.root.visible = true;
-    R.root.updateMatrixWorld(true);
-  }
-  function headPoint(out) {
-    out = out || new T.Vector3();
-    var b = R.bones.head; b.updateWorldMatrix(true, false);
-    return out.copy(R.headLocal).applyMatrix4(b.matrixWorld);
-  }
-  function worldOf(name, out) {
-    var b = R.bones[name]; out = out || new T.Vector3();
-    if (!b) return out.copy(R.root.position);
-    b.updateWorldMatrix(true, false);
-    return out.setFromMatrixPosition(b.matrixWorld);
-  }
-
-  // ------------------------------------------------------------------ faces & gaze
-  function blinkAt(t, seed) { var p = (t + seed * 1.7) % 3.7; return p < 0.13 ? Math.sin(p / 0.13 * PI) : 0; }
-  var FACE0 = {};
-  SHAPES.forEach(function (s) { FACE0[s] = 0; });
-  function applyFace(face) {
-    R.face.forEach(function (m) {
-      var d = m.morphTargetDictionary, a = m.morphTargetInfluences;
-      for (var s in face) { var i = d[s]; if (i != null) a[i] = clamp(Math.max(a[i], face[s] || 0), 0, 1); }
-    });
-  }
-  // cartoon blink: squash the eyeballs (rocco_pupils is weighted to eye.L/R) by the blink / squint weights, so the eyes
-  // close even where the lid shapes slide behind the eyeballs
-  function eyeSquash() {
-    var m = R.face[0]; if (!m) return;
-    var d = m.morphTargetDictionary, a = m.morphTargetInfluences;
-    var k = clamp(1 - 0.9 * (d.blink != null ? a[d.blink] : 0) - 0.3 * (d.squint != null ? a[d.squint] : 0), 0.08, 1);
-    if (k > 0.999) return;
-    ['eye.L', 'eye.R'].forEach(function (n) { var b = R.bones[n]; if (b) b.scale.y *= k; });
-  }
-  // turn both eyes toward a world point (limited, so they never roll back into the head)
-  var _want = new T.Vector3(), _pq = new T.Quaternion(), _wq = new T.Quaternion(), _fwd = new T.Vector3();
-  function gaze(target, k) {
-    if (!target || !(k > 0)) return;
-    ['eye.L', 'eye.R'].forEach(function (n) {
-      var b = R.bones[n]; if (!b) return;
-      b.updateWorldMatrix(true, false);
-      // the eye's look direction now: model +Z carried by the head bone (eyes look straight ahead at rest)
-      var head = R.bones.head; head.updateWorldMatrix(true, false);
-      head.getWorldQuaternion(_wq);
-      _fwd.set(0, 0, 1).applyQuaternion(R.headRestInv || (R.headRestInv = headRestInv())).applyQuaternion(_wq);
-      V.setFromMatrixPosition(b.matrixWorld);
-      _want.set(target.x, target.y, target.z).sub(V).normalize();
-      var ang = Math.acos(clamp(_fwd.dot(_want), -1, 1)), lim = 0.42;
-      if (ang < 1e-4) return;
-      Q.setFromUnitVectors(_fwd, _want);
-      if (ang > lim) Q.slerp(Q2.identity(), 1 - lim / ang);
-      Q2.identity().slerp(Q, k);                                   // world-space delta
-      b.parent.getWorldQuaternion(_pq);
-      // local' = P^-1 * delta * P * local
-      Q.copy(_pq).invert().multiply(Q2).multiply(_pq);
-      b.quaternion.premultiply(Q);
-    });
-  }
-  function headRestInv() { // inverse of the head bone's bind-pose world rotation (relative to the model)
-    var q = new T.Quaternion(), sk = null, head = R.bones.head;
-    R.meshes.some(function (m) { if (m.isSkinnedMesh) { sk = m.skeleton; return true; } return false; });
-    if (sk) { var i = sk.bones.indexOf(head); if (i >= 0) { var m = sk.boneInverses[i].clone().invert(); var p = new T.Vector3(), s = new T.Vector3(); m.decompose(p, q, s); } }
-    return q.invert();
-  }
+  function place(x, y, z, yaw, size) { if (!A) return; A.place(x, y, z, yaw, size); R.size = A.size; R.yaw = A.yaw; }
+  function headPoint(out) { return A.headPoint(out); }
+  function worldOf(name, out) { return A.point(name, out); }
 
   // ---- meeting the ball. The swing clips put bat_sweet on the plate's centre line at t = 0.25 s. Per swing we plan:
   //  - the height blend of swing_low/mid/high (from the contact point's height),
@@ -552,16 +213,16 @@ BB.Rocco = (function () {
   //  - a small reach toward the ball (in/out over the plate, a touch up/down): spine and bat move together, so the
   //    hands stay on the handle whatever the bat is parented to; the rest is absorbed along the bat (a cartoon can
   //    meet an inside pitch near the hands).
-  function sweetBone() { return R.bones.bat_sweet || R.bones.bat_tip || R.bones.bat; }
+  function sweetBone() { return A.bones.bat_sweet || A.bones.bat_tip || A.bones.bat; }
   function samplePaths() {
     R.paths = {};
     ['swing_high', 'swing_mid', 'swing_low'].forEach(function (c) {
       if (!has(c)) return;
       var arr = [];
-      for (var i = 0; i <= 60; i++) { evaluate([L(c, i * 0.005)]); R.model.updateMatrixWorld(true); arr.push(modelPoint(sweetBone(), new T.Vector3())); }
+      for (var i = 0; i <= 60; i++) { A.evaluate([L(c, i * 0.005)]); A.model.updateMatrixWorld(true); arr.push(modelPoint(sweetBone(), new T.Vector3())); }
       R.paths[c] = arr;
     });
-    var b = R.bones.bat, sp = R.bones.spine, under = false;
+    var b = A.bones.bat, sp = A.bones.spine, under = false;
     for (var o = b && b.parent; o; o = o.parent) if (o === sp) under = true;
     R.batUnderSpine = under;
   }
@@ -576,7 +237,7 @@ BB.Rocco = (function () {
     var sw = v.swing, ci = o.ci, p = v.pitch;
     var lat = o.latency != null ? o.latency : K.INPUT_LATENCY;
     var tcs = ci ? Math.max(0.025, ci.cT - (v.pitchT - sw.t)) : Math.max(0.03, K.SWING_LAG - lat);
-    var key = [p ? p.id + ':' + p.T : '', sw.t - v.pitchT, tcs, whiff ? 1 : 0, R.root.position.x, R.root.position.y, R.size, o.contactPt ? o.contactPt.x + ',' + o.contactPt.y + ',' + o.contactPt.z : ''].join('|');
+    var key = [p ? p.id + ':' + p.T : '', sw.t - v.pitchT, tcs, whiff ? 1 : 0, A.root.position.x, A.root.position.y, A.size, o.contactPt ? o.contactPt.x + ',' + o.contactPt.y + ',' + o.contactPt.z : ''].join('|');
     if (R.plan && R.plan.key === key) return R.plan;
     var P = { key: key, tcs: tcs, ctC: CONTACT_T, reach: null };
     if (whiff) P.blend = [L(first('whiff', 'swing_mid'), 0)];
@@ -584,8 +245,8 @@ BB.Rocco = (function () {
       var z = o.contactPt ? o.contactPt.z : (p && p.plate ? p.plate.z : 2.5);
       P.blend = swingBlend(z);
       if (o.contactPt && R.paths) {
-        R.root.updateMatrixWorld(true);
-        var mt = R.model.worldToLocal(new T.Vector3(o.contactPt.x, o.contactPt.y, o.contactPt.z)), q = pathAt(P.blend, CONTACT_T, new T.Vector3());
+        A.root.updateMatrixWorld(true);
+        var mt = A.model.worldToLocal(new T.Vector3(o.contactPt.x, o.contactPt.y, o.contactPt.z)), q = pathAt(P.blend, CONTACT_T, new T.Vector3());
         // late: the ball is behind the plate (toward his right, model -X); meet it earlier in the arc
         if (mt.x < q.x - 0.03) for (var t = CONTACT_T - 0.005; t >= 0.12; t -= 0.005) { pathAt(P.blend, t, q); P.ctC = t; if (q.x <= mt.x) break; }
         P.reach = new T.Vector3(0, clamp(mt.y - q.y, -0.25, 0.25), clamp(mt.z - q.z, -0.4, 0.4));
@@ -596,15 +257,15 @@ BB.Rocco = (function () {
     return P;
   }
   // game swing time -> clip time: the clip up to its contact time squeezed into the real swing up to contact
-  function warpP(st, P) { return st < P.tcs ? P.ctC * (st / P.tcs) : P.ctC + (st - P.tcs); }
+  function warpP(st, P) { return AC.warp(st, P.tcs, P.ctC); }
   function reachK(ct, P) { return ct < P.ctC ? smooth((ct - 0.06) / Math.max(0.02, P.ctC - 0.06)) : 1 - smooth((ct - P.ctC) / 0.35); }
   var _m3 = new T.Matrix3(), _m4 = new T.Matrix4(), _m5 = new T.Matrix4();
   function applyReach(v, k) {
     if (!v || !(k > 0)) return;
-    R.model.updateMatrixWorld(true);
-    _m4.copy(R.model.matrixWorld).invert();
+    A.model.updateMatrixWorld(true);
+    _m4.copy(A.model.matrixWorld).invert();
     ['spine', 'bat'].forEach(function (n) {
-      var b = R.bones[n]; if (!b || (n === 'bat' && R.batUnderSpine)) return;
+      var b = A.bones[n]; if (!b || (n === 'bat' && R.batUnderSpine)) return;
       // model-space offset -> the bone's parent space
       _m3.setFromMatrix4(_m5.multiplyMatrices(_m4, b.parent.matrixWorld)).invert();
       V.copy(v).multiplyScalar(k).applyMatrix3(_m3);
@@ -613,37 +274,19 @@ BB.Rocco = (function () {
   }
 
   // ------------------------------------------------------------------ the frame driver
-  // finish(): post effects, snapshot crossfade on discontinuities, matrices
-  var mem = { key: '', time: -1, frozen: null };
-  function finish(spec, time) {
-    evaluate(spec.layers);
-    R.root.updateMatrixWorld(true);
+  // the batter's bone edits on top of the clips: reach for the ball, cap turned backwards when On Fire
+  function post(actor, spec) {
     if (spec.reach) applyReach(spec.reach, spec.reachK);
-    if (spec.gaze) { R.root.updateMatrixWorld(true); gaze(spec.gaze, spec.gazeK == null ? 1 : spec.gazeK); }
-    if (spec.hideBat) R.bat.forEach(function (m) { m.visible = false; }); else R.bat.forEach(function (m) { m.visible = true; });
-    if (spec.capBack && R.bones.cap) R.bones.cap.rotateY(PI);
-    applyFace(spec.face || FACE0);
-    eyeSquash();
-    // crossfade over discontinuities between consecutive frames
-    var dt = time - mem.time, i;
-    if (spec.key !== mem.key && mem.time >= 0 && dt >= 0 && dt < 0.25 && (spec.fade || 0) > 0) {
-      for (i = 0; i < R.allBones.length; i++) { R.fadeFrom[i].p.copy(R.final[i].p); R.fadeFrom[i].q.copy(R.final[i].q); R.fadeFrom[i].s.copy(R.final[i].s); }
-      mem.fadeT0 = time; mem.fadeDur = spec.fade;
-    } else if (spec.key !== mem.key) mem.fadeT0 = null;
-    if (mem.fadeT0 != null) {
-      var k = smooth((time - mem.fadeT0) / mem.fadeDur);
-      if (k >= 1 || time < mem.fadeT0) mem.fadeT0 = null;
-      else for (i = 0; i < R.allBones.length; i++) {
-        var b = R.allBones[i], f = R.fadeFrom[i];
-        b.position.lerpVectors(f.p, b.position, k); b.quaternion.slerpQuaternions(f.q, b.quaternion.clone(), k); b.scale.lerpVectors(f.s, b.scale, k);
-      }
-    }
-    for (i = 0; i < R.allBones.length; i++) { var bb = R.allBones[i]; R.final[i].p.copy(bb.position); R.final[i].q.copy(bb.quaternion); R.final[i].s.copy(bb.scale); }
-    mem.key = spec.key; mem.time = time;
-    R.root.updateMatrixWorld(true);
+    if (spec.capBack && actor.bones.cap) actor.bones.cap.rotateY(PI);
+  }
+  function finish(spec, time) {
+    spec.post = post;
+    if (spec.hideBat) spec.hide = ['bat'];
+    A.commit(spec, time);
     R.last = spec;
   }
   // once main stops advancing pitchT ('between' after a resolved pitch) keep the reaction playing on the clock
+  var mem = { frozen: null };
   function frozenExtra(v, resolved) {
     var t = v.time || 0, f = mem.frozen, sig = (v.pitch ? v.pitch.id + ':' + v.pitch.T : '') + '|' + v.pitchT + '|' + (v.swing ? v.swing.t : '');
     if (!f || f.sig !== sig || !resolved || v.hitstop || t - f.last > 0.1 || t < f.last) { mem.frozen = { sig: sig, t0: t, last: t }; return 0; }
@@ -654,7 +297,7 @@ BB.Rocco = (function () {
   // swing clip selection: blend high / mid / low so the barrel height follows the pitch height
   function swingBlend(z) {
     var S = R.info.swings, cand = [];
-    ['swing_low', 'swing_mid', 'swing_high'].forEach(function (c) { if (S[c]) cand.push({ c: c, h: S[c].sweet.y * R.size }); });
+    ['swing_low', 'swing_mid', 'swing_high'].forEach(function (c) { if (S[c]) cand.push({ c: c, h: S[c].sweet.y * A.size }); });
     cand.sort(function (a, b) { return a.h - b.h; });
     if (cand.length === 1 || z <= cand[0].h) return [L(cand[0].c, 0, 1)];
     for (var i = 1; i < cand.length; i++) {
@@ -664,30 +307,45 @@ BB.Rocco = (function () {
   }
   function atTime(layers, t) { return layers.map(function (l) { return { c: l.c, t: t, w: l.w }; }); }
   function stanceL(t) { return [L('stance', looped('stance', twos(t)))]; }
+  // pre-pitch acting between pitches: o.pre = { kind: 'ritual' | 'glance', t: seconds since it began } (35-scene
+  // decides when; see preActing there). Plays on twos and hands back to the stance before the pitch.
+  function preLayers(o, t, base) {
+    var pr = o.pre; if (!pr || !has(pr.kind)) return base;
+    var d = dur(pr.kind), ct = onTwos(pr.t, t);
+    if (ct >= d) return base;
+    var w = smooth(ct / 0.12) * (1 - smooth((ct - (d - 0.18)) / 0.18));
+    return mixL(base, [L(pr.kind, ct)], w);
+  }
 
   // ---- bat scene. o = { ci: contact info from BB.Render, ball: world point for the gaze, contactPt: world point the
-  // barrel should meet, pitcherHead: world point, latency }
+  // barrel should meet, pitcherHead: world point, latency, pre: pre-pitch acting, umpHead: where the ump stands }
   function poseBat(v, o) {
     o = o || {};
     var t = v.time || 0, p = v.pitch, sw = v.swing, ci = o.ci, load = v.loading != null ? v.loading : 0;
     var resolved = !!(p && v.pitchT != null && (v.pitchT > p.T + 0.12 || (ci && ci.hit)));
     var extra = frozenExtra(v, resolved && !(ci && ci.hit));
     var pt = (p && v.pitchT != null) ? v.pitchT + extra : null;
-    var face = { blink: blinkAt(t, 1), smile: 0.4, brows_angry: 0.25 }, gz = o.pitcherHead || null, gk = 0.8;
+    var face = { blink: A.blinkAt(t, 1), smile: 0.4, brows_angry: 0.25 }, gz = o.pitcherHead || null, gk = 0.8;
     var spec = { key: 'idle', fade: 0.14, layers: null, face: face, capBack: !!v.onFire };
     // power load / coil (held tap)
     var base;
     if (load > 0) {
       var lt = load * 0.35;
       var coil = load >= 1 ? [L(first('coil_hold', 'power_load'), has('coil_hold') ? looped('coil_hold', t) : dur('power_load'))] : [L(first('power_load', 'stance'), lt * dur(first('power_load', 'stance')) / 0.35)];
-      base = load >= 1 ? coil : mixL(stanceL(t), coil, smooth(lt / 0.08));
+      base = load >= 1 ? coil : mixL(preLayers(o, t, stanceL(t)), coil, smooth(lt / 0.08));
       face.brows_angry = 0.3 + 0.7 * smooth(load); face.squint = 0.55 * load; face.cheeks_puff = 0.55 * smooth((load - 0.3) / 0.7); face.smile = 0; face.blink = 0;
       spec.key = 'load';
     } else if (pt != null) {
       var s1 = first('stride', 'stance');
       base = mixL(stanceL(t), [L(s1, s1 === 'stride' ? Math.min(pt, dur('stride')) : looped('stance', twos(t)))], smooth(pt / 0.06));
       spec.key = 'pitch'; spec.fade = 0.06;
-    } else base = stanceL(t);
+    } else {
+      base = preLayers(o, t, stanceL(t));
+      if (o.pre && has(o.pre.kind) && o.pre.t < dur(o.pre.kind)) {
+        gk = 0.8 * (1 - smooth(o.pre.t / 0.2) * (1 - smooth((o.pre.t - dur(o.pre.kind) + 0.35) / 0.3)));   // the clip looks where it likes
+        if (o.pre.kind === 'ritual') { face.smile = 0.7; face.brows_up = 0.25; face.brows_angry = 0; }
+      }
+    }
     if (p && pt != null && o.ball) { gz = o.ball; gk = 1; }
     if (!sw) {
       spec.layers = base;
@@ -696,15 +354,17 @@ BB.Rocco = (function () {
         var take = has('take') ? [L('take', Math.min(tk, dur('take')))] : stanceL(t);
         spec.layers = mixL(base, take, smooth(tk / 0.1));
         face.brows_up = 0.4 * smooth(tk / 0.2); face.smile = 0.2;
+        gk = smooth(1 - (pt - p.T - 0.3) / 0.3) * 0.8;
         if (calledK) {
           var kt = onTwos(pt - p.T - 0.2, t);
           if (kt > 0) {
             var sr = has('strike_react') ? [L('strike_react', Math.min(kt, dur('strike_react')))] : take;
             spec.layers = mixL(spec.layers, sr, smooth(kt / 0.12));
             face.brows_up = 0; face.brows_angry = kt < 0.5 ? 1 : 1 - smooth((kt - 0.5) / 0.3); face.brows_sad = smooth((kt - 0.5) / 0.3) * 0.9; face.frown = smooth(kt / 0.2); face.smile = 0;
+            // the glare: eyes on the umpire while the clip turns him round, then let the slump look down
+            if (o.umpHead) { gz = o.umpHead; gk = 0.9 * smooth((kt - 0.15) / 0.2) * (1 - smooth((kt - 0.9) / 0.3)); }
           }
         }
-        gk = smooth(1 - (pt - p.T - 0.3) / 0.3) * 0.8;
       }
       spec.gaze = gz; spec.gazeK = gk;
       finish(spec, t);
@@ -753,7 +413,7 @@ BB.Rocco = (function () {
     var t = v.time || 0, tc = o.tc, hr = !!o.hr, plateZ = o.plateZ != null ? o.plateZ : 2.5;
     var blend = swingBlend(plateZ), ct = CONTACT_T + tc, sd = dur(blend[0].c);
     var layers = atTime(blend, Math.min(ct, sd));
-    var face = { grin: 1, brows_up: 0.8, mouth_open: hr ? 0.8 : 0.2, blink: blinkAt(t, 1) * 0.6 };
+    var face = { grin: 1, brows_up: 0.8, mouth_open: hr ? 0.8 : 0.2, blink: A.blinkAt(t, 1) * 0.6 };
     if (hr && has('bat_flip')) {
       var ft = onTwos(tc - FLIP_AT, t);
       layers = mixL(layers, [L('bat_flip', Math.min(ft, dur('bat_flip')))], smooth(ft / 0.14));
@@ -762,115 +422,106 @@ BB.Rocco = (function () {
     finish(spec, t);
     return spec;
   }
-  // ---- field scene: running the bases. o = { dist: ft along the path, moving, hr, arrived, arriveT, out, outT, scored }
+  // ---- field scene: running the bases. o = { dist: ft along the path, runT, speed, hr, arrived, arriveT, out, outT,
+  // legs: { walk, walkCycles, runCycles, runW } from BB.Render's paced run }. The legs cover the ground they move
+  // over: the clip's own stride (measured at load) times the cycles BB.Render integrated from the ground speed, each
+  // gait capped at a playback speed past which it would read as a blur (the sprint) or rush the acting (the strut).
+  var CAP = { run: 3.5, trot: 1.6 };
+  function strideOf(gait) { var g = R.gaits && R.gaits[gait]; return g && g.stride > 0.5 ? g.stride : (gait === 'trot' ? 2.3 : 3.6); }
+  function cadenceCap(gait) { return (CAP[gait] || 2) / Math.max(0.1, dur(gait)); }        // leg cycles per second
   function poseRun(v, o) {
-    var t = v.time || 0, layers, face = { brows_angry: 0.5, mouth_open: 0.35, blink: blinkAt(t, 1) * 0.5 };
-    var gait = o.hr ? first('trot', 'run') : first('run', 'trot');
-    // legs follow the ground (feet per cycle) up to a cadence cap; the game runs the bases cartoon-fast, so past
-    // the cap he glides (a jaunty trot must not turn into a blur)
-    var stride = gait === 'trot' ? 6.5 : 10, cap = gait === 'trot' ? 2.6 : 4.0;
-    var rt = o.runT != null && gait === 'trot' ? onTwos(o.runT, t) : o.runT;     // the trot is acting: held on twos
-    var cyc = rt != null && o.speed != null ? rt * Math.min(o.speed / stride, cap) : o.dist / stride;
-    var ph = looped(gait, cyc * dur(gait));
-    layers = [L(gait, ph)];
-    if (o.hr) { face = { grin: 0.9, smile: 1, brows_up: 0.6, blink: blinkAt(t, 1) }; }
+    var t = v.time || 0, layers, face = { brows_angry: 0.5, mouth_open: 0.35, blink: A.blinkAt(t, 1) * 0.5 };
+    if (o.legs && has(o.legs.walk)) {
+      var lg = o.legs, wl = [L(lg.walk, looped(lg.walk, lg.walkCycles * dur(lg.walk)))];
+      layers = lg.walk !== 'run' && has('run') && lg.runW > 0.01 ? mixL(wl, [L('run', looped('run', lg.runCycles * dur('run')))], lg.runW) : wl;
+    } else {
+      var gait = o.hr ? first('trot', 'run') : first('run', 'trot');
+      var stride = strideOf(gait), cap = cadenceCap(gait);
+      var rt = o.runT != null && gait === 'trot' ? onTwos(o.runT, t) : o.runT;     // the strut is acting: held on twos
+      var cyc = rt != null && o.speed != null ? rt * Math.min(o.speed / stride, cap) : o.dist / stride;
+      layers = [L(gait, looped(gait, cyc * dur(gait)))];
+    }
+    if (o.hr) { face = { grin: 0.9, smile: 1, brows_up: 0.6, blink: A.blinkAt(t, 1) }; }
     var key = 'run';
     if (o.arrived && o.arriveT != null) {
       var at = onTwos(o.arriveT, t);
       var end = has('cheer') ? [L('cheer', Math.min(at, dur('cheer')))] : stanceL(t);
       layers = mixL(layers, end, smooth(at / 0.12));
-      face = { grin: 1, mouth_open: 0.7 * (1 - smooth((at - 0.9) / 0.3)), brows_up: 1, blink: at > 1 ? blinkAt(t, 1) : 0 };
+      face = { grin: 1, mouth_open: 0.7 * (1 - smooth((at - 0.9) / 0.3)), brows_up: 1, blink: at > 1 ? A.blinkAt(t, 1) : 0 };
     }
     if (o.out && o.outT != null && o.outT > 0) {
       var ot = onTwos(o.outT, t);
       var slump = has('strike_react') ? [L('strike_react', Math.min(ot, dur('strike_react')))] : stanceL(t);
       layers = mixL(layers, slump, smooth(ot / 0.15));
-      face = { brows_angry: ot < 0.5 ? 1 : 0.2, brows_sad: smooth((ot - 0.5) / 0.3), frown: 1, blink: blinkAt(t, 1) };
+      face = { brows_angry: ot < 0.5 ? 1 : 0.2, brows_sad: smooth((ot - 0.5) / 0.3), frown: 1, blink: A.blinkAt(t, 1) };
     }
     var spec = { key: key, fade: 0.1, layers: layers, face: face, hideBat: true, capBack: !!v.onFire };
     finish(spec, t);
     return spec;
   }
-  // ---- title: idle in the stance with a practice swing every few seconds
+  // ---- title: idle in the stance, a practice swing every few seconds, now and then the plate-tap ritual
   function poseTitle(t) {
-    var cyc = t % 6.5, layers = stanceL(t), face = { smile: 0.6, brows_up: 0.15, blink: blinkAt(t, 1) };
-    if (cyc > 4.5) {
-      var c = first('swing_mid', 'swing_high', 'swing_low'), st = cyc - 4.5;
-      var w = smooth(st / 0.12) * (1 - smooth((st - 1.35) / 0.4));
-      layers = mixL(layers, [L(c, Math.min(st, dur(c)))], w);
+    var cyc = t % 13, layers = stanceL(t), face = { smile: 0.6, brows_up: 0.15, blink: A.blinkAt(t, 1) };
+    var sw = cyc > 4.5 && cyc < 6.5 ? cyc - 4.5 : cyc > 11 ? cyc - 11 : -1;
+    if (sw >= 0) {
+      var c = first('swing_mid', 'swing_high', 'swing_low');
+      var w = smooth(sw / 0.12) * (1 - smooth((sw - 1.35) / 0.4));
+      layers = mixL(layers, [L(c, Math.min(sw, dur(c)))], w);
       face = { brows_angry: 0.8 * w, squint: 0.3 * w, smile: 0.6 * (1 - w), mouth_open: 0.2 * w, blink: 0 };
+    } else if (cyc > 7.6 && has('ritual')) {
+      layers = preLayers({ pre: { kind: 'ritual', t: cyc - 7.6 } }, t, layers);
+      face.smile = 0.75; face.brows_up = 0.3;
     }
     var spec = { key: 'title', fade: 0.15, layers: layers, face: face };
     finish(spec, t);
     return spec;
   }
 
-  // bat positions at other swing times (for the smear): evaluates the pose without touching the frame memory
+  // bat positions at other swing times (for the smear): evaluates the pose without touching the frame memory.
+  // Returns tips / mids (world points) and the bat bone's world matrices (for ghost bats).
   function batTrail(v, o, times) {
-    var tips = [], mids = [], keep = R.last;
+    var tips = [], mids = [], grips = [], mats = [], keep = R.last;
     var sw = v.swing; if (!sw || !keep) return null;
     var whiff = !!(sw.result && !sw.result.contact), P = plan(v, o, whiff), blend = P.blend;
-    var tipB = R.bones.bat_tip || R.bones.bat_sweet, midB = R.bones.bat_sweet || R.bones.bat, grip = R.bones.bat;
+    var tipB = A.bones.bat_tip || A.bones.bat_sweet, midB = A.bones.bat_sweet || A.bones.bat, grip = A.bones.bat;
     times.forEach(function (st) {
       var ct = warpP(Math.max(0, st), P);
-      evaluate(atTime(blend, ct));
-      R.root.updateMatrixWorld(true);
+      A.evaluate(atTime(blend, ct));
+      A.root.updateMatrixWorld(true);
       if (P.reach) applyReach(P.reach, reachK(ct, P));
-      R.root.updateMatrixWorld(true);
+      A.root.updateMatrixWorld(true);
       tips.push(new T.Vector3().setFromMatrixPosition(tipB.matrixWorld));
       var a = new T.Vector3().setFromMatrixPosition(grip.matrixWorld), b = new T.Vector3().setFromMatrixPosition(midB.matrixWorld);
-      mids.push(a.lerp(b, 0.6));
+      grips.push(a.clone()); mids.push(a.lerp(b, 0.6));
+      mats.push(grip.matrixWorld.clone());
     });
-    // put the frame's pose back
-    for (var i = 0; i < R.allBones.length; i++) { var bb = R.allBones[i]; bb.position.copy(R.final[i].p); bb.quaternion.copy(R.final[i].q); bb.scale.copy(R.final[i].s); }
-    R.root.updateMatrixWorld(true);
-    return { tips: tips, mids: mids };
+    A.restoreFinal();                       // put the frame's pose back
+    return { tips: tips, mids: mids, grips: grips, mats: mats };
   }
   // where the flipped bat comes to rest (world, Z-up), for the prop lying in the dirt
-  function batRest(out) {
-    out = out || {};
+  function batRest() {
     if (!has('bat_flip')) return null;
-    if (!R.batRestCache || R.batRestCache.key !== R.root.matrixWorld.elements.join()) {
-      evaluate([L('bat_flip', dur('bat_flip'))]);
-      R.root.updateMatrixWorld(true);
-      var p = worldOf('bat', new T.Vector3()), tip = R.bones.bat_tip ? worldOf('bat_tip', new T.Vector3()) : p.clone().add(new T.Vector3(1, 0, 0));
-      R.batRestCache = { key: R.root.matrixWorld.elements.join(), p: p, dir: tip.sub(p).setZ(0).normalize() };
-      for (var i = 0; i < R.allBones.length; i++) { var bb = R.allBones[i]; bb.position.copy(R.final[i].p); bb.quaternion.copy(R.final[i].q); bb.scale.copy(R.final[i].s); }
-      R.root.updateMatrixWorld(true);
+    if (!R.batRestCache || R.batRestCache.key !== A.root.matrixWorld.elements.join()) {
+      A.evaluate([L('bat_flip', dur('bat_flip'))]);
+      A.root.updateMatrixWorld(true);
+      var p = worldOf('bat', new T.Vector3()), tip = A.bones.bat_tip ? worldOf('bat_tip', new T.Vector3()) : p.clone().add(new T.Vector3(1, 0, 0));
+      R.batRestCache = { key: A.root.matrixWorld.elements.join(), p: p, dir: tip.sub(p).setZ(0).normalize() };
+      A.restoreFinal();
     }
     return R.batRestCache;
   }
   // lay the bat prop on the ground at (x, y) pointing along (dx, dy)
-  var _bq = new T.Quaternion(), _bz = new T.Vector3(), _bx = new T.Vector3(), _by = new T.Vector3(), _bm = new T.Matrix4();
+  var _bq = new T.Quaternion(), _by = new T.Vector3();
   function dropBat(x, y, dx, dy) {
     var m = R.batProp; if (!m) return null;
-    var ax = m.userData.axis, len = m.userData.len;
+    var ax = m.userData.axis;
     _by.set(dx, dy, 0.06).normalize();                       // world direction of the bat axis (handle -> tip)
-    // rotation taking the bat-space axis to _by, with the barrel's roll arbitrary
-    _bq.setFromUnitVectors(ax, _by);
+    _bq.setFromUnitVectors(ax, _by);                          // the barrel's roll is arbitrary
     m.quaternion.copy(_bq);
     m.position.set(x, y, 0.17);
-    m.scale.setScalar(R.size);
+    m.scale.setScalar(A.size);
     m.visible = true;
     return m;
-  }
-
-  // world-space bounds of the posed body (CPU skinning of every 2nd vertex; for framing and QA, not per frame)
-  function posedBox(step) {
-    var box = new T.Box3(), v = new T.Vector3();
-    step = step || 2;
-    R.root.updateMatrixWorld(true);
-    R.meshes.forEach(function (m) {
-      if (!m.visible) return;
-      var P = m.geometry.attributes.position;
-      for (var i = 0; i < P.count; i += step) {
-        v.fromBufferAttribute(P, i);
-        if (m.isSkinnedMesh) m.boneTransform(i, v);
-        v.applyMatrix4(m.matrixWorld);
-        box.expandByPoint(v);
-      }
-    });
-    return box;
   }
   // the flipped bat as a prop: follows bat_flip's flight from where Rocco stood (rootWorld = his root's world matrix
   // at home), then falls into the dirt and lies there
@@ -878,8 +529,7 @@ BB.Rocco = (function () {
   function flipBat(tf, rootWorld) {
     var m = R.batProp; if (!m || !R.flipPath) return null;
     var n = R.flipPath.length - 1, d = dur('bat_flip'), f = clamp(tf / 0.025, 0, n), i = Math.min(n - 1, Math.floor(f)), u = f - i;
-    // model -> world for that placement: rootWorld * up * model
-    _fm.copy(rootWorld).multiply(R.up.matrix).multiply(R.model.matrix);
+    _fm.copy(rootWorld).multiply(A.up.matrix).multiply(A.model.matrix);   // model -> world for that placement
     var a = R.flipPath[i], b = R.flipPath[i + 1];
     var pa = new T.Vector3(), qa = new T.Quaternion(), sa = new T.Vector3(), pb = new T.Vector3(), qb = new T.Quaternion(), sb = new T.Vector3();
     a.decompose(pa, qa, sa); b.decompose(pb, qb, sb);
@@ -895,30 +545,33 @@ BB.Rocco = (function () {
       _rq.setFromUnitVectors(ax, dir);
       _fq.slerp(_rq, smooth(fall));
     }
-    m.position.copy(_fp); m.quaternion.copy(_fq); m.scale.setScalar(R.size);
+    m.position.copy(_fp); m.quaternion.copy(_fq); m.scale.setScalar(A.size);
     m.visible = true;
     return m;
   }
   function info() {
-    var o = { status: R.status, error: R.error, warnings: R.warnings.slice(), clips: R.clips ? Object.keys(R.clips).map(function (c) { return c + ' ' + R.clips[c].duration.toFixed(2) + 's'; }) : [] };
-    if (R.info) {
+    var o = { status: R.status, error: R.error, warnings: R.warnings.slice(), clips: [] };
+    if (A) {
+      var ai = A.info();
+      o.clips = ai.clips;
       o.contact = {}; for (var c in R.info.swings) { var s = R.info.swings[c].sweet; o.contact[c] = [s.x, s.y, s.z].map(function (x) { return +x.toFixed(3); }); }
       var b = R.info.restBox; o.restHeight = +(b.max.y - b.min.y).toFixed(3); o.restMinY = +b.min.y.toFixed(3);
       var sb = R.info.stanceBox; o.stanceBox = { min: sb.min.toArray().map(function (x) { return +x.toFixed(2); }), max: sb.max.toArray().map(function (x) { return +x.toFixed(2); }) };
-      o.triangles = 0; R.meshes.forEach(function (m) { var g = m.geometry; o.triangles += (g.index ? g.index.count : g.attributes.position.count) / 3; });
-      o.materials = Object.keys(R.colors).map(function (n) { return n + ' ' + R.colors[n]; }); o.droppedTracks = R.dropped || 0;
-      o.drawCalls = R.meshes.length + R.meshes.filter(function (m) { return m.userData.outline; }).length;
+      o.triangles = ai.triangles; o.lod1Triangles = ai.lod1Triangles; o.materials = ai.materials; o.droppedTracks = ai.droppedTracks; o.drawCalls = ai.drawCalls; o.bones = ai.bones;
+      o.gaits = {}; for (var g in R.gaits) o.gaits[g] = { stride: +R.gaits[g].stride.toFixed(2), treadmill: +(R.gaits[g].treadmill || 0).toFixed(2) };
+      o.asset = BB.Assets.where('rocco');
     }
     o.loadMs = R.loadMs;
     return o;
   }
 
   API.ready = function () { return R.status === 'ready'; };
-  API.boot = boot; API.loadBuffer = loadBuffer; API.R = R;
+  API.whenReady = whenReady; API.boot = boot; API.loadBuffer = loadBuffer; API.R = R; API.prepareLod = prepareLod; API.releaseLod = releaseLod;
   API.setColors = setColors; API.setHot = setHot; API.place = place; API.point = function (n, out) { return worldOf(n, out); };
   API.poseBat = poseBat; API.poseHome = poseHome; API.poseRun = poseRun; API.poseTitle = poseTitle; API.batTrail = batTrail;
   API.solvePlacement = solvePlacement; API.autoSize = autoSize; API.batRest = batRest; API.dropBat = dropBat; API.info = info;
-  API.root = function () { return R.root; }; API.prop = function () { return R.batProp; };
-  API.headPoint = headPoint; API.flipBat = flipBat; API.has = has; API.dur = dur; API.posedBox = posedBox; API.CONTACT_T = CONTACT_T;
+  API.root = function () { return A && A.root; }; API.prop = function () { return R.batProp; }; API.actor = function () { return A; };
+  API.headPoint = headPoint; API.flipBat = flipBat; API.has = has; API.dur = dur; API.posedBox = function (step) { return A.posedBox(step); };
+  API.strideOf = strideOf; API.cadenceCap = cadenceCap; API.CONTACT_T = CONTACT_T; API.RITUAL_EVERY = RITUAL_EVERY;
   return API;
 })();

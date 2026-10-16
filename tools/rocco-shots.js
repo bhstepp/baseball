@@ -33,18 +33,21 @@ const CLIPS = {
   bat_flip: [0, 0.18, 0.3, 0.45, 0.6, 0.75, 0.9, 1.05, 1.2, 1.3], run: [0, 0.0625, 0.125, 0.1875, 0.25, 0.3125, 0.375, 0.4375],
   trot: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7], cheer: [0, 0.1, 0.2, 0.3, 0.45, 0.6, 0.78, 1.0, 1.2],
   take: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8], strike_react: [0, 0.15, 0.25, 0.36, 0.5, 0.7, 0.9, 1.05, 1.2, 1.4],
+  glance: [0, 0.14, 0.3, 0.45, 0.6, 0.75, 0.9, 1.05, 1.2], ritual: [0, 0.34, 0.6, 0.8, 1.0, 1.3, 1.42, 1.62, 1.9, 2.1, 2.3, 2.5],
 };
-const SHAPES = ['blink', 'smile', 'grin', 'frown', 'mouth_open', 'brows_up', 'brows_angry', 'brows_sad', 'squint', 'cheeks_puff'];
+const SHAPES = ['blink', 'smile', 'grin', 'frown', 'mouth_open', 'brows_up', 'brows_angry', 'brows_sad', 'squint', 'cheeks_puff', 'smirk'];
 
 function sheets() {
   const S = [];
-  const turn = (name, clip, t) => S.push([name, { cols: 6, cellW: 300, cellH: 460, cells: ['front', 'q34', 'left', 'back', 'q34back', 'right'].map((v) => ({ clip, t, view: { name: v, dist: 19, target: [0, 0, 2.5] }, label: v })) }]);
+  // the rest pose has open gloves, so the (rest) bat would pass through the right hand: hide it on rest-pose sheets
+  const NOBAT = ['bat_wood', 'bat_tape'];
+  const turn = (name, clip, t) => S.push([name, { cols: 6, cellW: 300, cellH: 460, hide: clip ? [] : NOBAT, cells: ['front', 'q34', 'left', 'back', 'q34back', 'right'].map((v) => ({ clip, t, view: { name: v, dist: 19, target: [0, 0, 2.5] }, label: v })) }]);
   turn('turnaround', null, 0);
   turn('turnaround-stance', 'stance', 0);
   S.push(['headturn', { cols: 6, cellW: 300, cellH: 300, cells: [['front', 0, 4], ['q34', 35, 6], ['left', 90, 2], ['q34back', 145, 8], ['back', 180, 4], ['low34', 30, -18]].map(([l, az, el]) => ({ label: l, view: { name: 'q34', az, el, dist: 6.2, target: [0, 0, 3.95], fov: 26 } })) }]);
-  S.push(['profile', { cols: 2, cellW: 600, cellH: 900, cells: [['left', 90, 3], ['right', -90, 3]].map(([l, az, el]) => ({ label: l, view: { name: 'q34', az, el, dist: 15.5, target: [0, 0, 2.55], fov: 24 } })) }]);
-  S.push(['big', { cols: 3, cellW: 600, cellH: 900, cells: [['front', 0, 5], ['q34', 35, 8], ['q34back', 150, 10]].map(([l, az, el]) => ({ label: l, view: { name: 'q34', az, el, dist: 15.5, target: [0, 0, 2.55], fov: 24 } })) }]);
-  S.push(['detail', { cols: 4, cellW: 400, cellH: 400, cells: [
+  S.push(['profile', { cols: 2, hide: NOBAT, cellW: 600, cellH: 900, cells: [['left', 90, 3], ['right', -90, 3]].map(([l, az, el]) => ({ label: l, view: { name: 'q34', az, el, dist: 15.5, target: [0, 0, 2.55], fov: 24 } })) }]);
+  S.push(['big', { cols: 3, hide: NOBAT, cellW: 600, cellH: 900, cells: [['front', 0, 5], ['q34', 35, 8], ['q34back', 150, 10]].map(([l, az, el]) => ({ label: l, view: { name: 'q34', az, el, dist: 15.5, target: [0, 0, 2.55], fov: 24 } })) }]);
+  S.push(['detail', { cols: 4, hide: NOBAT, cellW: 400, cellH: 400, cells: [
     { label: 'glove L', view: { name: 'q34', az: 60, el: 10, dist: 3.2, target: [1.62, 0, 1.68], fov: 24 } },
     { label: 'glove R', view: { name: 'q34', az: -60, el: 10, dist: 3.2, target: [-1.62, 0, 1.68], fov: 24 } },
     { label: 'cleat', view: { name: 'q34', az: 50, el: 18, dist: 4.4, target: [0.35, -0.2, 0.25], fov: 24 } },
@@ -60,12 +63,23 @@ function sheets() {
     pv('swing_mid', 0.25, 30, 8), pv('swing_mid', 0.25, 120, 8), pv('swing_mid', 0.42, 30, 8), pv('swing_mid', 1.0, -30, 8),
     pv('run', 0, 90, 5), pv('run', 0.125, 90, 5), pv('trot', 0.2, 40, 5), pv('cheer', 0.45, 20, 5),
   ] }]);
-  S.push(['face', { cols: 6, cellW: 260, cellH: 260, cells: [{ label: 'neutral' }].concat(SHAPES.map((k) => ({ sk: { [k]: 1 }, label: k }))).concat([{ sk: { smile: 0.6, squint: 0.35, brows_angry: 0.3 }, label: 'cocky' }]).map((c) => Object.assign(c, { view: { name: 'front', dist: 5.2, target: HEAD, fov: 24 } })) }]);
+  S.push(['face', { cols: 6, cellW: 260, cellH: 260, cells: [{ label: 'neutral' }].concat(SHAPES.map((k) => ({ sk: { [k]: 1 }, label: k }))).concat([{ sk: { smirk: 0.9, smile: 0.2, squint: 0.35, brows_angry: 0.3 }, label: 'cocky' }]).map((c) => Object.assign(c, { view: { name: 'front', dist: 5.2, target: HEAD, fov: 24 } })) }]);
   S.push(['nocap', { cols: 3, cellW: 400, cellH: 400, hide: ['team_a', 'team_b'], cells: [
     { label: 'front', view: { name: 'front', dist: 4.6, target: [0, 0, 4.3], fov: 24 } },
     { label: 'q34', view: { name: 'q34', az: 35, el: 6, dist: 4.6, target: [0, 0, 4.3], fov: 24 } },
     { label: 'side', view: { name: 'q34', az: 90, el: 4, dist: 4.6, target: [0, 0, 4.3], fov: 24 } }] }]);
   S.push(['face-34', { cols: 6, cellW: 260, cellH: 260, cells: [{ label: 'neutral' }].concat(SHAPES.map((k) => ({ sk: { [k]: 1 }, label: k }))).concat([{ sk: { grin: 1, brows_angry: 1, squint: 0.5 }, label: 'grit' }]).map((c) => Object.assign(c, { view: { name: 'q34', az: 35, el: 6, dist: 5.2, target: HEAD, fov: 24 } })) }]);
+  // gloves: rest, the bat grip (body hidden so the wrap reads), and the hand shapes the clips use
+  const ONLYGLOVES = ['fur', 'fur_light', 'mask', 'nose', 'eye_white', 'pupil', 'mouth', 'tongue', 'uniform', 'team_b', 'belt', 'sock', 'shoe', 'sole', 'lace', 'decal_chest', 'decal_back'];
+  const gv = (label, clip, t, bone, az, el, dist, hide) => ({ clip, t, label, hide, view: { name: 'q34', az, el, dist, targetBone: bone, fov: 26 } });
+  S.push(['gloves', { cols: 4, cellW: 400, cellH: 400, cells: [
+    gv('rest: back', null, 0, 'hand.L', 55, 25, 2.6, NOBAT), gv('rest: palm', null, 0, 'hand.L', 150, -25, 2.6, NOBAT),
+    gv('stance grip', 'stance', 0, 'hand.L', 60, 10, 3.0, ONLYGLOVES), gv('contact grip', 'swing_mid', 0.25, 'hand.L', 60, 10, 3.0, ONLYGLOVES),
+    gv('run: knife hand', 'run', 0.125, 'hand.L', 60, 10, 3.0, []), gv('take: palm-up shrug', 'take', 0.45, 'hand.R', -40, 15, 3.4, []),
+    gv('strike_react: "c\'mon!"', 'strike_react', 0.5, 'hand.R', -60, 10, 3.6, []), gv('cheer: fist pump', 'cheer', 0.46, 'hand.R', -30, 0, 3.4, []),
+  ] }]);
+  // the side the bat-scene camera sees: his right, a touch from the front
+  S.push(['face-r34', { cols: 6, cellW: 260, cellH: 260, cells: [{ label: 'neutral' }].concat(SHAPES.map((k) => ({ sk: { [k]: 1 }, label: k }))).concat([{ sk: { smirk: 0.9, smile: 0.2, squint: 0.35, brows_angry: 0.3 }, label: 'cocky' }]).map((c) => Object.assign(c, { view: { name: 'q34', az: -55, el: 8, dist: 5.2, target: HEAD, fov: 24 } })) }]);
   for (const clip in CLIPS) {
     const ts = CLIPS[clip], cols = ts.length;
     const cells = ts.map((t) => ({ clip, t, label: `${clip} ${t.toFixed(3)}`, view: { name: 'q34', az: 30, el: 8, dist: 20, target: [0, 0, 2.6] } }));
@@ -140,6 +154,8 @@ function sheets() {
       ['whiff->dizzy', 'whiff', D('whiff'), 'dizzy', 0], ['swing_mid->watch', 'swing_mid', D('swing_mid'), 'watch', 0],
       ['watch->bat_flip', 'watch', 0, 'bat_flip', 0], ['take->stance', 'take', D('take'), 'stance', 0],
       ['strike_react->stance', 'strike_react', D('strike_react'), 'stance', 0],
+      ['stance->glance', 'stance', 0, 'glance', 0], ['glance->stance', 'glance', D('glance'), 'stance', 0],
+      ['stance->ritual', 'stance', 0, 'ritual', 0], ['ritual->stance', 'ritual', D('ritual'), 'stance', 0],
     ];
     for (const [name, a, ta, b, tb] of checks) {
       const r = await page.evaluate(([a, ta, b, tb]) => window.viewer.compare(a, ta, b, tb, ['tail', 'ear', 'cap']), [a, ta, b, tb]);

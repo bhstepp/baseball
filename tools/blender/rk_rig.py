@@ -60,8 +60,107 @@ J['hand_end.L'] = tuple(np.array(J['hand.L']) + ARM_DIR * 0.22)
 HAND_T = np.array([0.0, -1.0, 0.0])                 # pinky -> index direction
 HAND_N = np.array([-S2, 0.0, -S2])                  # palm normal (left hand)
 GRIP_C = np.array(J['hand.L']) + ARM_DIR * 0.17 + HAND_N * 0.075   # handle centre inside the fist
-J['fingers.L'] = tuple(np.array(J['hand.L']) + ARM_DIR * 0.20 - HAND_N * 0.02)
-J['thumb.L'] = tuple(np.array(J['hand.L']) + ARM_DIR * 0.07 + HAND_N * 0.06 + HAND_T * 0.07)
+HANDLE_R = 0.048                                    # bat handle radius at the grip
+
+# ---- open cartoon glove (left hand; the right mirrors it). Glove frame: origin = wrist (hand joint),
+# t = HAND_T (pinky -> index), u = ARM_DIR (along the hand), v = -HAND_N (out of the back of the hand).
+GLOVE_T, GLOVE_U, GLOVE_V = HAND_T, ARM_DIR, -HAND_N
+
+
+def glove_pt(t, u, v, s=1):
+    p = np.array(J['hand.L']) + GLOVE_T * t + GLOVE_U * u + GLOVE_V * v
+    return p * np.array([s, 1, 1])
+
+
+# fingers: name, t (across the hand), knuckle u, radius, proximal and distal lengths, rest splay (deg, + toward
+# the index side), rest curl of the proximal / distal joint (deg, toward the palm)
+FINGERS = [('index', 0.089, 0.240, 0.050, 0.100, 0.080, 5.0, 9.0, 12.0),
+           ('middle', 0.0, 0.248, 0.052, 0.110, 0.086, 0.0, 10.0, 13.0),
+           ('pinky', -0.088, 0.232, 0.047, 0.090, 0.070, -6.0, 12.0, 15.0)]
+KNUCKLE_V = 0.012
+THUMB = dict(base=(0.094, 0.055, -0.012), dir=(0.70, 0.60, -0.38), r=0.049, L1=0.100, L2=0.075, curl=10.0)
+
+
+def _finger_chain_tuv(f):
+    name, t, u, r, L1, L2, sp, c1, c2 = f
+    sp, c1, c2 = math.radians(sp), math.radians(c1), math.radians(c2)
+    K = np.array([t, u, KNUCKLE_V])
+    d1 = np.array([math.sin(sp) * math.cos(c1), math.cos(sp) * math.cos(c1), -math.sin(c1)])
+    d2 = np.array([math.sin(sp) * math.cos(c1 + c2), math.cos(sp) * math.cos(c1 + c2), -math.sin(c1 + c2)])
+    M = K + d1 * L1
+    T = M + d2 * L2
+    return K, M, T
+
+
+def _thumb_chain_tuv():
+    B = np.array(THUMB['base'])
+    d1 = np.array(THUMB['dir'], float)
+    d1 /= np.linalg.norm(d1)
+    # distal flexes toward the palm centre
+    side = np.cross(d1, np.array([0, 0, -1.0]))
+    side /= np.linalg.norm(side)
+    a = math.radians(THUMB['curl'])
+    d2 = d1 * math.cos(a) + np.cross(side, d1) * math.sin(a)
+    M = B + d1 * THUMB['L1']
+    T = M + d2 * THUMB['L2']
+    return B, M, T
+
+
+def _tuv_to_model(q):
+    return glove_pt(q[0], q[1], q[2])
+
+
+GLOVE_CHAINS = {}                                   # left-hand chains in model space: name -> [joint, joint, end]
+for f in FINGERS:
+    GLOVE_CHAINS[f[0]] = [_tuv_to_model(q) for q in _finger_chain_tuv(f)]
+GLOVE_CHAINS['thumb'] = [_tuv_to_model(q) for q in _thumb_chain_tuv()]
+J['fingers.L'] = tuple(glove_pt(0.0, 0.212, KNUCKLE_V))          # knuckle row: cups the palm, carries the fingers
+for nm, (a, b, e) in GLOVE_CHAINS.items():
+    J[nm + '.L'] = tuple(a)
+    J[nm + '_2.L'] = tuple(b)
+    J[nm + '_end.L'] = tuple(e)
+
+
+def _circle_hits(K, r1, c, r2):
+    """Intersections of circle (K, r1) and circle (c, r2) in 2D."""
+    d = np.linalg.norm(c - K)
+    a = (r1 * r1 - r2 * r2 + d * d) / (2 * d)
+    h = math.sqrt(max(r1 * r1 - a * a, 0.0))
+    m = K + (c - K) * a / d
+    perp = np.array([-(c - K)[1], (c - K)[0]]) / d
+    return m + perp * h, m - perp * h
+
+
+def _wrap(K, L1, L2, c, rm, rt, cw=True):
+    """Two-segment chain from K wrapping round a circle centred c: middle joint at radius rm, end at rt;
+    clockwise (cw) or counter-clockwise in the (u, v) plane."""
+    ang = lambda P: math.atan2(P[1] - c[1], P[0] - c[0])
+    a0 = ang(K)
+    def pick(cands, a_ref):
+        best, bd = None, 9
+        for P in cands:
+            da = (a_ref - ang(P)) % (2 * math.pi) if cw else (ang(P) - a_ref) % (2 * math.pi)
+            if da < bd:
+                best, bd = P, da
+        return best
+    M = pick(_circle_hits(K, L1, c, rm), a0)
+    T = pick(_circle_hits(M, L2, c, rt), ang(M))
+    return M, T
+
+
+# grip: the bat handle lies across the palm through GRIP_C along HAND_T; fingers wrap its far side, the thumb
+# comes round the near side and over the index fingertip. Left-hand targets in model space (joint, end).
+GRIP_TARGETS = {}
+_c = np.array([0.17, -0.075])                       # handle centre in (u, v)
+for f in FINGERS:
+    name, t, u, r, L1, L2 = f[:6]
+    M, T = _wrap(np.array([u, KNUCKLE_V]), L1, L2, _c, HANDLE_R + r + 0.004, HANDLE_R + r * 0.92, cw=True)
+    GRIP_TARGETS[name] = (glove_pt(t, M[0], M[1]), glove_pt(t, T[0], T[1]))
+_B = np.array(THUMB['base'])
+_tt = 0.104
+_M, _T = _wrap(np.array([_B[1], _B[2]]), THUMB['L1'] * 0.98, THUMB['L2'], _c, HANDLE_R + THUMB['r'] + 0.006,
+               HANDLE_R + THUMB['r'] + 0.004, cw=False)
+GRIP_TARGETS['thumb'] = (glove_pt(_tt, _M[0], _M[1]), glove_pt(_tt + 0.006, _T[0], _T[1]))
 # left leg
 J['thigh.L'] = (0.28, 0.03, 1.60)
 J['shin.L'] = (0.33, -0.02, 1.00)
@@ -140,13 +239,22 @@ for s in ('L', 'R'):
         ('forearm.' + s, 'upper_arm.' + s, 'forearm.' + s, 'hand.' + s, True),
         ('hand.' + s, 'forearm.' + s, 'hand.' + s, 'hand_end.' + s, True),
         ('fingers.' + s, 'hand.' + s, 'fingers.' + s, 'FING', True),
-        ('thumb.' + s, 'hand.' + s, 'thumb.' + s, 'THUMB', True),
+        ('index.' + s, 'fingers.' + s, 'index.' + s, 'index_2.' + s, True),
+        ('index_2.' + s, 'index.' + s, 'index_2.' + s, 'index_end.' + s, True),
+        ('middle.' + s, 'fingers.' + s, 'middle.' + s, 'middle_2.' + s, True),
+        ('middle_2.' + s, 'middle.' + s, 'middle_2.' + s, 'middle_end.' + s, True),
+        ('pinky.' + s, 'fingers.' + s, 'pinky.' + s, 'pinky_2.' + s, True),
+        ('pinky_2.' + s, 'pinky.' + s, 'pinky_2.' + s, 'pinky_end.' + s, True),
+        ('thumb.' + s, 'hand.' + s, 'thumb.' + s, 'thumb_2.' + s, True),
+        ('thumb_2.' + s, 'thumb.' + s, 'thumb_2.' + s, 'thumb_end.' + s, True),
         ('thigh.' + s, 'hips', 'thigh.' + s, 'shin.' + s, True),
         ('shin.' + s, 'thigh.' + s, 'shin.' + s, 'foot.' + s, True),
         ('foot.' + s, 'shin.' + s, 'foot.' + s, 'toe.' + s, True),
         ('toe.' + s, 'foot.' + s, 'toe.' + s, 'toe_end.' + s, True),
     ]
 BONE_NAMES = [b[0] for b in BONES]
+HAND_BONES = ('fingers', 'index', 'index_2', 'middle', 'middle_2', 'pinky', 'pinky_2', 'thumb', 'thumb_2')
+FINGER_CHAINS = [('index', 'index_2'), ('middle', 'middle_2'), ('pinky', 'pinky_2'), ('thumb', 'thumb_2')]
 PARENT = {b[0]: b[1] for b in BONES}
 SIDE = {'L': 1.0, 'R': -1.0}
 
@@ -194,7 +302,11 @@ def build_armature(name='rocco_rig'):
         elif name.startswith('tail'):
             y = (e.tail - e.head).normalized()
             e.align_roll(Vector((1, 0, 0)).cross(y))
-        elif name.startswith(('foot', 'toe', 'thumb')):
+        elif name.split('.')[0] in HAND_BONES:
+            # finger bones: local Z = palm normal, so local X is the curl hinge (+X rotation curls toward the palm)
+            sx = 1.0 if name.endswith('.L') else -1.0
+            e.align_roll(Vector(tuple(HAND_N * np.array([sx, 1, 1]))))
+        elif name.startswith(('foot', 'toe')):
             e.align_roll(Vector((0, 0, 1)))
         else:
             e.align_roll(roll_hint(name))

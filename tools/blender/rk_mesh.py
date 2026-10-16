@@ -28,6 +28,36 @@ def sdf_mesh(f, lo, hi, h, voxel=None, quads=None, tris=None, sym=False, project
     return V, F
 
 
+def refine_region(V, F, region, f=None, cuts=1, smooth_iters=2):
+    """Split the edges whose both ends lie in `region` (bool mask fn of points) once, re-project onto the SDF f and
+    relax the new vertices a little: more edge loops where joints bend (knees), no T-junctions."""
+    V = np.asarray(V, float)
+    bm = bmesh.new()
+    vs = [bm.verts.new(tuple(p)) for p in V]
+    for fc in F:
+        bm.faces.new([vs[i] for i in fc])
+    bm.verts.ensure_lookup_table()
+    bm.verts.index_update()
+    inside = region(V)
+    edges = [e for e in bm.edges if inside[e.verts[0].index] and inside[e.verts[1].index]]
+    n0 = len(bm.verts)
+    bmesh.ops.subdivide_edges(bm, edges=edges, cuts=cuts, use_grid_fill=True)
+    bm.verts.ensure_lookup_table()
+    bm.verts.index_update()
+    V2 = np.array([v.co[:] for v in bm.verts])
+    F2 = [[v.index for v in fc.verts] for fc in bm.faces]
+    bm.free()
+    moved = np.zeros(len(V2), bool)
+    moved[n0:] = True
+    moved |= np.concatenate([inside, np.zeros(len(V2) - n0, bool)])
+    if f is not None:
+        for _ in range(smooth_iters):
+            Vr = relax_tangent(V2, F2, 0.5)
+            V2[moved] = Vr[moved]
+            V2[moved] = SD.project(f, V2[moved], iters=3)
+    return V2, F2
+
+
 def weld(V, F, eps=1e-7):
     """Merge coincident vertices (marching tets can emit duplicates at grid points with ~zero value)."""
     q = np.round(np.asarray(V) / eps).astype(np.int64)
