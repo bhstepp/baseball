@@ -84,10 +84,12 @@ BB.Assets = (function () {
     });
   }
   function provide(name, buf) { if (buf) provided[name] = buf; else delete provided[name]; }
+  // sidecar metadata of an asset (assets/<name>.json, inlined by tools/build.js), e.g. a clip library's markers
+  function meta(name) { var m = typeof window !== 'undefined' && window.BB_ASSET_META; return (m && m[name]) || null; }
   function stats() {
     var p = {}; for (var n in parsed) p[n] = { refs: parsed[n].refs, ms: parsed[n].ms != null ? Math.round(parsed[n].ms) : null };
     var inl = (typeof window !== 'undefined' && window.BB_ASSETS) || {}, fil = (typeof window !== 'undefined' && window.BB_ASSET_FILES) || {};
     return { inline: Object.keys(inl), files: Object.keys(fil), parsed: p };
   }
-  return { has: has, where: where, get: get, prefetch: prefetch, load: load, release: release, parse: parse, provide: provide, stats: stats };
+  return { has: has, where: where, get: get, prefetch: prefetch, load: load, release: release, parse: parse, provide: provide, meta: meta, stats: stats };
 })();

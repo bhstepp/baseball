@@ -1,6 +1,6 @@
 // 36-rocco.js — BB.Rocco: the modelled hero, a batter driver on top of BB.Actors (36-actors.js). Owned by the
 // integration agent. The asset contract is docs/PILOT-ROCCO.md; the asset is 'rocco' in BB.Assets (inlined in the
-// page) plus an optional 'rocco.lod1' file for the field scene.
+// page) plus an optional 'rocco_lod1' file for the field scene.
 // The driver maps game state to clips, shape keys and gaze; BB.Render (35-scene) places him and calls poseBat /
 // poseHome / poseRun / poseTitle once per frame.
 // If the asset is missing, fails to load, breaks the contract, or the page has ?rocco=old, ready() stays false and
@@ -26,11 +26,12 @@ BB.Rocco = (function () {
   var PALETTE = { fur: '#9A97A6', fur_light: '#F2EDE3', mask: '#2E2A38', nose: '#1B1420', eye_white: '#FFFFFF', pupil: '#1B1420', mouth: '#5A1F2A', tongue: '#E0605A',
     uniform: '#FFF6E6', team_a: '#2E5AAC', team_b: '#D9483B', belt: '#3B2F2A', sock: '#FFFFFF', shoe: '#1E1A22', sole: '#4A3F3A', lace: '#FFFFFF', glove: '#FFFFFF',
     bat_wood: '#D9A066', bat_tape: '#2E5AAC', decal_chest: '#2E5AAC', decal_back: '#2E5AAC' };
-  var CLIPS = ['stance', 'stride', 'power_load', 'coil_hold', 'swing_high', 'swing_mid', 'swing_low', 'whiff', 'dizzy', 'watch', 'bat_flip', 'run', 'trot', 'cheer', 'take', 'strike_react'];
+  var CLIPS = ['stance', 'stride', 'power_load', 'coil_hold', 'swing_high', 'swing_mid', 'swing_low', 'whiff', 'dizzy', 'watch', 'bat_flip', 'run', 'trot', 'cheer', 'take', 'strike_react',
+    'glance', 'ritual'];
   var BONES = ['root', 'hips', 'spine', 'chest', 'neck', 'head', 'jaw', 'ear.L', 'ear.R', 'eye.L', 'eye.R', 'brow.L', 'brow.R', 'tail.1', 'tail.2', 'tail.3', 'tail.4', 'tail.5',
     'shoulder.L', 'shoulder.R', 'upper_arm.L', 'upper_arm.R', 'forearm.L', 'forearm.R', 'hand.L', 'hand.R', 'thigh.L', 'thigh.R', 'shin.L', 'shin.R', 'foot.L', 'foot.R',
-    'toe.L', 'toe.R', 'bat', 'bat_sweet', 'bat_tip'];
-  var SHAPES = ['blink', 'smile', 'grin', 'frown', 'mouth_open', 'brows_up', 'brows_angry', 'brows_sad', 'squint', 'cheeks_puff'];
+    'toe.L', 'toe.R', 'bat', 'bat_sweet', 'bat_tip', 'fingers.L', 'fingers.R', 'thumb.L', 'thumb.R'];
+  var SHAPES = ['blink', 'smile', 'grin', 'frown', 'mouth_open', 'brows_up', 'brows_angry', 'brows_sad', 'squint', 'cheeks_puff', 'smirk'];
   AC.define('rocco', {
     palette: PALETTE,
     team: { team_a: 'a', team_b: 'b', bat_tape: 'a', decal_chest: 'a', decal_back: 'a' },     // recoloured from the uniform scheme
@@ -41,6 +42,9 @@ BB.Rocco = (function () {
     emissive: { eye_white: '#3A3A3A' },
     bones: BONES, need: ['root', 'head', 'bat'], clips: CLIPS, needClips: ['stance'], shapes: SHAPES,
     idle: 'stance', eyeSquash: true, inkBase: 7000, strictMaterials: true,
+    // ground speed of the in-place run cycles at 1x where the planted feet stay put, as authored (pass 2 notes; the
+    // f_run sidecar plays this role for the cast). Without it the speed is measured from the feet at load.
+    gaitSpeed: { run: 8.4, trot: 2.4 },
   });
   var CONTACT_T = 0.25;   // contract: the contact frame of every swing clip
   var FLIP_AT = 0.18;     // a homer: the bat flip starts this long after contact (end of the follow-through wrap)
@@ -166,28 +170,35 @@ BB.Rocco = (function () {
       }
     }
     R.gaits = {};
-    ['run', 'trot'].forEach(function (c) { if (has(c)) R.gaits[c] = gaitOf(c); });
+    ['run', 'trot'].forEach(function (c) {
+      if (!has(c)) return;
+      var g = gaitOf(c), authored = A.cfg.gaitSpeed && A.cfg.gaitSpeed[c];
+      g.measured = g.treadmill;
+      if (authored) { g.treadmill = authored; g.stride = authored * dur(c); }
+      R.gaits[c] = g;
+    });
     A.evaluate([L('stance', 0)]);
   }
   // a run cycle played in place: how far the planted foot slides back per cycle (the ground it covers), so the legs
-  // can be played at the rate that keeps the feet from skating
+  // can be played at the rate that keeps the feet from skating. The contact point is the lower of ankle and toe; it
+  // counts as planted within 0.06 ft of its lowest.
   function gaitOf(c) {
-    var feet = ['foot.L', 'foot.R'].map(function (n) { return A.bones[n]; }).filter(Boolean), d = dur(c), n = 48, out = { stride: 0, speeds: [] };
-    if (feet.length < 2) return out;
-    var tr = feet.map(function () { return []; });
-    for (var i = 0; i <= n; i++) {
-      A.evaluate([L(c, d * i / n)]); A.model.updateMatrixWorld(true);
-      feet.forEach(function (f, k) { tr[k].push(modelPoint(f, new T.Vector3())); });
-    }
-    var back = [];
-    tr.forEach(function (p) {
+    var d = dur(c), n = 80, out = { stride: 0, treadmill: 0 }, back = [];
+    ['L', 'R'].forEach(function (side) {
+      var f = A.bones['foot.' + side], to = A.bones['toe.' + side]; if (!f) return;
+      var p = [];
+      for (var i = 0; i <= n; i++) {
+        A.evaluate([L(c, d * i / n)]); A.model.updateMatrixWorld(true);
+        var a = modelPoint(f, new T.Vector3()), b = to ? modelPoint(to, new T.Vector3()) : a;
+        p.push(b.y < a.y ? b : a);
+      }
       var lo = Math.min.apply(null, p.map(function (q) { return q.y; }));
-      for (var i = 0; i < n; i++) if (p[i].y < lo + 0.12 && p[i + 1].y < lo + 0.12) back.push(-(p[i + 1].z - p[i].z) / (d / n));   // ft per clip-second, toward -Z (behind him)
+      for (var j = 0; j < n; j++) if (p[j].y < lo + 0.06 && p[j + 1].y < lo + 0.06) back.push(-(p[j + 1].z - p[j].z) / (d / n));   // ft per clip-second toward -Z
     });
+    if (!back.length) return out;
     back.sort(function (a, b) { return a - b; });
-    var med = back.length ? back[back.length >> 1] : 0;
-    out.treadmill = med;                 // ground speed at 1x playback
-    out.stride = med * d;                // ft of ground per cycle
+    out.treadmill = back[back.length >> 1];        // ground speed at 1x playback
+    out.stride = out.treadmill * d;               // ft of ground per cycle
     return out;
   }
   // where to put the root so the contact frame of the middle swing meets a point in the world (yaw = PI/2: model
@@ -558,7 +569,7 @@ BB.Rocco = (function () {
       var b = R.info.restBox; o.restHeight = +(b.max.y - b.min.y).toFixed(3); o.restMinY = +b.min.y.toFixed(3);
       var sb = R.info.stanceBox; o.stanceBox = { min: sb.min.toArray().map(function (x) { return +x.toFixed(2); }), max: sb.max.toArray().map(function (x) { return +x.toFixed(2); }) };
       o.triangles = ai.triangles; o.lod1Triangles = ai.lod1Triangles; o.materials = ai.materials; o.droppedTracks = ai.droppedTracks; o.drawCalls = ai.drawCalls; o.bones = ai.bones;
-      o.gaits = {}; for (var g in R.gaits) o.gaits[g] = { stride: +R.gaits[g].stride.toFixed(2), treadmill: +(R.gaits[g].treadmill || 0).toFixed(2) };
+      o.gaits = {}; for (var g in R.gaits) o.gaits[g] = { stride: +R.gaits[g].stride.toFixed(2), treadmill: +(R.gaits[g].treadmill || 0).toFixed(2), measured: +(R.gaits[g].measured || 0).toFixed(2) };
       o.asset = BB.Assets.where('rocco');
     }
     o.loadMs = R.loadMs;

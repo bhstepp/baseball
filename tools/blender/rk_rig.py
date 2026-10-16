@@ -148,6 +148,12 @@ def _wrap(K, L1, L2, c, rm, rt, cw=True):
     return M, T
 
 
+# sockets (identity control bones): grip.L/R at the centre of a closed grip (ball / bat handle), mitt at the
+# pocket of a fielding mitt worn on the left hand (the palm faces the ball)
+J['grip.L'] = tuple(GRIP_C)
+MITT_POCKET_TUV = (0.04, 0.22, -0.17)
+J['mitt'] = tuple(glove_pt(*MITT_POCKET_TUV))
+
 # grip: the bat handle lies across the palm through GRIP_C along HAND_T; fingers wrap its far side, the thumb
 # comes round the near side and over the index fingertip. Left-hand targets in model space (joint, end).
 GRIP_TARGETS = {}
@@ -229,6 +235,7 @@ BONES = [
     ('bat_sweet', 'bat', 'bat_sweet', 'ID', False),
     ('bat_tip', 'bat', 'bat_tip', 'ID', False),
 ]
+SOCKETS = ['grip.L', 'grip.R', 'mitt']
 for s in ('L', 'R'):
     BONES += [
         ('eye.' + s, 'head', 'eye.' + s, 'ID', True),
@@ -247,11 +254,13 @@ for s in ('L', 'R'):
         ('pinky_2.' + s, 'pinky.' + s, 'pinky_2.' + s, 'pinky_end.' + s, True),
         ('thumb.' + s, 'hand.' + s, 'thumb.' + s, 'thumb_2.' + s, True),
         ('thumb_2.' + s, 'thumb.' + s, 'thumb_2.' + s, 'thumb_end.' + s, True),
+        ('grip.' + s, 'hand.' + s, 'grip.' + s, 'ID', False),
         ('thigh.' + s, 'hips', 'thigh.' + s, 'shin.' + s, True),
         ('shin.' + s, 'thigh.' + s, 'shin.' + s, 'foot.' + s, True),
         ('foot.' + s, 'shin.' + s, 'foot.' + s, 'toe.' + s, True),
         ('toe.' + s, 'foot.' + s, 'toe.' + s, 'toe_end.' + s, True),
     ]
+BONES.append(('mitt', 'hand.L', 'mitt', 'ID', False))
 BONE_NAMES = [b[0] for b in BONES]
 HAND_BONES = ('fingers', 'index', 'index_2', 'middle', 'middle_2', 'pinky', 'pinky_2', 'thumb', 'thumb_2')
 FINGER_CHAINS = [('index', 'index_2'), ('middle', 'middle_2'), ('pinky', 'pinky_2'), ('thumb', 'thumb_2')]

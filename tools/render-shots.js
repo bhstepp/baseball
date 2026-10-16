@@ -86,9 +86,9 @@ function shipped() {
   try {
     const m = JSON.parse(fs.readFileSync(path.join(P, 'rocco.pack.json'), 'utf8'));
     if (m.source === require('crypto').createHash('sha1').update(fs.readFileSync(raw)).digest('hex') && fs.existsSync(path.join(P, 'rocco.glb')))
-      return { glb: path.join(P, 'rocco.glb'), lod1: fs.existsSync(path.join(P, 'rocco.lod1.glb')) ? path.join(P, 'rocco.lod1.glb') : null };
+      return { glb: path.join(P, 'rocco.glb'), lod1: fs.existsSync(path.join(P, 'rocco_lod1.glb')) ? path.join(P, 'rocco_lod1.glb') : null };
   } catch (e) {}
-  const lod = path.join(ROOT, 'assets', 'rocco.lod1.glb');
+  const lod = path.join(ROOT, 'assets', 'rocco_lod1.glb');
   return { glb: raw, lod1: fs.existsSync(lod) ? lod : null };
 }
 // --glb=<file>  use another hero model (e.g. the integration proxy) instead of the shipped one; --lod1=<file> its LOD1
@@ -124,9 +124,10 @@ const PILOT = [
   ['17-field-hr-trot', 'scene=field&play=hr&f=1&extra=0.9'],
   ['18-title', 'scene=title&time=4.1'],
   ['19-title-swing', 'scene=title&time=4.78'],
+  ['19b-title-ritual', 'scene=title&time=8.6'],
   ['20-fire', 'scene=bat&state=windup&w=0.4&fire=1'],
   ['21-bat-swing-ghosts', 'scene=bat&state=contact&st=0.05&pz=2.5&px=0'],
-  ['22-bat-ritual', 'scene=bat&state=idle&time=3.3&pre=ritual&pret=1.25'],
+  ['22-bat-ritual', 'scene=bat&state=idle&time=3.3&pre=ritual&pret=1.42'],   // the first plate tap
   ['23-bat-glance', 'scene=bat&state=windup&w=0.3&pre=glance&pret=0.5'],
   ['24-field-hr-zip', 'scene=field&play=hr&pt=1.62'],
   ['25-field-hr-home-stretch', 'scene=field&play=hr&f=1&extra=0.35'],
@@ -138,11 +139,13 @@ const FACES = [
   ['f3-load', 'scene=bat&state=loading&l=1&closeup=1'],
   ['f4-track', 'scene=bat&state=assist&f=0.85&closeup=1'],
   ['f5-contact', 'scene=bat&state=contact&st=0.16&pz=2.5&closeup=1'],
-  ['f6-whiff', 'scene=bat&state=whiff&st=0.6&closeup=1'],
-  ['f7-dizzy', 'scene=bat&state=whiff&st=1.7&closeup=1'],
-  ['f8-calledk', 'scene=bat&state=called&dt=1.2&strike=1&stamp=K&kind=bad&closeup=1'],
+  ['f6-whiff', 'scene=bat&state=whiff&st=0.6&closeup=1&cside=-1.2'],          // pass 2: the corkscrew ends facing the camera, on his right
+  ['f7-dizzy', 'scene=bat&state=whiff&st=1.7&closeup=1&cside=-1.45'],
+  ['f8-calledk', 'scene=bat&state=called&dt=1.2&strike=1&stamp=K&kind=bad&closeup=1&cside=-0.7'],   // glaring at the ump, right-front
   ['f9-title', 'scene=title&time=2.0&closeup=1&cside=0.7'],   // from the title camera's side (he stands at yaw -0.7 there)
   ['f10-fire', 'scene=bat&state=windup&w=0.4&fire=1&closeup=1&cside=1.2'],
+  ['f11-glance', 'scene=bat&state=windup&w=0.3&pre=glance&pret=0.5&closeup=1&cside=-1.3'],   // over his right shoulder at the catcher
+  ['f12-ritual', 'scene=bat&state=idle&pre=ritual&pret=0.75&closeup=1&cside=-0.6'],
 ];
 async function pilot(browser, filt) {
   const OUTP = path.join(ROOT, 'qa', 'pilot');

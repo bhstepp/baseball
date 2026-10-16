@@ -11,7 +11,7 @@
 //                           packed into dist/packed/<name>.glb instead (build output; tools/build.js ships it in place
 //                           of the raw file while the raw file is unchanged). --adopt moves the raw file to assets/src/
 //                           first and packs into assets/ (the final layout).
-//   tools/pack-assets.json  optional per-asset options, e.g. { "rocco": { "lod1": 0.3 } } also makes <name>.lod1.glb, a
+//   tools/pack-assets.json  optional per-asset options, e.g. { "rocco": { "lod1": 0.3 } } also makes <name>_lod1.glb, a
 //                           simplified level of detail (same rig and materials, no clips: the actor plays LOD0's clips)
 // gltfpack: a local install (npm i gltfpack@0.24.0 in tools/ or the repo) or `npx -y gltfpack@0.24.0` (needs the npm
 // registry once). Flags: -cc meshopt, -kn/-km/-ke keep names/materials/extras, -kv keep decal uvs (no texture uses
@@ -173,7 +173,7 @@ async function verify(rawBuf, outBuf, o) {
 function jobs() {
   const names = new Set();
   if (fs.existsSync(SRC)) fs.readdirSync(SRC).filter(f => /\.glb$/.test(f)).forEach(f => names.add(f.replace(/\.glb$/, '')));
-  if (fs.existsSync(ASSETS)) fs.readdirSync(ASSETS).filter(f => /\.glb$/.test(f) && !/\.lod\d\.glb$/.test(f)).forEach(f => names.add(f.replace(/\.glb$/, '')));
+  if (fs.existsSync(ASSETS)) fs.readdirSync(ASSETS).filter(f => /\.glb$/.test(f) && !/_lod\d\.glb$/.test(f)).forEach(f => names.add(f.replace(/\.glb$/, '')));
   const cf = path.join(__dirname, 'pack-assets.json'), cfg = fs.existsSync(cf) ? JSON.parse(fs.readFileSync(cf, 'utf8')) : {};
   const out = [];
   [...names].sort().filter(n => !ONLY.length || ONLY.includes(n)).forEach(n => {
@@ -208,11 +208,11 @@ async function packOne(j) {
   // optional level of detail: simplified copy, clips stripped (the actor plays LOD0's)
   if (j.cfg.lod1) {
     const g = readGlb(raw); delete g.json.animations;
-    const lin = target.replace(/\.glb$/, '.lod1.src.tmp.glb'), lout = path.join(j.dir, j.name + '.lod1.glb'), ltmp = lout + '.tmp.glb';
+    const lin = target.replace(/\.glb$/, '_lod1.src.tmp.glb'), lout = path.join(j.dir, j.name + '_lod1.glb'), ltmp = lout + '.tmp.glb';
     fs.writeFileSync(lin, writeGlb(g.json, g.bin));
     try { gltfpack(lin, ltmp, ['-si', String(j.cfg.lod1)].concat(j.cfg.lod1Aggressive ? ['-sa'] : [])); } finally { fs.unlinkSync(lin); }
     const lb = fs.readFileSync(ltmp), lc = flag('--no-verify') ? { ok: true, problems: [], stats: {} } : await verify(raw, lb, { lod: true });
-    if (!lc.ok) { fs.unlinkSync(ltmp); throw new Error(j.name + '.lod1 fails the checks:\n  ' + lc.problems.join('\n  ')); }
+    if (!lc.ok) { fs.unlinkSync(ltmp); throw new Error(j.name + '_lod1 fails the checks:\n  ' + lc.problems.join('\n  ')); }
     fs.renameSync(ltmp, lout);
     res.lod1Out = { output: sha(lb), bytes: lb.length, gzip: zlib.gzipSync(lb, { level: 9 }).length, stats: lc.stats };
   }
@@ -221,7 +221,7 @@ async function packOne(j) {
   const s = res.stats || {};
   console.log(`${j.name}: ${kb(res.rawBytes)} -> ${kb(res.bytes)} (gzip ${kb(res.rawGzip)} -> ${kb(res.gzip)}), ${s.tris} tris, ${s.bones} bones, ${s.clips} clips, ` +
     `max bone err ${s.maxBoneErr} ft, max geometry err ${s.maxGeomErr} ft${s.contact ? ', contact ' + JSON.stringify(s.contact) : ''} -> ${path.relative(ROOT, target)}` +
-    (res.lod1Out ? `\n${j.name}.lod1: ${res.lod1Out.stats.tris} tris (${res.lod1Out.stats.ratio}), ${kb(res.lod1Out.bytes)} (gzip ${kb(res.lod1Out.gzip)})` : ''));
+    (res.lod1Out ? `\n${j.name}_lod1: ${res.lod1Out.stats.tris} tris (${res.lod1Out.stats.ratio}), ${kb(res.lod1Out.bytes)} (gzip ${kb(res.lod1Out.gzip)})` : ''));
   return res;
 }
 

@@ -31,7 +31,7 @@ var GLB = {};
 (function () {
   function arg(k) { var m = new RegExp('[?&]' + k + '=([^&]*)').exec(location.search); return m ? decodeURIComponent(m[1]) : null; }
   var want = [['rocco', arg('glb') || '../assets/rocco.glb']];
-  if (arg('lod1')) want.push(['rocco.lod1', arg('lod1')]);
+  if (arg('lod1')) want.push(['rocco_lod1', arg('lod1')]);
   function go() { (function next(i) {
     if (i >= MODS.length) return boot();
     var s = document.createElement('script'); s.src = '../src/' + MODS[i];

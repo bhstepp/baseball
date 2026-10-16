@@ -18,6 +18,9 @@ const ROOT = path.join(__dirname, '..');
 const ORDER = ['00-const.js', '10-pitch.js', '15-bat.js', '20-content.js', '25-rules.js', '30-assets.js', '31-toon.js', '32-cast.js', '33-park.js', '34-anim.js', '35-scene.js',
   '36-actors.js', '36-rocco.js', '37-ink.js', '38-cards.js', '40-audio.js', '50-save.js', '55-meta.js', '56-ui.js', '60-main.js'];
 const BOOT = ['rocco'];
+// what the game can load: the boot assets, characters (char_<id>) and clip libraries (anim_<lib>), docs/CAST-CONTRACT.md;
+// anything else in assets/ (e.g. a generator's reference body) is not shipped
+const SHIPS = name => BOOT.includes(name) || /^(char|anim)_/.test(name);
 const S = f => fs.readFileSync(path.join(ROOT, 'src', f), 'utf8');
 const have = f => fs.existsSync(path.join(ROOT, 'src', f));
 const sha = b => crypto.createHash('sha1').update(b).digest('hex');
@@ -36,26 +39,31 @@ const isPacked = buf => { try { const len = buf.readUInt32LE(12), json = JSON.pa
 const assets = [];   // { name, file, buf, packed, boot }
 if (fs.existsSync(ASSET_DIR)) fs.readdirSync(ASSET_DIR).filter(f => /\.glb$/.test(f)).sort().forEach(f => {
   const name = f.replace(/\.glb$/, '');
-  if (/\.lod\d$/.test(name)) return;                     // levels of detail follow their model below
+  if (/_lod\d$/.test(name)) return;                      // levels of detail (<name>_lod1) follow their model below
+  if (!SHIPS(name)) { console.log(`build: assets/${f} is not a game asset (not shipped)`); return; }
   let file = path.join(ASSET_DIR, f), buf = fs.readFileSync(file), lods = [];
   const meta = path.join(PACKED, name + '.pack.json');
   if (!isPacked(buf) && fs.existsSync(meta)) {          // exported in place: use the packed copy of this exact file
     const m = JSON.parse(fs.readFileSync(meta, 'utf8')), pf = path.join(PACKED, name + '.glb');
-    if (m.source === sha(buf) && fs.existsSync(pf)) { file = pf; buf = fs.readFileSync(pf); if (m.lod1Out && fs.existsSync(path.join(PACKED, name + '.lod1.glb'))) lods.push(path.join(PACKED, name + '.lod1.glb')); }
+    if (m.source === sha(buf) && fs.existsSync(pf)) { file = pf; buf = fs.readFileSync(pf); if (m.lod1Out && fs.existsSync(path.join(PACKED, name + '_lod1.glb'))) lods.push(path.join(PACKED, name + '_lod1.glb')); }
   }
-  if (!lods.length && path.dirname(file) === ASSET_DIR) fs.readdirSync(ASSET_DIR).filter(g => g.startsWith(name + '.lod') && /\.glb$/.test(g)).forEach(g => lods.push(path.join(ASSET_DIR, g)));
+  if (!lods.length && path.dirname(file) === ASSET_DIR) fs.readdirSync(ASSET_DIR).filter(g => g.startsWith(name + '_lod') && /\.glb$/.test(g)).forEach(g => lods.push(path.join(ASSET_DIR, g)));
   if (!isPacked(buf)) console.warn(`build: assets/${f} is not compressed (${(buf.length / 1024).toFixed(0)} KB): run node tools/pack-assets.js`);
   assets.push({ name, file, buf, boot: BOOT.includes(name) });
   lods.forEach(lf => { const lb = fs.readFileSync(lf); assets.push({ name: path.basename(lf).replace(/\.glb$/, ''), file: lf, buf: lb, boot: false }); });
 });
+// sidecars (assets/<name>.json: clip markers, retargeting data) are small: inlined in the page as window.BB_ASSET_META
+const META = {};
+if (fs.existsSync(ASSET_DIR)) fs.readdirSync(ASSET_DIR).filter(f => /\.json$/.test(f)).forEach(f => { try { META[f.replace(/\.json$/, '')] = JSON.parse(fs.readFileSync(path.join(ASSET_DIR, f), 'utf8')); } catch (e) { console.warn('build: bad JSON in assets/' + f); } });
+const metaTag = Object.keys(META).length ? `<script>\nwindow.BB_ASSET_META = ${JSON.stringify(META)};\n</script>\n` : '';
 const b64 = a => a.buf.toString('base64');
 const inlineOf = list => `<script>\nwindow.BB_ASSETS = {${list.map(a => `\n  ${JSON.stringify(a.name)}: "${b64(a)}"`).join(',')}\n};\n</script>\n`;
 const files = assets.filter(a => !a.boot);
 const FILEMAP = {}; files.forEach(a => { FILEMAP[a.name] = { url: 'assets/' + a.name + '.glb?v=' + sha(a.buf).slice(0, 10), bytes: a.buf.length }; });
 const fileList = `<script>\nwindow.BB_ASSET_FILES = ${JSON.stringify(FILEMAP)};\n</script>\n`;
 // the site: boot assets inline, the rest as files; the standalone test page: everything inline
-const siteAssets = inlineOf(assets.filter(a => a.boot)) + fileList;
-const testAssets = inlineOf(assets);
+const siteAssets = inlineOf(assets.filter(a => a.boot)) + fileList + metaTag;
+const testAssets = inlineOf(assets) + metaTag;
 
 function page(assetTags) {
   const script = `${VENDOR}${assetTags}<script>\n"use strict";\n${js}\n</script>\n`;

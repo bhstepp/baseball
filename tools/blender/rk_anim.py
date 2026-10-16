@@ -272,14 +272,15 @@ class Solver:
             nm = 'tail.%d' % i
             sc = c.get('_tail%d.s' % i, 1.0)
             fk(nm, M4(euler(c['_tail%d.rx' % i], c['_tail%d.ry' % i], c['_tail%d.rz' % i]), s=(sc, sc, sc)))
-        # bat
+        # bat (a rig without bat bones - the cast skeleton - still solves the hands' grip frame on the virtual bat)
         d = np.array([g('bat.dx'), g('bat.dy'), g('bat.dz')])
         pal = np.array([g('bat.px'), g('bat.py'), g('bat.pz')])
         Rb = frame3(d, pal) @ self.bat_frame_local.T
-        vis = max(g('bat.vis'), 1e-4)
-        set_world('bat', M4(Rb @ rest['bat'][:3, :3], vec('bat'), (vis, vis, vis * max(g('bat.len'), 1e-3))))
-        fk('bat_sweet', np.eye(4))
-        fk('bat_tip', np.eye(4))
+        if 'bat' in self.parent:
+            vis = max(g('bat.vis'), 1e-4)
+            set_world('bat', M4(Rb @ rest['bat'][:3, :3], vec('bat'), (vis, vis, vis * max(g('bat.len'), 1e-3))))
+            fk('bat_sweet', np.eye(4))
+            fk('bat_tip', np.eye(4))
         Wbat = M4(Rb, vec('bat'))
         # arms
         for sd in ('L', 'R'):
@@ -336,6 +337,9 @@ class Solver:
             for a, b in RR.FINGER_CHAINS:
                 fk(a + '.' + sd, M4(shp[a + '.' + sd]))
                 fk(b + '.' + sd, M4(shp[b + '.' + sd]))
+            fk('grip.' + sd, np.eye(4))
+        if 'mitt' in self.parent:
+            fk('mitt', np.eye(4))
         # legs
         for sd in ('L', 'R'):
             Rf = euler(0, 0, g('foot%s.rz' % sd)) @ euler(g('foot%s.rx' % sd), g('foot%s.ry' % sd), 0)

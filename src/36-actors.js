@@ -9,7 +9,7 @@
 //     evaluated on demand, so a frame shows exactly what the state says (harness == game); a short snapshot
 //     crossfade covers discontinuities
 //   - face helpers (shape keys, blinks, cartoon eye squash), gaze, world anchors, posed bounds
-//   - levels of detail: LOD1 meshes (same rig and materials, from '<asset>.lod1') bound to the LOD0 skeleton,
+//   - levels of detail: LOD1 meshes (same rig and materials, from '<asset>_lod1', docs/CAST-CONTRACT.md) bound to the LOD0 skeleton,
 //     picked by on-screen size
 // Role drivers (BB.Rocco's batter driver in 36-rocco.js; pitcher/catcher/umpire/fielder in phase B) sit on top.
 // Assets come from BB.Assets (30-assets.js). Kinds are described with define(kind, cfg) (see the end of this file).
@@ -203,7 +203,8 @@ BB.Actors = (function () {
     (cfg.need || ['root']).forEach(function (b) { if (!bones[b]) throw new Error(self.asset + ' has no "' + b + '" bone'); });
     this.model = model; this.bones = bones; this.byName = byName;
     this.colors = {}; this.mats = {}; this.over = {}; this.hidden = {}; this.lodLevel = 0; this.lods = { 0: [] }; this.face = [];
-    this.decalTex = {}; this.decalFlip = {};
+    this.decalTex = {}; this.decalFlip = {}; this.decalText = opts.decalText || {};
+    this.extras = Object.assign({}, tpl.userData || {});   // glTF scene extras: { id, species, role, height, hipHeight, lod, hand }
     var meshes = this.adoptMeshes(model, 0);
     if (!meshes.length) throw new Error(this.asset + ' has no meshes');
     this.base = Object.assign({}, this.colors);
@@ -307,10 +308,10 @@ BB.Actors = (function () {
   };
   // decal lettering: the same canvas lettering as BB.Cast's uniforms, a private copy flipped to read from outside
   A.decalMap = function (name) {
-    var dc = this.cfg.decals[name], fill = this.colors[name] || '#2E5AAC';
-    var base = BB.Cast && BB.Cast.decalTex ? BB.Cast.decalTex(dc.text || '?', fill, TN.INK) : null;
+    var dc = this.cfg.decals[name], fill = this.colors[name] || '#2E5AAC', text = this.decalText[name] || dc.text || '?';
+    var base = BB.Cast && BB.Cast.decalTex ? BB.Cast.decalTex(text, fill, TN.INK) : null;
     if (!base) return null;
-    var key = name + fill;
+    var key = name + fill + text;
     if (this.decalTex[key]) return this.decalTex[key];
     var t = base.clone(), f = this.decalFlip[name];
     t.wrapS = t.wrapT = T.ClampToEdgeWrapping;
@@ -467,6 +468,37 @@ BB.Actors = (function () {
     return q.invert();
   };
 
+  // ------------------------------------------------------------------ shared clip libraries (phase B)
+  // addClips(lib, {scale, only}): the clips of an animation library file (anim_<lib>.glb: the reference skeleton and
+  // its clips, docs/CAST-CONTRACT.md) for this character. Clips animate rotations on every bone and translation only
+  // on root and hips; those translations are retargeted by scale = hipHeight / refHipHeight. Channels for bones this
+  // character lacks (tail, ears...) are dropped. Returns the clip names added.
+  A.addClips = function (lib, o) {
+    o = o || {};
+    var self = this, k = o.scale != null ? o.scale : 1, names = {}, added = [];
+    this.model.traverse(function (n) { names[n.name] = true; });
+    (lib.animations || []).forEach(function (src) {
+      if (o.only && o.only.indexOf(src.name) < 0) return;
+      var tracks = [];
+      src.tracks.forEach(function (tr) {
+        var pp = T.PropertyBinding.parseTrackName(tr.name);
+        if (!names[pp.nodeName]) return;
+        if (pp.propertyName === 'position' && k !== 1) {
+          var node = self.byName[pp.nodeName], bn = node ? nameOf(node) : pp.nodeName;
+          if (bn === 'root' || bn === 'hips') { tr = tr.clone(); for (var i = 0; i < tr.values.length; i++) tr.values[i] *= k; }
+        }
+        tracks.push(tr);
+      });
+      var clip = new T.AnimationClip(src.name, src.duration, tracks); clip.userData = { checked: true, lib: lib.userData && lib.userData.asset };
+      if (self.actions[clip.name]) { self.actions[clip.name].stop(); self.mixer.uncacheAction(self.clips[clip.name]); }
+      self.clips[clip.name] = clip;
+      var a = self.mixer.clipAction(clip); a.setLoop(T.LoopRepeat, Infinity); a.play(); a.setEffectiveWeight(0);
+      self.actions[clip.name] = a; added.push(clip.name);
+    });
+    this.save();
+    return added;
+  };
+
   // ------------------------------------------------------------------ parts, levels of detail
   A.ofKind = function (kind) { return this.meshes.filter(function (m) { return m.userData.kind === kind; }); };
   A.hideKinds = function (list) {
@@ -538,6 +570,8 @@ BB.Actors = (function () {
   };
 
   // ------------------------------------------------------------------ placement & anchors
+  // left-handers are the right-handed model mirrored (docs/CAST-CONTRACT.md); three.js flips the winding itself
+  A.setMirror = function (on) { this.root.scale.x = on ? -1 : 1; this.mirrored = !!on; };
   A.place = function (x, y, z, yaw, size) {
     this.root.position.set(x, y, z || 0); this.root.rotation.set(0, 0, yaw || 0);
     if (size != null && size !== this.size) { this.size = size; this.up.scale.setScalar(size); }
@@ -664,9 +698,9 @@ BB.Actors = (function () {
       catch (e) { BB.Assets.release(asset); throw e; }
     });
   }
-  // add a level of detail from '<asset>.lod<level>' if the build has one
+  // add a level of detail from '<asset>_lod<level>' (docs/CAST-CONTRACT.md: char_<id>_lod1) if the build has one
   function loadLod(actor, level) {
-    var name = actor.asset + '.lod' + level;
+    var name = actor.asset + '_lod' + level;
     if (!BB.Assets.has(name)) return Promise.resolve(false);
     if (actor.lods[level] && actor.lods[level].length) return Promise.resolve(true);
     actor.lodPending = actor.lodPending || {};
@@ -680,6 +714,21 @@ BB.Actors = (function () {
       return ok;
     }, function (e) { delete actor.lodPending[level]; throw e; }));
   }
+  // the phase B cast (docs/CAST-CONTRACT.md): one description for every character file; per character: colours from
+  // the model (fur, markings), team colours and decal text (team letter, card number) per instance
+  define('cast', {
+    team: { team_a: 'a', team_b: 'b', cap: 'a', cap_brim: 'b', decal_chest: 'a', decal_back: 'a' },
+    hull: { pupil: 0, tongue: 0, teeth: 0.5, mouth: 0.4, nose: 0.6, eye_white: 0.55, lace: 0.45, mitt_lace: 0.45, sole: 0.9, decal_chest: 0, decal_back: 0 },
+    ink: { pupil: 0.55, eye_white: 0.7, nose: 0.8, mouth: 0.7, tongue: 0.6, teeth: 0.6, lace: 0.6, mitt_lace: 0.6 },
+    decals: { decal_chest: { text: '?', side: 'front' }, decal_back: { text: '?', side: 'back' } },
+    props: { mitt: 'mitt', mitt_lace: 'mitt' },
+    emissive: { eye_white: '#3A3A3A' },
+    bones: ['root', 'hips', 'spine', 'chest', 'neck', 'head', 'eye.L', 'eye.R', 'shoulder.L', 'shoulder.R', 'upper_arm.L', 'upper_arm.R', 'forearm.L', 'forearm.R',
+      'hand.L', 'hand.R', 'fingers.L', 'fingers.R', 'thigh.L', 'thigh.R', 'shin.L', 'shin.R', 'foot.L', 'foot.R', 'toe.L', 'toe.R'],
+    need: ['root', 'head'],
+    shapes: ['blink', 'smile', 'grin', 'frown', 'mouth_open', 'brows_up', 'brows_angry', 'brows_sad', 'squint', 'cheeks_puff', 'smirk'],
+    eyeSquash: true, trustModelColors: true,
+  });
   return { available: true, define: define, create: create, loadLod: loadLod, kinds: KINDS, Actor: Actor,
     L: L, mixL: mixL, twos: twos, onTwos: onTwos, warp: warp, HULL: HULL, restPositions: restPositions };
 })();
