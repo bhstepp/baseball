@@ -6,7 +6,7 @@
 // usage: node tools/build.js
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
 const ROOT = path.join(__dirname, '..');
-const ORDER = ['00-const.js', '10-pitch.js', '15-bat.js', '20-content.js', '25-rules.js', '30-riso.js', '35-scene.js',
+const ORDER = ['00-const.js', '10-pitch.js', '15-bat.js', '20-content.js', '25-rules.js', '31-toon.js', '32-cast.js', '33-park.js', '34-anim.js', '35-scene.js',
   '38-cards.js', '40-audio.js', '50-save.js', '55-meta.js', '56-ui.js', '60-main.js'];
 const S = f => fs.readFileSync(path.join(ROOT, 'src', f), 'utf8');
 const have = f => fs.existsSync(path.join(ROOT, 'src', f));
@@ -14,9 +14,11 @@ const have = f => fs.existsSync(path.join(ROOT, 'src', f));
 const missing = ORDER.filter(f => !have(f));
 if (missing.length) console.warn('build: skipping missing modules: ' + missing.join(', '));
 const js = ORDER.filter(have).map(f => `// ===================== MODULE: ${f} =====================\n` + S(f)).join('\n');
-const head = have('shell.head.html') ? S('shell.head.html') : '<style>html,body{margin:0;background:#F4EEE1}</style>';
+const head = have('shell.head.html') ? S('shell.head.html') : '<style>html,body{margin:0;background:#FFF4DC}</style>';
 const body = have('shell.body.html') ? S('shell.body.html') : '<canvas id="game"></canvas><div id="ui"></div>';
-const script = `<script>\n"use strict";\n${js}\n</script>\n`;
+// Vendored libraries go in their own script tag, ahead of the game bundle (three.js r149, MIT: src/vendor/three.LICENSE).
+const VENDOR = ['vendor/three.min.js'].filter(have).map(f => `<script>\n${S(f)}\n</script>\n`).join('');
+const script = `${VENDOR}<script>\n"use strict";\n${js}\n</script>\n`;
 
 const full = `<!doctype html>
 <html lang="en">
@@ -26,9 +28,9 @@ const full = `<!doctype html>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Hardball">
-<meta name="theme-color" content="#F4EEE1">
-<title>Halftone Hardball</title>
+<meta name="apple-mobile-web-app-title" content="Slugger">
+<meta name="theme-color" content="#FFF4DC">
+<title>Screwball Slugger</title>
 ${head}
 </head>
 <body>

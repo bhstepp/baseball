@@ -261,10 +261,10 @@ All synthesized with Web Audio; no files. Must never throw if audio is unavailab
 - `unlock()` (call from the first user gesture), `setMuted(bool)`, `isMuted()`, `setMusic(bool)`.
 - `sfx(name, opts)`: `crack` (`{quality 0..1, sweet}`), `foul`, `whiff`, `mitt` (`{mph}`), `whoosh` (`{mph}`),
   `strike`, `ball`, `out`, `wall`, `stamp`, `tap`, `coin`, `packRip`, `cardFlip`, `rare`, `unlock`, `levelUp`,
-  `error`, `toast`.
+  `error`, `toast`, and the cartoon set `boing` (`{f}`), `slide` (`{dir:'up'|'down', dur}`), `bonk`, `zip` (`{mph}`), `xylo`, `honk` (`{n}`), `pop`, `twinkle` (`{dur}`), `kablam`, `splat`. Every sfx accepts `{when}` (delay in seconds).
 - `crowd(level 0..1)` continuous crowd bed (call every frame or on change; smooth internally);
   `cheer(size 0..1)`, `groan()`, `organ(name)` with names `charge`, `homer`, `walkup`, `win`, `lose`, `rally`,
-  `menu` (a short looping ballpark-organ menu tune; `organ('stop')` stops it).
+  `sneak` (full-count tiptoe cue), `iris` (scene-end sting), `menu` (a short looping ballpark-organ menu tune; `organ('stop')` stops it).
 - `BB.Haptics.tap()`, `.thud()`, `.buzz()` (navigator.vibrate where available; no-ops otherwise).
 
 ### `BB.Save`, `BB.Meta`, `BB.UI` (50/55/56 + shell — meta agent)

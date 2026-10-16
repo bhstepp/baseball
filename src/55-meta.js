@@ -1,4 +1,4 @@
-// 55-meta.js — the retention layer: bats, ink sets, the 72-card album, packs, coins/XP/levels, the Scorebook
+// 55-meta.js — the retention layer: bats, uniforms (BB.INKSETS colour schemes), the 72-card album, packs, coins/XP/levels, the Scorebook
 // (achievements + lifetime stats), Barnstorm Tour progress, Daily Derby streaks and the Endless Derby best.
 // Owned by the meta agent. Persists through BB.Save. Pure logic: no DOM here (BB.UI draws all of it).
 (function () {
@@ -35,19 +35,19 @@
       desc: 'Borrowed from the coach. Sky-high pop-ups and the odd miracle.', look: { wood: 'light', tape: 'a', mark: 'thin' } },
     { id: 'b_corked', name: 'Corked', timing: 1.05, power: 1.1, lift: 3, unlock: { kind: 'coins', n: 1200 },
       desc: 'Perfectly regulation. Please do not look inside. Or shake it.', look: { wood: 'mid', tape: 'b', mark: 'cork' } },
-    { id: 'b_riso', name: 'Riso Roller', timing: 1.15, power: 1.04, lift: 3, unlock: { kind: 'set', team: 1 },
-      desc: 'Inked on three drums. Leaves a mark on every ball.', look: { wood: 'ink', tape: 'c', mark: 'dots' } },
+    { id: 'b_riso', name: 'Rubber Hose', timing: 1.15, power: 1.04, lift: 3, unlock: { kind: 'set', team: 1 },
+      desc: 'Bends like a noodle, snaps like a whip. Boing.', look: { wood: 'ink', tape: 'c', mark: 'dots' } },
     { id: 'b_barber', name: 'Barber Pole', timing: 1.08, power: 1.06, lift: 1, unlock: { kind: 'set', team: 3 },
       desc: 'Candy-striped and smooth. A little of everything.', look: { wood: 'light', tape: 'b', mark: 'stripes' } },
     { id: 'b_smudge', name: 'The Smudge', timing: 1.0, power: 1.09, lift: 5, unlock: { kind: 'ach', id: 'misprint' },
-      desc: 'Came off the press crooked. Hits crooked, too — crooked far.', look: { wood: 'ink', tape: 'b', mark: 'smudge' } },
+      desc: 'Fell in the paint bucket. Hits crooked, too — crooked far.', look: { wood: 'ink', tape: 'b', mark: 'smudge' } },
     { id: 'b_golden', name: 'Golden Ash', timing: 1.12, power: 1.08, lift: 2, unlock: { kind: 'set', team: 5 },
       desc: 'Wider sweet spot, real pop. The collector\'s bat.', look: { wood: 'gold', tape: 'a', mark: 'star' } },
   ];
   var BAT_BY = {}; BATS.forEach(function (b) { BAT_BY[b.id] = b; });
 
-  // ======================================================================= INK SETS
-  // 'park' = no fixed press: every park prints in its own inks.
+  // ======================================================================= UNIFORMS (BB.INKSETS colour schemes)
+  // 'park' = no fixed uniform: every park dresses you in its own colours.
   var INK_RULES = {
     park: { kind: 'free' },
     classic: { kind: 'free' },
@@ -58,13 +58,13 @@
     ledger: { kind: 'set', team: 4 },
   };
   var INK_DESC = {
-    park: 'Each ballpark prints in its own house inks.',
-    classic: 'Blue, fluorescent pink, yellow. The original run.',
-    dusk: 'Federal blue and orange for the night game.',
-    lawn: 'Green grass, pink seats, summer.',
-    grape: 'Purple and orange. Tastes like a doubleheader.',
-    harbor: 'Teal and red, salt in the air.',
-    ledger: 'Black and red. Strictly box score.',
+    park: 'Every ballpark dresses you in its own home colours.',
+    classic: 'Blue, bubble-gum pink and mustard. Opening-day sharp.',
+    dusk: 'Navy and orange for the twilight doubleheader.',
+    lawn: 'Grass green with pink piping. Smells like summer.',
+    grape: 'Purple and orange. Tastes like a soda fountain.',
+    harbor: 'Teal and brick red, salt in the air.',
+    ledger: 'Ink black and red. Strictly business.',
   };
   function inkRule(id) { return INK_RULES[id] || { kind: 'level', n: 10 }; }
 
@@ -111,14 +111,38 @@
     'Hit one so far it got its own zip code.', 'Drinks coffee out of his glove.',
     'Throws a pitch the scouts call "the rumor".', 'Ran through a wall. The wall apologized.',
     'Grew up shagging flies in a cornfield.', 'Thinks the infield fly rule is a conspiracy.',
-    'Rounds third like he\'s late for supper.', 'Collects ink smudges from old programs.',
+    'Rounds third like he\'s late for supper.', 'Collects autographed peanut shells.',
     'Got his nickname from a misunderstanding.', 'Hums the organ tune between pitches.',
     'Once caught a fly ball in his cap.', 'Never met a fastball he didn\'t like.', 'Bunts for fun. Nobody knows why.',
     'His glove is older than the ballpark.', 'Taught the bat boy everything he knows.', 'Tips his cap to pigeons.',
-    'Has a 12-step plan to steal home.', 'Breakfast: pancakes and pine tar.', 'Printed slightly off-center since birth.',
+    'Has a 12-step plan to steal home.', 'Breakfast: pancakes and pine tar.', 'Drawn slightly off-model since birth.',
     'Hit for the cycle. On a unicycle.', 'Spits in his glove for luck, then apologizes to it.',
     'Can hear a slider coming.', 'Measures home runs in hot-dog lengths.', 'Wears the same cap since Little League.',
   ];
+  // Each team is one theme of cartoon animals (park order: farm, city critters, woodland, sea, desert, fancy birds).
+  // Species ids match BB.CardArt.SPECIES.
+  var TEAM_SPECIES = [
+    ['goat', 'hen', 'rooster', 'sheep', 'cow', 'horse', 'dog', 'ox'],
+    ['pigeon', 'rat', 'cat', 'bulldog', 'mouse', 'possum', 'crow'],
+    ['moose', 'loon', 'beaver', 'bear', 'fox', 'deer', 'squirrel', 'skunk'],
+    ['gull', 'seal', 'walrus', 'pelican', 'puffin', 'otter'],
+    ['armadillo', 'tortoise', 'lizard', 'fennec', 'bighorn', 'vulture', 'badger'],
+    ['owl', 'peacock', 'flamingo', 'swan', 'parrot', 'heron', 'goose'],
+  ];
+  var SPECIES_NAME = { goat: 'Goat', hen: 'Hen', rooster: 'Rooster', sheep: 'Sheep', cow: 'Cow', horse: 'Horse', dog: 'Hound', ox: 'Ox',
+    pigeon: 'Pigeon', rat: 'Rat', cat: 'Alley Cat', bulldog: 'Bulldog', mouse: 'Mouse', possum: 'Possum', crow: 'Crow',
+    moose: 'Moose', loon: 'Loon', beaver: 'Beaver', bear: 'Bear', fox: 'Fox', deer: 'Deer', squirrel: 'Squirrel', skunk: 'Skunk',
+    gull: 'Gull', seal: 'Seal', walrus: 'Walrus', pelican: 'Pelican', puffin: 'Puffin', otter: 'Otter',
+    armadillo: 'Armadillo', tortoise: 'Tortoise', lizard: 'Gila Lizard', fennec: 'Fennec Fox', bighorn: 'Bighorn', vulture: 'Vulture', badger: 'Badger',
+    owl: 'Owl', peacock: 'Peacock', flamingo: 'Flamingo', swan: 'Swan', parrot: 'Parrot', heron: 'Heron', goose: 'Goose' };
+  function teamSpecies(t) {
+    // every species of the theme appears at least once, then seeded picks; own rng so names/numbers never shift
+    var list = TEAM_SPECIES[t % TEAM_SPECIES.length].slice(), rng = U.rng(U.hashStr('toon-species-' + t)), out = [];
+    for (var i = list.length - 1; i > 0; i--) { var j = Math.floor(rng() * (i + 1)); var tmp = list[i]; list[i] = list[j]; list[j] = tmp; }
+    for (var k = 0; k < 12; k++) out.push(k < list.length ? list[k] : list[Math.floor(rng() * list.length)]);
+    return out;
+  }
+
   var POSITIONS = ['P', 'P', 'P', 'C', '1B', '2B', 'SS', '3B', 'LF', 'CF', 'RF', 'DH'];
   var POS_NAME = { P: 'Pitcher', C: 'Catcher', '1B': 'First Base', '2B': 'Second Base', SS: 'Shortstop', '3B': 'Third Base',
     LF: 'Left Field', CF: 'Center Field', RF: 'Right Field', DH: 'Designated Hitter' };
@@ -130,7 +154,7 @@
       // rarity layout: 2 foil, 3 rare, 7 common, shuffled per team
       var rar = ['foil', 'foil', 'rare', 'rare', 'rare', 'common', 'common', 'common', 'common', 'common', 'common', 'common'];
       for (var i = rar.length - 1; i > 0; i--) { var j = Math.floor(rng() * (i + 1)); var tmp = rar[i]; rar[i] = rar[j]; rar[j] = tmp; }
-      var numbers = {};
+      var numbers = {}, species = teamSpecies(t);
       for (var k = 0; k < 12; k++) {
         var id = 'c' + (t + 1) + '-' + pad2(k + 1);
         var r = U.rng(U.hashStr('halftone-card-' + id));
@@ -156,6 +180,7 @@
           id: id, no: t * 12 + k + 1, name: name, nick: nick, pos: pos, posName: POS_NAME[pos],
           team: team.name, teamIdx: t, teamShort: team.short, teamColorSlot: team.colorSlot, number: num,
           rarity: rar[k], seed: U.hashStr(id), inkset: team.inkset, stat: stat, flavor: U.pick(r, FLAVOR),
+          species: species[k], speciesName: SPECIES_NAME[species[k]] || species[k],
         });
       }
     });
@@ -181,7 +206,7 @@
 
   // ======================================================================= ACHIEVEMENTS (Scorebook stamps)
   var ACH = [
-    { id: 'first_hit', name: 'Ink on the Bat', desc: 'Get your first hit.', mark: '1B' },
+    { id: 'first_hit', name: 'First Knock', desc: 'Get your first hit.', mark: '1B' },
     { id: 'first_hr', name: 'Dinger Debut', desc: 'Hit your first home run.', mark: 'HR' },
     { id: 'moonshot', name: 'Moonshot', desc: 'Hit a home run 450+ ft.', mark: '450' },
     { id: 'tape', name: 'Tape Measure', desc: 'Hit a home run 500+ ft.', mark: '500' },
@@ -202,14 +227,14 @@
     { id: 'sombrero', name: 'Golden Sombrero', desc: 'Strike out four times in one game. Oops.', mark: '4K' },
     { id: 'derby10', name: 'Derby Darling', desc: '10 homers in one Endless Derby.', mark: '10' },
     { id: 'derby20', name: 'Twenty Big Ones', desc: '20 homers in one Endless Derby.', mark: '20' },
-    { id: 'daily1', name: 'Morning Edition', desc: 'Play your first Daily Derby.', mark: 'D1' },
+    { id: 'daily1', name: 'Morning Cartoon', desc: 'Play your first Daily Derby.', mark: 'D1' },
     { id: 'daily3', name: 'Three-Day Run', desc: 'Daily Derby streak of 3 days.', mark: 'D3' },
-    { id: 'daily7', name: 'Weekly Circulation', desc: 'Daily Derby streak of 7 days.', mark: 'D7' },
-    { id: 'daily30', name: 'Monthly Subscriber', desc: 'Daily Derby streak of 30 days.', mark: 'D30' },
+    { id: 'daily7', name: 'Saturday Regular', desc: 'Daily Derby streak of 7 days.', mark: 'D7' },
+    { id: 'daily30', name: 'Matinee Idol', desc: 'Daily Derby streak of 30 days.', mark: 'D30' },
     { id: 'gold', name: 'Gold Stars', desc: 'Earn 3 stars on a tour game.', mark: '★★★' },
     { id: 'giant', name: 'Giant Killer', desc: 'Beat a boss pitcher.', mark: 'BOSS' },
-    { id: 'sweep', name: 'Back Issue', desc: 'Win all five games of an issue.', mark: '5/5' },
-    { id: 'collected', name: 'Collected Edition', desc: 'Beat all six bosses.', mark: '6/6' },
+    { id: 'sweep', name: 'Full Reel', desc: 'Win all five games of a reel.', mark: '5/5' },
+    { id: 'collected', name: 'Season Finale', desc: 'Beat all six bosses.', mark: '6/6' },
     { id: 'stars45', name: 'Star Chaser', desc: 'Collect 45 tour stars.', mark: '45★' },
     { id: 'firstpack', name: 'Fresh Pack Smell', desc: 'Open your first card pack.', mark: 'PK' },
     { id: 'foil', name: 'Shiny!', desc: 'Pull a foil card.', mark: 'FL' },
@@ -220,7 +245,7 @@
     { id: 'century', name: 'Century', desc: '100 lifetime hits.', mark: '100' },
     { id: 'level10', name: 'Double Digits', desc: 'Reach level 10.', mark: 'L10' },
     { id: 'changeup', name: 'Change of Lumber', desc: 'Equip a different bat.', mark: 'BAT' },
-    { id: 'freshink', name: 'Fresh Ink', desc: 'Load a different press.', mark: 'INK' },
+    { id: 'freshink', name: 'New Threads', desc: 'Wear a different uniform.', mark: 'FIT' },
   ];
   var ACH_BY = {}; ACH.forEach(function (a) { ACH_BY[a.id] = a; });
   var ACH_COINS = 25;
@@ -282,7 +307,7 @@
     switch (c.kind) {
       case 'free': return 'Free';
       case 'level': return 'Reach level ' + c.n;
-      case 'tour': var ch = TOUR()[c.chapter]; return 'Beat the Issue ' + (c.chapter + 1) + ' boss' + (ch && ch.title ? ' (' + ch.title + ')' : '');
+      case 'tour': var ch = TOUR()[c.chapter]; return 'Beat the Reel ' + (c.chapter + 1) + ' boss' + (ch && ch.title ? ' (' + ch.title + ')' : '');
       case 'set': return 'Complete the ' + (TEAMS[c.team] ? TEAMS[c.team].name : 'team') + ' card set';
       case 'ach': return 'Earn the "' + (ACH_BY[c.id] ? ACH_BY[c.id].name : c.id) + '" stamp';
       case 'stat': return 'Get ' + c.n + ' ' + (c.label || c.key) + ' (' + Math.min(c.n, S().stats[c.key] || 0) + '/' + c.n + ')';
@@ -306,7 +331,7 @@
       var p = k.split(':'), kind = p[0], id = p[1], name = id;
       if (kind === 'bat') name = BAT_BY[id].name;
       else if (kind === 'inkset') name = (inksetById(id) || {}).name;
-      else if (kind === 'chapter') { var ch = TOUR()[+id]; name = 'Issue ' + (+id + 1) + (ch && ch.title ? ': ' + ch.title : ''); }
+      else if (kind === 'chapter') { var ch = TOUR()[+id]; name = 'Reel ' + (+id + 1) + (ch && ch.title ? ': ' + ch.title : ''); }
       out.push({ kind: kind, id: kind === 'chapter' ? +id : id, name: name });
     }
     return out;
@@ -662,7 +687,7 @@
   }
 
   BB.Meta = {
-    BATS: BATS, CARDS: CARDS, TEAMS: TEAMS, ACH: ACH, PACK: PACK, INK_RULES: INK_RULES, INK_DESC: INK_DESC,
+    BATS: BATS, CARDS: CARDS, TEAMS: TEAMS, TEAM_SPECIES: TEAM_SPECIES, SPECIES_NAME: SPECIES_NAME, ACH: ACH, PACK: PACK, INK_RULES: INK_RULES, INK_DESC: INK_DESC,
     SET_REWARDS: SET_REWARDS, ACH_COINS: ACH_COINS, MAX_LEVEL: MAX_LEVEL,
     getBat: function (id) { return BAT_BY[id] || null; },
     getCard: function (id) { return CARD_BY[id] || null; },

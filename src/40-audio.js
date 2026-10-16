@@ -3,13 +3,15 @@
 // entry point is wrapped, and with no AudioContext the whole module degrades to silent no-ops.
 //
 // Graph:  sources -> [sfx bus | crowd bus | organ bus] -> master gain -> compressor -> soft-clip shaper -> out
-//         sfx sends -> stadium slap-back echo -> sfx bus;  organ voices -> vibrato/tremolo "leslie" -> organ bus
+//         sfx sends -> stadium slap-back echo -> sfx bus;  organ voices -> vibrato/tremolo "leslie" -> organ bus;
+//         the cartoon pit band (clarinet / bassoon FM reeds, brass, pizzicato, xylophone, traps) -> organ (music) bus
 (function () {
   var W = typeof window !== 'undefined' ? window : globalThis;
   var R = Math.random;
   function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
   function rr(a, b) { return a + (b - a) * R(); }
   function mtof(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+  function own(o, k) { return typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k) ? o[k] : null; }
   function safe(fn) { return function () { try { return fn.apply(null, arguments); } catch (e) { return undefined; } }; }
   function later(fn, ms) { try { setTimeout(function () { try { fn(); } catch (e) { /* ignore */ } }, ms); } catch (e) { /* ignore */ } }
 
@@ -203,18 +205,110 @@
     }
   }
 
+  // ------------------------------------------------------------------ cartoon-orchestra voices
+  // An LFO onto one or more frequency params: targets = [[param, depthHz], ...]; depth ramps in after `delay`.
+  function lfoTo(g, t, dur, rate, targets, delay) {
+    var c = g.ctx, l = c.createOscillator(); l.frequency.value = rate; delay = delay || 0;
+    for (var i = 0; i < targets.length; i++) {
+      var dg = c.createGain();
+      dg.gain.setValueAtTime(0, t + delay); dg.gain.linearRampToValueAtTime(targets[i][1], t + Math.max(delay + 0.01, dur * 0.5));
+      l.connect(dg); dg.connect(targets[i][0]);
+    }
+    l.start(t); l.stop(t + dur + 0.2);
+  }
+  // held-note envelope; wob = sad-trombone droop over the second half
+  function sustainEnv(p, t, a, v, dur, rel, wob) {
+    var e = t + Math.max(a + 0.005, dur);
+    p.setValueAtTime(0, t); p.linearRampToValueAtTime(v, t + a);
+    if (wob) { p.setValueAtTime(v, t + Math.max(a + 0.004, dur * 0.6)); p.linearRampToValueAtTime(v * 0.4, e); }
+    else p.setValueAtTime(v, e);
+    p.linearRampToValueAtTime(0, e + rel);
+    return e + rel;
+  }
+  // two-operator FM reed. ratio 2 -> odd harmonics (clarinet); ratio 1, dark filter -> bassoon / tuba
+  function reedNote(g, dest, t, f, dur, v, wob, ratio, i0, i1, lpf) {
+    var c = g.ctx, car = c.createOscillator(), mod = c.createOscillator(), mg = c.createGain(), amp = c.createGain(), lp = c.createBiquadFilter();
+    car.frequency.setValueAtTime(f, t); mod.frequency.setValueAtTime(f * ratio, t);
+    mg.gain.setValueAtTime(f * i0, t); mg.gain.exponentialRampToValueAtTime(f * i1, t + 0.1);
+    mod.connect(mg); mg.connect(car.frequency);
+    lp.type = 'lowpass'; lp.frequency.value = lpf; lp.Q.value = 0.7;
+    var end = sustainEnv(amp.gain, t, 0.016, v, dur, 0.05, wob);
+    if (wob) lfoTo(g, t, dur, 5, [[car.frequency, f * 0.035], [mod.frequency, f * ratio * 0.035]]);
+    else if (dur > 0.3) lfoTo(g, t, dur, 5.6, [[car.frequency, f * 0.006], [mod.frequency, f * ratio * 0.006]], 0.14);
+    car.connect(amp); amp.connect(lp); lp.connect(dest);
+    car.start(t); mod.start(t); car.stop(end + 0.05); mod.stop(end + 0.05);
+  }
+  function brassNote(g, dest, t, f, dur, v, wob) { // two detuned saws, a "blat" filter swell and a little scoop
+    var c = g.ctx, lp = c.createBiquadFilter(), amp = c.createGain(), fr = [];
+    lp.type = 'lowpass'; lp.Q.value = 1.2;
+    lp.frequency.setValueAtTime(f * 1.2, t); lp.frequency.linearRampToValueAtTime(Math.min(f * 7, 15000), t + 0.035);
+    lp.frequency.setTargetAtTime(Math.min(f * 3.2, 12000), t + 0.04, 0.08);
+    var end = sustainEnv(amp.gain, t, 0.02, v, dur, 0.07, wob);
+    for (var i = 0; i < 2; i++) {
+      var o = c.createOscillator(); o.type = 'sawtooth'; o.detune.value = i ? 7 : -7;
+      o.frequency.setValueAtTime(f * 0.96, t); o.frequency.exponentialRampToValueAtTime(f, t + 0.045);
+      o.connect(lp); o.start(t); o.stop(end + 0.05); fr.push([o.frequency, f * (wob ? 0.035 : 0.005)]);
+    }
+    if (wob || dur > 0.3) lfoTo(g, t, dur, wob ? 5 : 5.4, fr, wob ? 0 : 0.15);
+    lp.connect(amp); amp.connect(dest);
+  }
+  function pizzNote(g, dest, t, f, v) { // plucked string: bright saw+tri, filter snaps shut
+    var c = g.ctx, lp = c.createBiquadFilter(), amp = c.createGain(), d = clamp(0.32 * Math.pow(220 / f, 0.25), 0.12, 0.5);
+    lp.type = 'lowpass'; lp.Q.value = 2;
+    lp.frequency.setValueAtTime(Math.min(f * 12, 14000), t); lp.frequency.exponentialRampToValueAtTime(f * 1.5, t + 0.12);
+    amp.gain.setValueAtTime(0.0001, t); amp.gain.linearRampToValueAtTime(v, t + 0.003); amp.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    for (var i = 0; i < 2; i++) {
+      var o = c.createOscillator(); o.type = i ? 'triangle' : 'sawtooth'; o.frequency.value = f; o.detune.value = i ? 4 : -4;
+      o.connect(lp); o.start(t); o.stop(t + d + 0.05);
+    }
+    lp.connect(amp); amp.connect(dest);
+  }
+  function xyloNote(g, dest, t, f, v, pan) { // struck bar: fundamental + tuned 3rd partial + mallet click
+    var d = clamp(0.5 * Math.pow(523 / f, 0.5), 0.12, 0.6);
+    tone(g, dest, { t: t, f: f, a: 0.001, d: d, v: v, pan: pan });
+    tone(g, dest, { t: t, f: f * 3, a: 0.001, d: d * 0.25, v: v * 0.3, pan: pan });
+    noise(g, dest, { t: t, f: Math.min(f * 4, 12000), q: 2, a: 0.0005, d: 0.006, v: v * 0.5, pan: pan });
+  }
+  function kick(g, dest, t, v) {
+    tone(g, dest, { t: t, f: 130, f2: 45, glide: 0.08, a: 0.001, d: 0.3, v: v });
+    noise(g, dest, { t: t, filt: 'lowpass', f: 300, q: 0.7, a: 0.001, d: 0.04, v: v * 0.4 });
+  }
+  function snare(g, dest, t, v) {
+    noise(g, dest, { t: t, f: 1900, q: 0.8, a: 0.001, d: 0.11, v: v });
+    tone(g, dest, { t: t, type: 'triangle', f: 230, f2: 180, glide: 0.03, a: 0.001, d: 0.05, v: v * 0.4 });
+  }
+  function cymbal(g, dest, t, v) {
+    noise(g, dest, { t: t, filt: 'highpass', f: 5500, q: 0.5, a: 0.002, d: 1.3, v: v });
+    noise(g, dest, { t: t, f: 9000, q: 1, a: 0.001, d: 0.5, v: v * 0.6 });
+  }
+  function chirp(g, dest, t, v, pan) { // one tiny cartoon bird "tweet": fast up-sweep with a warble
+    var f = rr(2900, 3700), o = tone(g, dest, { t: t, f: f * 0.75, f2: f * 1.25, glide: 0.04, a: 0.003, d: 0.055, v: v, pan: pan });
+    lfoTo(g, t, 0.02, 45, [[o.frequency, 260]]);
+  }
+
   // ------------------------------------------------------------------ sound effects
   var SFX = {
     crack: function (g, t, o) { crack(g, t, o.quality == null ? 0.8 : o.quality, !!o.sweet, false); },
     foul: function (g, t, o) { crack(g, t, o.quality == null ? 0.4 : Math.min(o.quality, 0.6), false, true); },
-    whiff: function (g, t) {
-      noise(g, g.sfx, { t: t, f: 300, pts: [[0.11, 1700], [0.26, 450]], q: 1.4, a: 0.07, hold: 0.05, d: 0.15, v: 0.55, pan: -0.15 });
+    whiff: function (g, t) { // comic swoosh (breath + whistled arc) and a tiny bird twitter as the bat comes round
+      noise(g, g.sfx, { t: t, f: 350, pts: [[0.1, 2600], [0.25, 500]], q: 2.2, a: 0.05, hold: 0.04, d: 0.15, v: 0.6, pan: -0.2 });
+      tone(g, g.sfx, { t: t, f: 520, f2: 1900, glide: 0.1, a: 0.04, d: 0.08, v: 0.06, pan: -0.2 });
+      tone(g, g.sfx, { t: t + 0.1, f: 1900, f2: 560, glide: 0.14, a: 0.01, d: 0.14, v: 0.05, pan: 0.1 });
       noise(g, g.sfx, { t: t + 0.02, buf: 'pink', filt: 'lowpass', f: 500, q: 0.7, a: 0.06, d: 0.15, v: 0.35 });
+      var p = rr(-0.6, 0.6);
+      chirp(g, g.sfx, t + 0.34, 0.07, p); chirp(g, g.sfx, t + 0.43, 0.06, p); chirp(g, g.sfx, t + 0.5, 0.075, p);
     },
     whoosh: function (g, t, o) {
       var sp = clamp(((o.mph || 88) - 50) / 50, 0, 1);
       noise(g, g.sfx, { t: t, f: 800 + 700 * sp, pts: [[0.16, 2300 + 1400 * sp], [0.3, 800]], q: 2, a: 0.14, d: 0.16, v: 0.25 + 0.2 * sp, pan: 0.25 });
       tone(g, g.sfx, { t: t, f: 1500 + 900 * sp, f2: (1500 + 900 * sp) * 0.72, gd: 0.13, glide: 0.15, a: 0.12, d: 0.17, v: 0.03 + 0.02 * sp });
+    },
+    zip: function (g, t, o) { // fast cartoon zip: the faster the pitch, the shorter and higher
+      var sp = clamp(((o.mph || 88) - 50) / 50, 0, 1), d = 0.22 - 0.1 * sp, f0 = 450 + 400 * sp, f1 = 3000 + 2500 * sp;
+      noise(g, g.sfx, { t: t, f: f0, f2: f1, glide: d, q: 3, a: d * 0.7, d: 0.05, v: 0.4 + 0.25 * sp, pan: 0.2 });
+      tone(g, g.sfx, { t: t, type: 'sawtooth', f: f0 * 0.5, f2: f1 * 0.4, glide: d, a: d * 0.7, d: 0.04, v: 0.035 + 0.02 * sp, pan: 0.2 });
+      tone(g, g.sfx, { t: t, f: f0, f2: f1 * 0.8, glide: d, a: d * 0.7, d: 0.05, v: 0.05 });
+      noise(g, g.sfx, { t: t + d, buf: 'pink', filt: 'lowpass', f: 2200, f2: 400, glide: 0.15, q: 0.7, a: 0.005, d: 0.15, v: 0.18, pan: -0.2 });
     },
     mitt: function (g, t, o) {
       var sp = clamp(((o.mph || 88) - 50) / 50, 0, 1);
@@ -222,10 +316,12 @@
       noise(g, g.sfx, { t: t, filt: 'lowpass', f: 2600, f2: 350, glide: 0.05, q: 1, a: 0.0008, d: 0.07, v: 0.6 + 0.3 * sp, send: 0.25 });
       tone(g, g.sfx, { t: t, f: 160, f2: 70, glide: 0.06, a: 0.001, d: 0.09, v: 0.55 + 0.2 * sp });
     },
-    strike: function (g, t) { // stylized umpire "HUP!"
-      noise(g, g.sfx, { t: t, f: 1800, q: 1, a: 0.008, d: 0.03, v: 0.16 });
+    strike: function (g, t) { // stylized comic umpire "HUP!": breath, a barked vowel that drops, a lip-pop button
+      noise(g, g.sfx, { t: t, f: 1800, q: 1, a: 0.006, d: 0.03, v: 0.18 });
       var o = g.ctx.createGain(); route(g, o, { send: 0.3 }, g.sfx);
-      voice(g, o, t + 0.02, 175, 132, [700, 1220, 2600], 0.95, 0.012, 0.06, 0.09);
+      voice(g, o, t + 0.015, 235, 150, [720, 1240, 2650], 1.0, 0.008, 0.07, 0.08);
+      tone(g, g.sfx, { t: t + 0.17, f: 420, f2: 130, glide: 0.025, a: 0.0008, d: 0.035, v: 0.35 });
+      woodblock(g, g.sfx, t + 0.17, 1250, 0.12);
     },
     ball: function (g, t) { voice(g, g.sfx, t, 140, 118, [450, 820, 2500], 0.5, 0.02, 0.03, 0.08); },
     out: function (g, t) { woodblock(g, g.sfx, t, 620, 0.5); woodblock(g, g.sfx, t + 0.12, 470, 0.42); },
@@ -235,22 +331,30 @@
       var p = [410, 627, 1043, 1389, 1820];
       for (var i = 0; i < p.length; i++) tone(g, g.sfx, { t: t + 0.003, type: i % 2 ? 'triangle' : 'sine', f: p[i] * rr(0.98, 1.02), a: 0.001, d: 0.5 - 0.08 * i, v: 0.06, send: 0.2 });
     },
-    stamp: function (g, t) { // rubber stamp on paper: thunk + squish + a little rustle
-      tone(g, g.sfx, { t: t, f: 150, f2: 58, glide: 0.05, a: 0.001, d: 0.11, v: 0.8 });
-      noise(g, g.sfx, { t: t, filt: 'lowpass', f: 900, f2: 250, glide: 0.06, q: 0.8, a: 0.001, d: 0.07, v: 0.55 });
-      noise(g, g.sfx, { t: t + 0.004, f: 380, q: 3, a: 0.002, d: 0.05, v: 0.25 });
-      for (var i = 0; i < 5; i++) noise(g, g.sfx, { t: t + 0.03 + i * 0.018 + rr(0, 0.01), filt: 'highpass', f: rr(3500, 6000), q: 0.8, a: 0.001, d: rr(0.008, 0.016), v: rr(0.06, 0.14) });
+    stamp: function (g, t) { // punchy comic pop: a thump with an up-flicked "pok" and a paper slap
+      tone(g, g.sfx, { t: t, f: 170, f2: 60, glide: 0.06, a: 0.001, d: 0.12, v: 0.85 });
+      tone(g, g.sfx, { t: t + 0.004, f: 380, f2: 1250, glide: 0.035, a: 0.001, d: 0.06, v: 0.35 });
+      noise(g, g.sfx, { t: t, filt: 'lowpass', f: 1600, f2: 300, glide: 0.05, q: 0.8, a: 0.0008, d: 0.05, v: 0.5 });
+      noise(g, g.sfx, { t: t, filt: 'highpass', f: 3000, q: 0.7, a: 0.0003, d: 0.006, v: 0.3 });
     },
     tap: function (g, t) {
       tone(g, g.sfx, { t: t, f: 1700, f2: 1150, glide: 0.015, a: 0.0005, d: 0.03, v: 0.18 });
       noise(g, g.sfx, { t: t, filt: 'highpass', f: 4000, q: 0.7, a: 0.0003, d: 0.004, v: 0.12 });
     },
-    coin: function (g, t) {
-      [[988, 0], [1319, 0.075]].forEach(function (n) {
-        tone(g, g.sfx, { t: t + n[1], f: n[0], a: 0.001, d: 0.38, v: 0.22 });
-        tone(g, g.sfx, { t: t + n[1], f: n[0] * 2, a: 0.001, d: 0.2, v: 0.06 });
-        tone(g, g.sfx, { t: t + n[1], f: n[0] * 2.76, a: 0.001, d: 0.08, v: 0.03 });
-      });
+    pop: function (g, t) { // cork pop
+      noise(g, g.sfx, { t: t, filt: 'highpass', f: 2000, q: 0.7, a: 0.0002, d: 0.004, v: 0.4 });
+      tone(g, g.sfx, { t: t, f: 420, f2: 1300, glide: 0.025, a: 0.0008, d: 0.045, v: 0.45 });
+      noise(g, g.sfx, { t: t + 0.003, f: 900, q: 4, a: 0.0005, d: 0.03, v: 0.3 });
+    },
+    coin: function (g, t) { // cartoon cash register: "cha" (drawer clack + coin rattle) then "CHING!"
+      noise(g, g.sfx, { t: t, f: 2600, q: 3, a: 0.0005, d: 0.03, v: 0.45 });
+      tone(g, g.sfx, { t: t, f: 320, f2: 180, glide: 0.03, a: 0.0008, d: 0.05, v: 0.3 });
+      for (var i = 0; i < 6; i++) noise(g, g.sfx, { t: t + 0.02 + i * 0.015 + rr(0, 0.01), filt: 'highpass', f: rr(5000, 8000), q: 2, a: 0.0005, d: rr(0.008, 0.02), v: rr(0.08, 0.16), pan: rr(-0.4, 0.4) });
+      var b = t + 0.12, f0 = 1568, P = [[1, 0.2, 0.9], [2, 0.09, 0.6], [2.76, 0.08, 0.45], [5.4, 0.04, 0.25], [8.93, 0.02, 0.12]];
+      for (i = 0; i < P.length; i++) {
+        tone(g, g.sfx, { t: b, f: f0 * P[i][0], a: 0.001, d: P[i][2], v: P[i][1], send: 0.15 });
+        tone(g, g.sfx, { t: b + 0.06, f: f0 * 1.335 * P[i][0], a: 0.001, d: P[i][2] * 0.8, v: P[i][1] * 0.6, send: 0.15 });
+      }
     },
     packRip: function (g, t) {
       var N = 26;
@@ -275,8 +379,8 @@
       }
       noise(g, g.sfx, { t: t, filt: 'highpass', f: 7000, q: 0.7, a: 0.25, d: 0.6, v: 0.06 });
     },
-    unlock: function (g, t) { playPiece(g, PIECES._unlock, t, g.organSfx, 1.1); },
-    levelUp: function (g, t) { playPiece(g, PIECES._levelUp, t, g.organSfx, 1.1); },
+    unlock: function (g, t) { playPiece(g, PIECES._unlock, t, { org: g.organSfx, dry: g.sfx }, 1.1); },
+    levelUp: function (g, t) { playPiece(g, PIECES._levelUp, t, { org: g.organSfx, dry: g.sfx }, 1.1); },
     error: function (g, t) {
       tone(g, g.sfx, { t: t, type: 'square', f: 196, f2: 185, glide: 0.08, a: 0.002, d: 0.09, v: 0.06 });
       tone(g, g.sfx, { t: t + 0.11, type: 'square', f: 165, f2: 150, glide: 0.1, a: 0.002, d: 0.12, v: 0.06 });
@@ -284,6 +388,78 @@
     toast: function (g, t) {
       tone(g, g.sfx, { t: t, f: 1320, a: 0.002, d: 0.08, v: 0.1 });
       tone(g, g.sfx, { t: t + 0.06, f: 1760, a: 0.002, d: 0.12, v: 0.09 });
+    },
+    // ---- cartoon gags
+    boing: function (g, t, o) { // spring doorstop: a twangy saw whose pitch and resonance wobble and settle
+      var c = g.ctx, f = clamp(+o.f || 110, 50, 400), osc = c.createOscillator(), lp = c.createBiquadFilter(), amp = c.createGain();
+      var l = c.createOscillator(), d1 = c.createGain(), d2 = c.createGain(), D = 0.9;
+      osc.type = 'sawtooth'; osc.frequency.setValueAtTime(f * 0.8, t); osc.frequency.exponentialRampToValueAtTime(f, t + 0.05);
+      lp.type = 'lowpass'; lp.Q.value = 9; lp.frequency.setValueAtTime(400, t); lp.frequency.exponentialRampToValueAtTime(1900, t + 0.06); lp.frequency.setTargetAtTime(700, t + 0.08, 0.3);
+      l.frequency.setValueAtTime(17, t); l.frequency.exponentialRampToValueAtTime(9, t + D);
+      d1.gain.setValueAtTime(f * 0.28, t); d1.gain.exponentialRampToValueAtTime(f * 0.01, t + D);
+      d2.gain.setValueAtTime(650, t); d2.gain.exponentialRampToValueAtTime(15, t + D);
+      l.connect(d1); d1.connect(osc.frequency); l.connect(d2); d2.connect(lp.frequency);
+      env(amp.gain, t, 0.004, 0.32, D);
+      osc.connect(lp); lp.connect(amp); route(g, amp, { send: 0.15 }, g.sfx);
+      osc.start(t); l.start(t); osc.stop(t + D + 0.05); l.stop(t + D + 0.05);
+    },
+    slide: function (g, t, o) { // slide whistle; o.dir 'up' (default) | 'down', o.dur seconds
+      var down = o.dir === 'down', d = clamp(+o.dur || (down ? 0.75 : 0.55), 0.15, 2.5);
+      var f0 = down ? 1900 : 480, f1 = down ? 430 : 1900;
+      var w = tone(g, g.sfx, { t: t, f: f0, f2: f1, glide: d, a: 0.035, hold: Math.max(0, d - 0.06), d: 0.07, v: 0.14, send: 0.12 });
+      lfoTo(g, t, d, 6.5, [[w.frequency, 14]], 0.05);
+      tone(g, g.sfx, { t: t, f: f0 * 2, f2: f1 * 2, glide: d, a: 0.035, hold: Math.max(0, d - 0.06), d: 0.07, v: 0.015 });
+      noise(g, g.sfx, { t: t, f: f0, f2: f1, glide: d, q: 5, a: 0.03, hold: Math.max(0, d - 0.06), d: 0.07, v: 0.07 });
+    },
+    bonk: function (g, t) { // wood-block bonk on the noggin
+      woodblock(g, g.sfx, t, 540, 0.55);
+      tone(g, g.sfx, { t: t, f: 900, f2: 380, glide: 0.06, a: 0.001, d: 0.12, v: 0.35 });
+      tone(g, g.sfx, { t: t, type: 'triangle', f: 270, f2: 190, glide: 0.05, a: 0.001, d: 0.1, v: 0.3 });
+    },
+    xylo: function (g, t) { // descending xylophone run ending in a dopey low plunk (strikeout)
+      var m = [96, 93, 91, 88, 86, 84, 81, 79, 76, 74, 72], tt = t;
+      for (var i = 0; i < m.length; i++) { xyloNote(g, g.sfx, tt, mtof(m[i]), 0.17, 0.6 - 1.2 * i / m.length); tt += 0.05 + i * 0.004; }
+      xyloNote(g, g.sfx, tt + 0.1, mtof(55), 0.3, -0.5);
+      woodblock(g, g.sfx, tt + 0.1, 330, 0.25);
+    },
+    honk: function (g, t, o) { // rubber-bulb bicycle horn, "honk-honk" (o.n = 1 for a single honk)
+      var n = o.n === 1 ? 1 : 2;
+      for (var k = 0; k < n; k++) {
+        var tt = t + k * 0.2, fb = formants(g, g.sfx, [950, 1600, 2800], [5, 6, 8], [1, 0.6, 0.3]), f = k ? 385 : 370;
+        tone(g, fb.input, { t: tt, type: 'sawtooth', f: f * 0.9, f2: f, glide: 0.03, a: 0.008, hold: 0.09, d: 0.06, v: 0.9 });
+        tone(g, fb.input, { t: tt, type: 'square', f: f * 0.905, f2: f * 1.006, glide: 0.03, a: 0.008, hold: 0.09, d: 0.06, v: 0.5 });
+        noise(g, g.sfx, { t: tt, f: 3200, q: 4, a: 0.01, d: 0.05, v: 0.06 });
+      }
+    },
+    twinkle: function (g, t, o) { // dizzy stars circling the head: high bell tinkles panning round
+      var dur = clamp(+o.dur || 1.4, 0.4, 4), notes = [88, 91, 93, 96, 98, 100, 103], n = Math.round(dur * 11);
+      for (var i = 0; i < n; i++) {
+        var tt = t + i * dur / n + rr(0, 0.02), f = mtof(notes[Math.floor(R() * notes.length)]), v = 0.08 * (1 - 0.5 * i / n), pan = Math.sin(i * 0.9) * 0.8;
+        tone(g, g.sfx, { t: tt, f: f, a: 0.002, d: 0.18, v: v, pan: pan, send: 0.2 });
+        tone(g, g.sfx, { t: tt, f: f * 2.01, a: 0.002, d: 0.08, v: v * 0.3, pan: pan });
+      }
+      noise(g, g.sfx, { t: t, filt: 'highpass', f: 8000, q: 0.7, a: 0.1, hold: Math.max(0, dur - 0.3), d: 0.3, v: 0.03 });
+    },
+    kablam: function (g, t) { // big cartoon explosion: boom + blast + crackle + debris raining down
+      tone(g, g.sfx, { t: t, f: 90, f2: 32, glide: 0.35, a: 0.002, d: 1.1, v: 0.85 });
+      tone(g, g.sfx, { t: t, type: 'triangle', f: 160, f2: 45, glide: 0.12, a: 0.001, d: 0.35, v: 0.45 });
+      noise(g, g.sfx, { t: t, filt: 'lowpass', f: 3000, f2: 120, glide: 0.9, q: 0.7, a: 0.002, d: 1.4, v: 0.85, send: 0.35 });
+      noise(g, g.sfx, { t: t, filt: 'highpass', f: 1200, q: 0.7, a: 0.001, d: 0.05, v: 0.45 });
+      for (var i = 0; i < 18; i++) noise(g, g.sfx, { t: t + 0.05 + Math.pow(R(), 1.5) * 0.6, f: rr(800, 3000), q: 1.5, a: 0.0005, d: rr(0.005, 0.02), v: rr(0.1, 0.3), pan: rr(-0.8, 0.8) });
+      for (i = 0; i < 12; i++) {
+        var tt = t + 0.35 + i * 0.08 + rr(0, 0.05), k = 1 - i / 12, f = rr(600, 2200), p = rr(-0.8, 0.8);
+        tone(g, g.sfx, { t: tt, f: f, f2: f * 0.8, glide: 0.03, a: 0.0008, d: rr(0.03, 0.08), v: 0.03 + 0.1 * k, pan: p });
+        noise(g, g.sfx, { t: tt, f: f * 1.7, q: 6, a: 0.0005, d: 0.02, v: 0.05 + 0.15 * k, pan: p });
+      }
+    },
+    splat: function (g, t) { // wet splat with a few gloopy bloops
+      noise(g, g.sfx, { t: t, filt: 'lowpass', f: 2500, f2: 250, glide: 0.12, q: 1.5, a: 0.002, d: 0.2, v: 0.9 });
+      tone(g, g.sfx, { t: t, f: 260, f2: 70, glide: 0.08, a: 0.001, d: 0.14, v: 0.55 });
+      noise(g, g.sfx, { t: t, f: 1200, q: 3, a: 0.001, d: 0.06, v: 0.3 });
+      for (var i = 0; i < 7; i++) {
+        var f = rr(500, 1300);
+        tone(g, g.sfx, { t: t + 0.06 + i * 0.04 + rr(0, 0.05), f: f * 0.6, f2: f, glide: 0.02, a: 0.001, d: 0.04, v: rr(0.08, 0.16), pan: rr(-0.6, 0.6) });
+      }
     },
   };
 
@@ -352,63 +528,114 @@
     }
   }
 
-  // ------------------------------------------------------------------ the ballpark organ
+  // ------------------------------------------------------------------ the ballpark organ + cartoon pit band
   var NOTE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
   function pm(s) { var r = /^([A-G])(#|b)?(-?\d)$/.exec(s); return 12 * (+r[3] + 1) + NOTE[r[1]] + (r[2] === '#' ? 1 : r[2] === 'b' ? -1 : 0); }
   // "C5/.5 E5+G5/1 r/.5 E4/3w": pitch(+pitch)/beats, r = rest, trailing w = sad-trombone wobble
-  function seq(str, vel, out) {
+  function seq(str, vel, out, inst, lg) {
     var b = 0;
     str.trim().split(/\s+/).forEach(function (tok) {
       var p = tok.split('/'), l = p[1] != null ? parseFloat(p[1]) : 1;
-      if (p[0] !== 'r') out.push({ b: b, m: p[0].split('+').map(pm), l: l, v: vel, w: /w/.test(p[1] || '') });
+      if (p[0] !== 'r') out.push({ b: b, m: p[0].split('+').map(pm), l: l, v: vel, w: /w/.test(p[1] || ''), inst: inst || 'organ', lg: lg });
       b += l;
     });
     return b;
   }
+  // voices: [notes, velocity, instrument (default organ), legato (default the piece's)]
   function piece(bpm, voices, claps, legato) {
     var ev = [], len = 0;
-    voices.forEach(function (v) { len = Math.max(len, seq(v[0], v[1], ev)); });
+    voices.forEach(function (v) { len = Math.max(len, seq(v[0], v[1], ev, v[2], v[3])); });
     ev.sort(function (a, b) { return a.b - b.b; });
     return { bpm: bpm, ev: ev, len: len, claps: claps || [], legato: legato || 0.9 };
   }
-  var CH = { C: ['C3', 'C4+E4+G4'], F: ['F2', 'C4+F4+A4'], Dm: ['D3', 'D4+F4+A4'], G7: ['G2', 'B3+D4+F4'], G: ['G2', 'B3+D4+G4'], Am: ['A2', 'C4+E4+A4'] };
-  function waltz(bars) { // oom-pah-pah accompaniment
-    return [bars.map(function (k) { return CH[k][0] + '/1 r/2'; }).join(' '), bars.map(function (k) { return 'r/1 ' + CH[k][1] + '/.8 r/.2 ' + CH[k][1] + '/.8 r/.2'; }).join(' ')];
-  }
-  var MENU_BARS = ['C', 'C', 'F', 'C', 'F', 'Dm', 'G7', 'G', 'C', 'C', 'F', 'Am', 'F', 'G', 'G7', 'C'], acc = waltz(MENU_BARS);
+  function rep(s, n) { var o = []; for (var i = 0; i < n; i++) o.push(s); return o.join(' '); }
+  // an offbeat "chunk" chord on beats 2 and 4 of each 4/4 bar: bars = [[chordOn2, chordOn4], ...]
+  function chunks(bars) { return bars.map(function (b) { return 'r/1 ' + b[0] + '/.5 r/1.5 ' + b[1] + '/.5 r/.5'; }).join(' '); }
+
+  // MENU: an original bouncy 16-bar strut in C (I-VI7-II7-V7 "sunny" changes, a ragtime minor iv, a diminished
+  // passing chord and a turnaround that loops straight back to the pickup). Clarinet tune, xylophone joins for the
+  // second half, bassoon + pizzicato bass on 1 and 3, organ chunks on 2 and 4, wood blocks clip-clopping.
+  var MENU_MEL = [
+    'G4/.5 G#4/.5 A4/.5 C5/1 A4/.5 G4/1', 'C#5/.5 r/.5 E5/.5 G5/.5 A5/1 G5/.5 E5/.5', 'F#5/1 D5/.5 A4/.5 C5/.5 B4/.5 A4/1', 'G4/.5 A4/.5 B4/.5 D5/.5 F5/1.5 r/.5',
+    'E5/.5 D#5/.5 E5/.5 G5/.5 C6/1 G5/.5 E5/.5', 'Bb5/1 A5/.5 G5/.5 E5/1 C5/1', 'A4/.5 C5/.5 F5/.5 A5/.5 G#5/.5 A5/.5 F5/1', 'Ab5/1 G5/.5 F5/.5 D5/1 B4/1',
+    'C5/.5 r/.5 E5/.5 G5/.5 C6/.5 B5/.5 C6/1', 'r/.5 A5/.5 G5/.5 E5/.5 C#5/.5 E5/.5 A4/1', 'D5/.5 E5/.5 F#5/.5 A5/.5 C6/1 A5/1', 'B5/.5 A5/.5 G5/.5 F5/.5 D5/.5 B4/.5 G4/1',
+    'E5/1 G5/.5 E5/.5 Eb5/1 F#5/.5 A5/.5', 'D5/.5 F5/.5 A5/.5 C6/.5 B5/.5 G5/.5 F5/.5 D5/.5', 'E5/.5 G5/.5 C6/.5 r/.5 C#6/.5 r/.5 A5/1', 'D6/.5 r/.5 F5/.5 E5/.5 D5/1 B4/1'];
+  var MENU_BASS = ['C3 r G2 r', 'A2 r E2 r', 'D3 r A2 r', 'G2 r D3 B2', 'C3 r G2 r', 'C3 r G2 E2', 'F2 r C3 r', 'F2 r Ab2 G2',
+    'C3 r G2 r', 'A2 r E2 r', 'D3 r A2 r', 'G2 r D3 r', 'E2 r Eb2 r', 'D2 r G2 r', 'C3 r A2 r', 'D3 r G2 B2'].join(' ').split(' ')
+    .map(function (n) { return n + '/1'; }).join(' ');
+  var CHD = { C: 'E4+G4+C5', A7: 'E4+G4+C#5', D7: 'F#4+A4+C5', G7: 'F4+G4+B4', C7: 'E4+G4+Bb4', F: 'F4+A4+C5', Fm: 'F4+Ab4+C5',
+    Eo: 'Eb4+F#4+A4', Dm7: 'F4+A4+C5' };
+  var MENU_CH = chunks([['C', 'C'], ['A7', 'A7'], ['D7', 'D7'], ['G7', 'G7'], ['C', 'C'], ['C7', 'C7'], ['F', 'F'], ['Fm', 'Fm'],
+    ['C', 'C'], ['A7', 'A7'], ['D7', 'D7'], ['G7', 'G7'], ['C', 'Eo'], ['Dm7', 'G7'], ['C', 'A7'], ['Dm7', 'G7']]
+    .map(function (b) { return [CHD[b[0]], CHD[b[1]]]; }));
+  var MENU_PIZZ = MENU_BASS.replace(/([A-G]b?)(\d)/g, function (s, n, o) { return n + (+o + 1); });
+
   var PIECES = {
-    charge: piece(132, [['G4/.333 C5/.333 E5/.334 G5/.75 E5/.25 G5/2', 1], ['r/1 E4+G4+C5/.75 r/.25 E4+G4+C5/2', 0.6], ['r/1 C3/.75 r/.25 C3/2', 0.8]]),
-    homer: piece(160, [['C4/.25 D4/.25 E4/.25 F4/.25 G4/.25 A4/.25 B4/.25 C5/.25 D5/.25 E5/.25 F5/.25 G5/.25 A5/.25 B5/.25 C6/1 G5/.5 C6/.5 E6/.5 D6/.5 C6/2', 0.95],
-      ['r/3.5 C4+E4+G4/2 F4+A4+C5/.5 G4+B4+D5/.5 C4+E4+G4+C5/2', 0.6], ['r/3.5 C3/2 F2/.5 G2/.5 C3/2', 0.8]]),
-    walkup: piece(128, [['C4/.5 E4/.5 G4/.5 A4/.5 Bb4/.5 A4/.5 G4/.5 E4/.5 C5+E5+G5/.25 r/.25 C5+E5+G5/1', 0.95], ['C3/1 C3/1 C3/1 C3/1 C2/.25 r/.25 C3/1', 0.75]], null, 0.8),
-    win: piece(140, [['G4/.5 C5/.5 E5/.5 G5/1 E5/.5 G5/1.5 r/.5 A5/.5 G5/.5 F5/.5 E5/.5 D5/.5 E5/.5 C5/2', 1],
-      ['r/1.5 C4+E4+G4/3 r/.5 F4+A4+C5/1 G4+B4/1 G4+B4+D5/1 C4+E4+G4+C5/2', 0.55], ['r/1.5 C3/3 r/.5 F2/1 G2/1 G2/1 C3/2', 0.8]]),
-    lose: piece(76, [['G4/1 Gb4/1 F4/1 E4/3w', 1], ['G3/1 Gb3/1 F3/1 E3/3w', 0.6]], null, 0.95),
+    charge: piece(132, [['G4/.333 C5/.333 E5/.334 G5/.75 E5/.25 G5/2', 0.9, 'brass'], ['G4/.333 C5/.333 E5/.334 G5/.75 E5/.25 G5/2', 0.6],
+      ['r/1 E4+G4+C5/.75 r/.25 E4+G4+C5/2', 0.5], ['r/1 C3/.75 r/.25 C3/2', 0.8, 'bassoon'],
+      ['C4/.333 C4/.333 C4/.334 r/.75 C4/.25 C4/2', 0.45, 'snare'], ['r/1 C4/.75 r/.25 C4/2', 0.5, 'kick'], ['r/2 C4/1', 0.6, 'cym']]),
+    homer: piece(160, [['C5/.125 D5/.125 E5/.125 F5/.125 G5/.125 A5/.125 B5/.125 C6/.125 D6/.125 E6/.125 F6/.125 G6/.125 A6/.125 B6/.125 C7/.25 r/7.5 C7+G6/.5', 0.9, 'xylo'],
+      ['r/2 C5/.5 E5/.25 G5/.75 C6/.5 r/.25 A5/.25 C6/.5 B5/.25 A5/.25 G5/.5 E5/.5 F5/.5 D5/.5 C5+E5+G5+C6/2.5', 0.85, 'brass'],
+      ['r/2 C4+E4+G4/2 F4+A4+C5/2 G4+B4+D5/1 G4+B4+F5/1 C4+E4+G4+C5/2', 0.5],
+      ['r/2 C3/.5 r/.5 G2/.5 r/.5 F2/.5 r/.5 C3/.5 r/.5 G2/.5 r/.5 G2/.5 B2/.5 C3/2', 0.9, 'bassoon', 0.7],
+      ['r/2 ' + rep('C4/1', 6) + ' C4/2', 0.35, 'kick'], ['r/2 ' + rep('r/1 C4/1', 3) + ' C4/2', 0.4, 'snare'], ['r/2 C4/6 C4/2', 0.55, 'cym']], [2, 6], 0.9),
+    walkup: piece(132, [['C3/1 E3/1 G3/1 A3/1 Bb3/1 A3/1 G3/1 E3/1 C3/.25 r/.25 C2/1.5', 0.9, 'bassoon', 0.7],
+      ['r/1 G4/.5 A4/.5 C5/1 D#5/.5 E5/.5 G5/1 E5/.5 C5/.5 D5/.5 C5/.5 A4/1 r/2', 0.9, 'reed', 0.85],
+      ['r/8 C5+E5+Bb5/.25 r/.25 C5+E5+G5+C6/1.5', 0.8, 'brass'], ['r/8 C4+E4+Bb4/.25 r/.25 C4+E4+G4+C5/1.5', 0.45],
+      [rep('r/1 G5/1', 4), 0.5, 'block'], ['r/8 C4/.25 r/.25 C4/1.5', 0.5, 'kick'], ['r/8.5 C4/1.5', 0.5, 'cym']], null, 0.8),
+    win: piece(144, [['G4/.5 C5/.5 E5/.5 G5/1 E5/.5 G5/1.5 r/.5 A5/.5 G5/.5 F5/.5 E5/.5 D5/.5 E5/.5 C5/2', 0.85, 'brass'],
+      ['G4/.5 C5/.5 E5/.5 G5/1 E5/.5 G5/1.5 r/.5 A5/.5 G5/.5 F5/.5 E5/.5 D5/.5 E5/.5 C5/2', 0.6, 'reed'],
+      ['r/5 A6/.5 G6/.5 F6/.5 E6/.5 D6/.5 E6/.5 C6/.5 C7/1.5', 0.8, 'xylo'],
+      ['C3/.5 r/.5 G2/.5 r/.5 C3/.5 r/.5 G2/.5 r/.5 F2/.5 r/.5 C3/.5 r/.5 G2/.5 r/.5 G2/.5 B2/.5 C3/2', 0.9, 'bassoon', 0.7],
+      ['r/.5 E4+G4+C5/.5 r/.5 E4+G4+C5/.5 r/.5 E4+G4+C5/.5 r/.5 E4+G4+C5/.5 r/.5 F4+A4+C5/.5 r/.5 F4+A4+C5/.5 r/.5 F4+G4+B4/.5 r/.5 F4+G4+B4/.5 C4+E4+G4+C5/2', 0.45, 'organ', 0.6],
+      ['r/8 C4/2', 0.5, 'kick'], ['r/8 C4/2', 0.55, 'cym']], [8], 0.9),
+    lose: piece(76, [['G4/1 Gb4/1 F4/1 E4/3w', 0.9, 'brass'], ['G3/1 Gb3/1 F3/1 E3/3w', 0.7, 'bassoon'], ['G3/1 Gb3/1 F3/1 E3/3w', 0.35]], null, 0.95),
     rally: piece(150, [['C4/.5 Db4/.5 D4/.5 Eb4/.5 E4/.5 F4/.5 F#4/.5 G4/.5 G#4/.5 A4/.5 Bb4/.5 B4/.5 C5+E5+G5/.4 r/1.6', 0.9],
-      ['C3/1 C3/1 C3/1 C3/1 C3/1 C3/1 C2+C3/.4 r/1.6', 0.7]], [7, 7.5], 0.75),
-    menu: piece(168, [['E5/2 D5/1 C5/1 E5/1 G5/1 A5/2 G5/1 E5/3 F5/2 E5/1 D5/1 F5/1 A5/1 G5/2 F5/1 D5/3 ' +
-      'E5/2 D5/1 C5/1 E5/1 G5/1 C6/2 B5/1 A5/3 F5/1 A5/1 C6/1 B5/2 G5/1 D5/1.5 E5/.5 D5/1 C5/3', 0.7], [acc[0], 0.55], [acc[1], 0.32]], null, 0.88),
-    _unlock: piece(180, [['C5/.25 E5/.25 G5/.25 C6+E5+G5/1.25', 0.9], ['r/.75 C3/1.25', 0.7]]),
-    _levelUp: piece(170, [['G4/.25 C5/.25 E5/.25 G5/.5 E5/.25 C5+E5+G5+C6/1.5', 0.9], ['r/1.5 C3+C4/1.5', 0.7]]),
+      ['C4/.5 Db4/.5 D4/.5 Eb4/.5 E4/.5 F4/.5 F#4/.5 G4/.5 G#4/.5 A4/.5 Bb4/.5 B4/.5 C5+E5+G5/.4 r/1.6', 0.5, 'reed', 0.7],
+      ['C3/1 C3/1 C3/1 C3/1 C3/1 C3/1 C2+C3/.4 r/1.6', 0.7], [rep('C3/.5', 12) + ' C3/.4 r/1.6', 0.8, 'pizz'],
+      [rep('C4/.5', 12) + ' C4/.4 r/1.6', 0.35, 'snare'], ['r/6 C4/2', 0.5, 'cym'], ['r/6 C4/2', 0.5, 'kick']], [7, 7.5], 0.75),
+    // SNEAK: an original tiptoe in A minor for full-count tension: pizzicato on the 8ths, bassoon on the floor,
+    // a wood-block clock ticking. Plays once (~7 s); organ('stop') or any other cue cuts it.
+    sneak: piece(132, [['A3/.5 r/.5 C4/.5 r/.5 E4/.5 r/.5 F4/.5 E4/.5 D#4/.5 r/.5 E4/.5 r/.5 C4/.5 r/.5 A3/1 ' +
+      'A3/.5 r/.5 C4/.5 r/.5 E4/.5 r/.5 G#4/.5 A4/.5 B4/.5 r/.5 G#4/.5 r/.5 E4/.5 D4/.5 B3/.5 G#3/.5', 0.9, 'pizz'],
+      [rep('A2/.5 r/1.5 E2/.5 r/1.5', 3) + ' E2/.5 r/1.5 E2/.5 r/.5 E2/.5 r/.5', 0.85, 'bassoon', 0.5],
+      [rep('E6/1 B5/1', 8), 0.25, 'block'], ['r/12 B4/4', 0.25, 'reed']], null, 0.9),
+    // IRIS: a short "ta-DAA!" sting for scene ends / the iris wipe
+    iris: piece(150, [['G5/.125 A5/.125 B5/.125 C6/.125 D6/.125 E6/.125 F6/.125 G6/.125 r/.5 C7/1.75', 0.8, 'xylo'],
+      ['r/1 G4+B4+D5/.25 r/.25 C5+E5+G5+C6/1.75', 0.85, 'brass'], ['r/1.5 C4+E4+G4+C5/1.75', 0.45],
+      ['r/1 G2/.25 r/.25 C2/1.75', 0.9, 'bassoon'], ['r/1 C4/.25 r/2', 0.5, 'snare'], ['r/1.5 C4/1.75', 0.5, 'kick'], ['r/1.5 C4/1.75', 0.6, 'cym']]),
+    menu: piece(172, [[MENU_MEL.join(' '), 0.8, 'reed', 0.82], [rep('r/4', 8) + ' ' + MENU_MEL.slice(8).join(' '), 0.55, 'xylo'],
+      [MENU_BASS, 0.85, 'bassoon', 0.45], [MENU_PIZZ, 0.5, 'pizz'], [MENU_CH, 0.32, 'organ', 0.8],
+      [rep('r/1 G5/1 r/1 C6/1', 8) + ' ' + rep('C6/.5 r/.5 G5/.5 r/.5', 16), 0.3, 'block']], null, 0.88),
+    _unlock: piece(180, [['C5/.25 E5/.25 G5/.25 C6+E5+G5/1.25', 0.7], ['C6/.25 E6/.25 G6/.25 C7/1.25', 0.8, 'xylo'], ['r/.75 C3/1.25', 0.7, 'bassoon'], ['r/.75 C4/1', 0.4, 'cym']]),
+    _levelUp: piece(170, [['G4/.25 C5/.25 E5/.25 G5/.5 E5/.25 C5+E5+G5+C6/1.5', 0.8, 'brass'], ['G5/.25 C6/.25 E6/.25 G6/.5 E6/.25 C7/1.5', 0.7, 'xylo'],
+      ['r/1.5 C4+E4+G4/1.5', 0.45], ['r/1.5 C3/1.5', 0.7, 'bassoon'], ['r/1.5 C4/1.5', 0.3, 'kick'], ['r/1.5 C4/1.5', 0.5, 'cym']]),
   };
   function organNote(g, dest, t, m, dur, v, wob) {
     var c = g.ctx, f = mtof(m), osc = c.createOscillator(), gn = c.createGain();
     if (g.wave) { osc.setPeriodicWave(g.wave); osc.frequency.setValueAtTime(f / 2, t); }
     else { osc.type = 'triangle'; osc.frequency.setValueAtTime(f, t); }
-    gn.gain.setValueAtTime(0, t); gn.gain.linearRampToValueAtTime(v, t + 0.006);
-    gn.gain.setValueAtTime(v, t + dur); gn.gain.linearRampToValueAtTime(0, t + dur + 0.05);
-    if (wob) { // sad-trombone wah-wah
-      var lfo = c.createOscillator(), dep = c.createGain();
-      lfo.frequency.value = 5; dep.gain.setValueAtTime(0, t); dep.gain.linearRampToValueAtTime(f * (g.wave ? 0.5 : 1) * 0.035, t + dur * 0.5);
-      lfo.connect(dep); dep.connect(osc.frequency); lfo.start(t); lfo.stop(t + dur + 0.1);
-      gn.gain.setValueAtTime(v, t + dur * 0.6); gn.gain.linearRampToValueAtTime(v * 0.4, t + dur);
-    }
-    osc.connect(gn); gn.connect(dest); osc.start(t); osc.stop(t + dur + 0.08);
+    var end = sustainEnv(gn.gain, t, 0.006, v, dur, 0.05, wob);
+    if (wob) lfoTo(g, t, dur, 5, [[osc.frequency, f * (g.wave ? 0.5 : 1) * 0.035]]);
+    osc.connect(gn); gn.connect(dest); osc.start(t); osc.stop(end + 0.05);
   }
+  // instruments: (g, dest {org, dry}, t, midi, dur, v, wob). Level trims keep the band balanced against the organ.
+  var INST = {
+    organ: function (g, d, t, m, dur, v, w) { organNote(g, d.org, t, m, dur, v, w); },
+    reed: function (g, d, t, m, dur, v, w) { reedNote(g, d.dry, t, mtof(m), dur, v * 1.25, w, 2, 1.6, 0.9, 3800); },
+    bassoon: function (g, d, t, m, dur, v, w) { reedNote(g, d.dry, t, mtof(m), dur, v * 1.7, w, 1, 2.2, 1.1, 1300); },
+    brass: function (g, d, t, m, dur, v, w) { brassNote(g, d.dry, t, mtof(m), dur, v * 0.7, w); },
+    pizz: function (g, d, t, m, dur, v) { pizzNote(g, d.dry, t, mtof(m), v * 1.6); },
+    xylo: function (g, d, t, m, dur, v) { xyloNote(g, d.dry, t, mtof(m), v * 1.3); },
+    block: function (g, d, t, m, dur, v) { woodblock(g, d.dry, t, mtof(m), v * 0.8); },
+    kick: function (g, d, t, m, dur, v) { kick(g, d.dry, t, v * 4); },
+    snare: function (g, d, t, m, dur, v) { snare(g, d.dry, t, v * 2); },
+    cym: function (g, d, t, m, dur, v) { cymbal(g, d.dry, t, v * 1.2); },
+  };
   function playEvent(g, P, ev, at, dest, gain) {
-    var spb = 60 / P.bpm, dur = Math.max(0.05, ev.l * spb * P.legato), v = 0.15 * ev.v * (gain || 1);
-    for (var i = 0; i < ev.m.length; i++) organNote(g, dest, at, ev.m[i], dur, v, ev.w);
-    noise(g, dest, { t: at, f: 2800, q: 0.8, a: 0.0003, d: 0.006, v: v * 0.6 }); // key click
+    var spb = 60 / P.bpm, dur = Math.max(0.05, ev.l * spb * (ev.lg || P.legato)), v = 0.15 * ev.v * (gain || 1), fn = INST[ev.inst] || INST.organ;
+    for (var i = 0; i < ev.m.length; i++) fn(g, dest, at, ev.m[i], dur, v, ev.w);
+    if (fn === INST.organ) noise(g, dest.org, { t: at, f: 2800, q: 0.8, a: 0.0003, d: 0.006, v: v * 0.6 }); // key click
   }
   function playPiece(g, P, t0, dest, gain) {
     var spb = 60 / P.bpm;
@@ -427,9 +654,8 @@
   }
   function menuStart(g) {
     if (S.menu || !S.music) return;
-    var c = g.ctx, gn = c.createGain(), now = c.currentTime;
-    gn.gain.setValueAtTime(0.0001, now); gn.gain.linearRampToValueAtTime(1, now + 0.4); gn.connect(g.organIn);
-    S.menu = { gain: gn, t0: now + 0.12, i: 0, it: 0 };
+    var now = g.ctx.currentTime;
+    S.menu = { cue: mkCue(g, 0.4), t0: now + 0.12, i: 0, it: 0 };
     menuPump(g);
   }
   function menuPump(g) {
@@ -438,7 +664,7 @@
     for (var guard = 0; guard < 128; guard++) {
       var ev = P.ev[m.i], at = m.t0 + m.it * L + ev.b * spb;
       if (at > now + 0.5) break;
-      if (at > now - 0.02) playEvent(g, P, ev, at, m.gain);
+      if (at > now - 0.02) playEvent(g, P, ev, at, m.cue);
       if (++m.i >= P.ev.length) { m.i = 0; m.it++; }
     }
   }
@@ -446,7 +672,15 @@
     try { var now = g.ctx.currentTime; node.gain.cancelScheduledValues(now); node.gain.setValueAtTime(node.gain.value, now); node.gain.setTargetAtTime(0, now, tc); } catch (e) { /* ignore */ }
     later(function () { node.disconnect(); }, 1500);
   }
-  function menuStop(g, tc) { if (S.menu) { fadeOut(S.menu.gain, g, tc || 0.12); S.menu = null; } }
+  // a cue = a pair of fader gains: organ voices go through the leslie chain, the pit band straight to the music bus
+  function mkCue(g, fadeIn) {
+    var c = g.ctx, now = c.currentTime, cue = { org: c.createGain(), dry: c.createGain() };
+    if (fadeIn) [cue.org, cue.dry].forEach(function (n) { n.gain.setValueAtTime(0.0001, now); n.gain.linearRampToValueAtTime(1, now + fadeIn); });
+    cue.org.connect(g.organIn); cue.dry.connect(g.organ);
+    return cue;
+  }
+  function fadeCue(cue, g, tc) { fadeOut(cue.org, g, tc); fadeOut(cue.dry, g, tc); }
+  function menuStop(g, tc) { if (S.menu) { fadeCue(S.menu.cue, g, tc || 0.12); S.menu = null; } }
   function tick() {
     var g = S.g; if (!g || g.ctx.state !== 'running') return;
     var now = g.ctx.currentTime;
@@ -501,23 +735,23 @@
   }
 
   function sfx(name, opts) {
-    var fn = SFX[name], g = live(); if (!fn || !g || S.muted) return;
-    opts = opts || {};
+    var fn = own(SFX, name), g = live(); if (!fn || !g || S.muted) return;
+    opts = opts && typeof opts === 'object' ? opts : {};
     var now = g.ctx.currentTime;
     if (S.last[name] != null && now - S.last[name] < 0.025 && name !== 'crack') return; // de-dupe double fires
     S.last[name] = now;
-    fn(g, now + 0.004 + (opts.when || 0), opts);
+    fn(g, now + 0.004 + clamp(+opts.when || 0, 0, 10), opts);
   }
   function organ(name) {
     var g = S.g;
-    if (name === 'stop') { S.menuWanted = false; if (g) { menuStop(g, 0.15); if (S.cue) { fadeOut(S.cue, g, 0.08); S.cue = null; } } return; }
+    if (name === 'stop') { S.menuWanted = false; if (g) { menuStop(g, 0.15); if (S.cue) { fadeCue(S.cue, g, 0.08); S.cue = null; } } return; }
     if (name === 'menu') { S.menuWanted = true; if (live() && S.music && !S.cue) menuStart(g); return; }
-    var P = PIECES[name]; if (!P || name.charAt(0) === '_') return;
+    var P = own(PIECES, name); if (!P || name.charAt(0) === '_') return;
     S.menuWanted = false;
     g = live(); if (!g || !S.music || S.muted) return;
     menuStop(g, 0.08);
-    if (S.cue) fadeOut(S.cue, g, 0.05);
-    var cue = g.ctx.createGain(); cue.connect(g.organIn); S.cue = cue;
+    if (S.cue) fadeCue(S.cue, g, 0.05);
+    var cue = mkCue(g, 0); S.cue = cue;
     var len = playPiece(g, P, g.ctx.currentTime + 0.03, cue, 1);
     later(function () { if (S.cue === cue) S.cue = null; }, (len + 0.6) * 1000);
   }
@@ -528,18 +762,19 @@
   function setMusic(b) {
     S.music = !!b; var g = S.g; if (!g) return;
     g.organ.gain.setTargetAtTime(S.music ? LEVEL.organ : 0, g.ctx.currentTime, 0.05);
-    if (!S.music) { menuStop(g, 0.1); if (S.cue) { fadeOut(S.cue, g, 0.05); S.cue = null; } }
+    if (!S.music) { menuStop(g, 0.1); if (S.cue) { fadeCue(S.cue, g, 0.05); S.cue = null; } }
   }
 
   // ------------------------------------------------------------------ offline rendering (tests / tuning)
   // render(kind, name, opts, seconds) -> Promise<{peak, rms, seconds}> or null. kind: sfx | organ | cheer | groan | crowd
+  // (for sfx, 'a+b' renders several layered at once)
   function render(kind, name, opts, secs) {
     var OAC = W.OfflineAudioContext || W.webkitOfflineAudioContext;
     if (!OAC) return Promise.resolve(null);
     secs = secs || 2; opts = opts || {};
     var sr = 44100, oc = new OAC(2, Math.ceil(sr * secs), sr), g = buildGraph(oc, true), t = 0.02;
-    if (kind === 'sfx') SFX[name](g, t, opts);
-    else if (kind === 'organ') playPiece(g, PIECES[name], t, g.organIn, 1);
+    if (kind === 'sfx') String(name).split('+').forEach(function (n) { SFX[n](g, t, opts); }); // 'crack+kablam' layers
+    else if (kind === 'organ') playPiece(g, PIECES[name], t, { org: g.organIn, dry: g.organ }, 1);
     else if (kind === 'cheer') cheer(g, t, opts.size == null ? 1 : opts.size, g.crowd);
     else if (kind === 'groan') groan(g, t, g.crowd);
     else if (kind === 'crowd') { var b = bedBuild(g); b.target = opts.level == null ? 0.7 : opts.level; for (var x = 0; x < secs; x += 0.1) bedTick(g, x); }

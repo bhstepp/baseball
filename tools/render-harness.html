@@ -3,27 +3,26 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Render harness · Halftone Hardball</title>
-<!-- fonts: local copies (fetched by tools/render-shots.js into qa/render/fonts), else Google Fonts -->
+<title>Render harness · Screwball Slugger</title>
+<!-- fonts: local copies (fetched by tools/render-shots.js into qa/render/fonts), else system fallbacks -->
 <style>
-@font-face { font-family: 'Bungee'; src: url(../qa/render/fonts/Bungee.ttf) format('truetype'); }
-@font-face { font-family: 'Space Mono'; font-weight: 400; src: url(../qa/render/fonts/SpaceMono-Regular.ttf) format('truetype'); }
-@font-face { font-family: 'Space Mono'; font-weight: 700; src: url(../qa/render/fonts/SpaceMono-Bold.ttf) format('truetype'); }
-html, body { margin: 0; background: #F4EEE1; overflow: hidden; }
-canvas#game { display: block; }
+@font-face { font-family: 'Luckiest Guy'; src: url(../qa/render/fonts/LuckiestGuy.woff2) format('woff2'); }
+@font-face { font-family: 'Fredoka'; font-weight: 300 700; src: url(../qa/render/fonts/Fredoka.woff2) format('woff2'); }
+html, body { margin: 0; background: #FFF4DC; overflow: hidden; }
+canvas#game { display: block; position: fixed; left: 0; top: 0; }
 #grid { display: none; padding: 8px; gap: 8px; flex-wrap: wrap; align-content: flex-start; background: #E9E1CF; min-height: 100vh; box-sizing: border-box; }
 #grid canvas { display: block; }
-#hint { position: fixed; bottom: 2px; left: 4px; font: 10px monospace; color: #0008; pointer-events: none; }
 </style>
 </head>
 <body>
 <canvas id="game"></canvas>
 <div id="grid"></div>
-<div id="hint"></div>
+<script src="../src/vendor/three.min.js"></script>
+<script>window.BB_RENDER_HQ = true;</script>
 <script src="../src/00-const.js"></script>
 <script>
-// load whatever sim modules exist, then the render modules (missing optional ones are fine)
-var MODS = ['10-pitch.js', '15-bat.js', '20-content.js', '30-riso.js', '35-scene.js', '38-cards.js'];
+// load the sim + render modules (missing optional ones are fine)
+var MODS = ['10-pitch.js', '15-bat.js', '20-content.js', '31-toon.js', '32-cast.js', '33-park.js', '34-anim.js', '35-scene.js', '30-riso.js', '38-cards.js'];
 (function next(i) {
   if (i >= MODS.length) return boot();
   var s = document.createElement('script'); s.src = '../src/' + MODS[i];
@@ -44,11 +43,11 @@ var MOCK_PITCHER = { id: 'p_mock', name: 'Mock McGee', hand: 'R', team: 'Mockers
   look: { build: 'tall', hair: 'mustache', windup: 'classic', number: 27 } };
 function parks() { return (BB.Content && BB.Content.PARKS && BB.Content.PARKS.length) ? BB.Content.PARKS : [MOCK_PARK]; }
 function pitchers() { return (BB.Content && BB.Content.PITCHERS && BB.Content.PITCHERS.length) ? BB.Content.PITCHERS : [MOCK_PITCHER]; }
-function mockPitch(pitcher, seed, type) {
+function mockPitch(pitcher, seed, type, strike) {
   if (BB.Pitch && BB.Pitch.make) {
-    for (var k = 0; k < 400; k++) {
+    for (var k = 0; k < 600; k++) {
       var p = BB.Pitch.make(pitcher, { balls: 0, strikes: 0, derby: true, id: 1 }, BB.U.rng(seed + k));
-      if (!type || p.type === type) return p;
+      if ((!type || p.type === type) && (strike == null || p.strike === strike)) return p;
     }
   }
   var T = 0.72;
@@ -59,17 +58,19 @@ function mockPlay(park, want) {
   var sw = want === 'hr' ? { contact: true, label: 'PERFECT', quality: 1, sweet: true, ev: 110, la: 29, spray: -14, power: true }
     : want === 'gap' ? { contact: true, label: 'GREAT', quality: 0.8, sweet: false, ev: 101, la: 17, spray: 24, power: false }
     : want === 'wall' ? { contact: true, label: 'GREAT', quality: 0.85, sweet: false, ev: 104, la: 22, spray: -2, power: false }
+    : want === 'fly' ? { contact: true, label: 'GOOD', quality: 0.6, sweet: false, ev: 92, la: 34, spray: 8, power: false }
+    : want === 'foul' ? { contact: true, label: 'LATE', quality: 0.3, sweet: false, ev: 80, la: 30, spray: 58, power: false }
     : { contact: true, label: 'EARLY', quality: 0.4, sweet: false, ev: 84, la: -6, spray: -18, power: false };
   var match = { hr: function (p) { return p.type === 'HR'; }, gap: function (p) { return p.type === '2B' || p.type === '3B'; },
-    wall: function (p) { return p.wall && p.type !== 'HR'; }, ground: function (p) { return p.type === 'OUT' && p.outKind === 'ground'; } }[want] || function () { return true; };
+    wall: function (p) { return p.wall && p.type !== 'HR'; }, ground: function (p) { return p.type === 'OUT' && p.outKind === 'ground'; },
+    fly: function (p) { return p.type === 'OUT' && p.outKind === 'fly'; }, foul: function (p) { return p.type === 'FOUL'; } }[want] || function () { return true; };
   if (BB.Bat && BB.Bat.play) {
-    for (var k = 0; k < 300; k++) {
+    for (var k = 0; k < 400; k++) {
       var s2 = Object.assign({}, sw, { ev: sw.ev + (k % 7) - 3, la: sw.la + ((k * 3) % 9) - 4, spray: sw.spray + ((k * 5) % 11) - 5 });
       var pl = BB.Bat.play(s2, park, BB.U.rng(1000 + k), { bases: [true, false, false], outs: 1 });
       if (match(pl)) { pl._sw = s2; return pl; }
     }
   }
-  // simple closure mock
   var d = want === 'hr' ? 420 : want === 'gap' ? 330 : 120, sp = BB.U.rad(sw.spray), apex = want === 'hr' ? 95 : want === 'gap' ? 40 : 3, hang = want === 'ground' ? 1.2 : 4;
   var dur = Math.max(2.2, hang + 0.8);
   return { type: want === 'hr' ? 'HR' : want === 'gap' ? '2B' : 'OUT', outKind: want === 'ground' ? 'ground' : null, dist: d, dur: dur, hang: hang, wall: false, catchBy: -1, catchT: -1,
@@ -77,7 +78,7 @@ function mockPlay(park, want) {
     fielderAt: function (i, t) { var D = BB.Bat ? BB.Bat.FIELDERS[BB.Bat.ORDER[i]] : { x: 0, y: 100 }; return { x: D.x, y: D.y }; } };
 }
 function mockHud(o) {
-  return Object.assign({ balls: 2, strikes: 1, outs: 1, outsMax: 3, bases: [true, false, true], inning: 'BOT 9', score: '3–4', goal: 'Score 2 runs to walk it off', progress: '0 / 2 R', streak: 0 }, o || {});
+  return Object.assign({ balls: 2, strikes: 1, outs: 1, outsMax: 3, bases: [true, false, true], inning: 'BOT 9', score: '3–4', goal: 'Bottom 9th. Down 1, runners on the corners, 1 out. Score 2 to win.', progress: '0 / 2 R', streak: 0 }, o || {});
 }
 
 // ---------------------------------------------------------------- scenes
@@ -89,8 +90,9 @@ function boot() {
   var w = +(Q.w || window.innerWidth), h = +(Q.h || window.innerHeight);
   canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
   BB.Render.init(canvas);
+  BB.Render._S.noAdapt = true;
   BB.Render.resize(w, h, Math.min(window.devicePixelRatio || 1, 2));
-  var fontsP = (document.fonts && document.fonts.load) ? Promise.all([document.fonts.load('20px "Bungee"'), document.fonts.load('700 12px "Space Mono"'), document.fonts.load('400 12px "Space Mono"')]).catch(function () {}) : Promise.resolve();
+  var fontsP = (document.fonts && document.fonts.load) ? Promise.all([document.fonts.load('20px "Luckiest Guy"'), document.fonts.load('700 12px "Fredoka"')]).catch(function () {}) : Promise.resolve();
   fontsP.then(function () {
     window.setup = setup;
     setup(location.search);
@@ -102,31 +104,37 @@ function buildView(q) {
   var pitcher = Object.assign({}, ps[(+q.pitcher || 0) % ps.length]);
   if (q.windstyle) pitcher.look = Object.assign({}, pitcher.look, { windup: q.windstyle });
   if (q.hand) pitcher.hand = q.hand;
-  var bat = { id: 'b_hickory', name: 'Old Hickory', look: { wood: q.wood || 'mid', tape: 'a' } };
-  if (q.ink) BB.Render.setInks(q.ink); else BB.Render.setInks(null);
+  var bat = { id: 'b_hickory', name: 'Old Hickory' };
+  BB.Render.setInks(q.ink || null);
   var v = { scene: q.scene || 'title', time: +(q.time || 3.2), park: park, pitcher: pitcher, bat: bat, windup: null, pitch: null, pitchT: null,
     swing: null, loading: null, assist: q.assist !== '0', play: null, playT: 0, runners: [], hud: q.nohud ? null : mockHud(q.hud ? JSON.parse(q.hud) : null),
     stamp: null, onFire: q.fire === '1', shake: +(q.shake || 0), hitstop: q.hitstop === '1', last: q.nolast ? null : { mph: 94, name: 'Slider' } };
   if (v.onFire) v.hud.streak = 4;
+  if (q.outs10) v.hud = mockHud({ outs: 4, outsMax: 10, inning: 'DERBY', score: '3 HR', progress: '1,204 ft', goal: 'Hit home runs. Anything but a homer is an out.' });
   if (v.scene === 'bat') {
-    var pitch = mockPitch(pitcher, +(q.seed || 7), q.ptype);
+    var pitch = mockPitch(pitcher, +(q.seed || 7), q.ptype, q.strike != null ? q.strike === '1' : null);
     var st = q.state || 'idle';
     if (st === 'windup') v.windup = +(q.w || 0.5);
-    if (st === 'loading') { v.windup = 0.85; v.loading = +(q.l || 1); }
+    if (st === 'loading') { v.windup = +(q.w || 0.85); v.loading = +(q.l || 1); }
     if (st === 'mid' || st === 'assist') { v.pitch = pitch; v.pitchT = pitch.T * +(q.f || 0.6); }
     if (st === 'swing' || st === 'contact' || st === 'whiff') {
       v.pitch = pitch;
       var sw = +(q.st || (st === 'swing' ? 0.035 : 0.12));
       v.pitchT = pitch.T - 0.07 + sw;
-      var res = st === 'whiff' ? { contact: false, label: 'WHIFF' } : { contact: true, label: 'PERFECT', quality: 1, sweet: true, ev: 106, la: 26, spray: -8 };
+      var res = st === 'whiff' ? { contact: false, label: 'WHIFF', timingErr: -0.15 } : { contact: true, label: 'PERFECT', quality: 1, sweet: true, ev: 106, la: 26, spray: -8, timingErr: 0 };
       v.swing = { t: sw, result: res, power: !!q.power };
+      if (st === 'contact') v.play = mockPlay(park, q.play || 'hr');
     }
-    if (st === 'mitt') { v.pitch = pitch; v.pitchT = pitch.T + +(q.dt || 0.08); }
+    if (st === 'mitt' || st === 'called') { v.pitch = pitch; v.pitchT = pitch.T + +(q.dt || 0.08); }
   }
   if (v.scene === 'field') {
     var play = mockPlay(park, q.play || 'hr');
     v.play = play; v.playT = Math.min(play.dur, play.dur * +(q.f || 0.5));
-    v.runners = q.play === 'gap' ? [{ from: 1, to: 4 }, { from: 0, to: 2 }] : q.play === 'ground' ? [{ from: 1, to: 2 }, { from: 0, to: -1 }] : [{ from: 1, to: 4 }, { from: 0, to: 4 }];
+    if (q.extra) v._extra = +q.extra;
+    v.runners = q.play === 'gap' ? [{ from: 1, to: 4 }, { from: 0, to: 2 }] : q.play === 'ground' ? [{ from: 1, to: 2 }, { from: 0, to: -1 }] : q.play === 'hr' || !q.play ? [{ from: 1, to: 4 }, { from: 0, to: 4 }] : [];
+    if (q.play === 'gap') v.hud.bases = [false, true, false];
+    if (q.play === 'hr' || !q.play) v.hud.bases = [false, false, false];
+    if (q.play === 'ground') v.hud.bases = [false, true, false];
   }
   if (q.stamp) v.stamp = { text: q.stamp, sub: q.sub || '', t: +(q.stt || 0.5), kind: q.kind || 'good' };
   return v;
@@ -134,8 +142,11 @@ function buildView(q) {
 function setup(search) {
   var q = qs(search);
   last = buildView(q);
+  // a scene change opens with an iris: render a frame of the same scene first unless the shot asks for the wipe
+  BB.Render._S.prevScene = ''; BB.Render._S.lastScene = '';
+  if (!q.iris) { var pre = Object.assign({}, last, { time: last.time - 1 }); BB.Render.frame(pre); }
+  else { var pv = Object.assign({}, last, { scene: q.iris, time: last.time - 0.16 }); BB.Render.frame(pv); BB.Render._S.sceneT0 = last.time - 0.16; BB.Render._S.lastScene = last.scene; BB.Render._S.prevScene = q.iris; }
   BB.Render.frame(last);
-  document.getElementById('hint').textContent = '';
   window.__done = true;
   return true;
 }
@@ -147,7 +158,7 @@ function animate() {
     if (v.scene === 'bat' && q.anim === 'cycle') {
       var c = t % 3.2;
       if (c < 1.15) { v.windup = c / 1.15; v.pitch = null; v.pitchT = null; v.swing = null; }
-      else { v.windup = null; v.pitch = pitch; v.pitchT = c - 1.15; v.swing = v.pitchT > pitch.T - 0.07 ? { t: v.pitchT - pitch.T + 0.07, result: { contact: (Math.floor(t / 3.2) % 2) === 0, quality: 1, ev: 104, la: 25, spray: -10 } } : null; }
+      else { v.windup = null; v.pitch = pitch; v.pitchT = c - 1.15; v.swing = v.pitchT > pitch.T - 0.07 ? { t: v.pitchT - pitch.T + 0.07, result: { contact: (Math.floor(t / 3.2) % 2) === 0, quality: 1, ev: 104, la: 25, spray: -10, timingErr: 0 } } : null; }
     }
     if (v.scene === 'field' && v.play) v.playT = (t % (v.play.dur + 0.6));
     BB.Render.frame(v);
@@ -156,48 +167,29 @@ function animate() {
   loop();
 }
 
-// ---------------------------------------------------------------- card grid (album sizing) + badges
+// ---------------------------------------------------------------- card grid (album sizing), only if BB.CardArt is loaded
 function cards() {
   canvas.style.display = 'none';
   var grid = document.getElementById('grid'); grid.style.display = 'flex';
   var dpr = Math.min(window.devicePixelRatio || 1, 2);
-  var fontsP = document.fonts ? Promise.all([document.fonts.load('20px "Bungee"'), document.fonts.load('700 12px "Space Mono"')]).catch(function () {}) : Promise.resolve();
+  if (!BB.CardArt) { window.__done = true; return; }
+  var fontsP = document.fonts ? Promise.all([document.fonts.load('20px "Luckiest Guy"'), document.fonts.load('700 12px "Fredoka"')]).catch(function () {}) : Promise.resolve();
   fontsP.then(function () {
-    var list = (BB.Meta && BB.Meta.CARDS) || null;
     var rar = ['common', 'rare', 'foil', 'misprint'], names = ['Abner Grubbottom', 'Pee Wee Snodley', 'Dizzy McKettleson', 'Rube Wobberry', 'Hap Quillworth', 'Moose Tumblefield'];
     var pos = ['P', 'C', '1B', '2B', 'SS', '3B', 'LF', 'CF', 'RF', 'DH'];
-    var teams = [['Mudville Barnstormers', 'MUD', 'a', 'classic'], ['Rivet City Pigeons', 'RIV', 'b', 'dusk'], ['Port Juniper Night Owls', 'POR', 'c', 'lawn'],
-      ['Gull Harbor Gulls', 'GUL', 'a', 'harbor'], ['Dry Gulch Jackrabbits', 'DRY', 'b', 'grape'], ['Big Prairie Comets', 'BIG', 'c', 'ledger']];
-    var big = Q.big === '1', cw = big ? 300 : 120, ch = Math.round(cw * 1.4);
-    var t0 = performance.now(), n = 0;
+    var teams = [['Haybale Hayseeds', 'HAY', 'a', 'classic'], ['Ironbridge Rivets', 'RIV', 'b', 'dusk'], ['Loon Lake Loons', 'LOO', 'c', 'lawn'],
+      ['Gull Point Gulls', 'GUL', 'a', 'harbor'], ['Dry Wash Coyotes', 'DRY', 'b', 'grape'], ['Capitol Copperheads', 'CAP', 'c', 'ledger']];
+    var big = Q.big === '1', cw = big ? 300 : 120, ch = Math.round(cw * 1.4), n = 0, t0 = performance.now();
     for (var i = 0; i < (big ? 4 : 20); i++) {
       var tm = teams[i % 6];
-      var card = { id: 'mock-' + i, no: i + 1, name: names[i % names.length], nick: i % 3 === 0 ? 'Noodles' : null, pos: pos[i % pos.length], team: tm[0], teamShort: tm[1],
+      var card = { id: 'mock-' + i, no: i + 1, name: names[i % names.length], pos: pos[i % pos.length], team: tm[0], teamShort: tm[1],
         teamColorSlot: tm[2], number: 3 + (i * 7) % 60, rarity: rar[big ? i : (i % 4)], seed: BB.U.hashStr('mock-' + i), inkset: tm[3], stat: '.312 AVG · 24 HR · 88 RBI' };
       var c = document.createElement('canvas'); c.width = cw * dpr; c.height = ch * dpr; c.style.width = cw + 'px'; c.style.height = ch + 'px';
       grid.appendChild(c);
-      BB.CardArt.draw(c, card, { time: 0.6 + i * 0.2 });
+      try { BB.CardArt.draw(c, card, { time: 0.6 + i * 0.2 }); } catch (e) { console.error(e); }
       n++;
     }
-    var tCards = performance.now() - t0;
-    // second pass (cache hits)
-    var t1 = performance.now();
-    Array.prototype.forEach.call(grid.querySelectorAll('canvas'), function (c, i) {
-      var tm = teams[i % 6];
-      BB.CardArt.draw(c, { id: 'mock-' + i, no: i + 1, name: names[i % names.length], nick: i % 3 === 0 ? 'Noodles' : null, pos: pos[i % pos.length], team: tm[0], teamShort: tm[1], teamColorSlot: tm[2], number: 3 + (i * 7) % 60, rarity: rar[big ? i : (i % 4)], seed: BB.U.hashStr('mock-' + i), inkset: tm[3], stat: '.312 AVG · 24 HR · 88 RBI' }, { time: 1.0 + i * 0.2 });
-    });
-    var tCached = performance.now() - t1;
-    if (!big) {
-      // pitcher portraits, bats, ink sets, parks
-      pitchers().slice(0, 4).forEach(function (p) { var c = mk(110, 154); BB.CardArt.drawPitcher(c, p, { inkset: 'classic' }); });
-      var bats = (BB.Meta && BB.Meta.BATS) || [{ id: 'b1', name: 'Old Hickory', look: { wood: 'mid', tape: 'a', mark: 'none' } }, { id: 'b2', name: 'Moon Shot', look: { wood: 'dark', tape: 'c', mark: 'moon' } },
-        { id: 'b3', name: 'Riso Roller', look: { wood: 'ink', tape: 'c', mark: 'dots' } }, { id: 'b4', name: 'Golden Ash', look: { wood: 'gold', tape: 'a', mark: 'star' } }];
-      bats.slice(0, 4).forEach(function (b) { var c = mk(150, 60); BB.CardArt.drawBat(c, b); });
-      BB.INKSETS.forEach(function (s) { var c = mk(150, 60); BB.CardArt.drawInkset(c, s); });
-      parks().slice(0, 4).forEach(function (p) { var c = mk(120, 90); BB.CardArt.drawPark(c, p); });
-    }
-    function mk(w, h) { var c = document.createElement('canvas'); c.width = w * dpr; c.height = h * dpr; c.style.width = w + 'px'; c.style.height = h + 'px'; grid.appendChild(c); return c; }
-    window.__cardStats = { cards: n, firstMs: tCards, cachedMs: tCached };
+    window.__cardStats = { cards: n, firstMs: performance.now() - t0 };
     window.__done = true;
   });
 }

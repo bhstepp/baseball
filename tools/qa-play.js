@@ -9,7 +9,7 @@ fs.mkdirSync(OUT, { recursive: true });
 const FAST = process.argv.includes('--fast');
 
 (async () => {
-  const browser = await pw.chromium.launch();
+  const browser = await pw.chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true });
   const page = await ctx.newPage();
   const errors = [];

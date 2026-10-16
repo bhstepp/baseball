@@ -89,6 +89,7 @@
     G.pitch = call('Rules', 'nextPitch', G.rs);
     if (!G.pitch) { finish(); return; }
     G.pitchNo++;
+    if (G.rs.balls === 3 && G.rs.strikes === 2) call('Audio', 'organ', 'sneak');
     if (G.hints < 3 && !hintSeen()) {
       setStamp(G.hints === 2 ? 'LAY OFF BALLS' : G.hints === 1 ? 'HOLD = POWER' : 'TAP TO SWING',
         G.hints === 1 ? 'press during the windup, let go to swing' : G.hints === 2 ? 'pitches outside the box are hard to hit' : 'when the ball reaches the plate', 'neutral');
@@ -174,7 +175,7 @@
         var p = G.pitch;
         if (G.loading) G.loading.level = 1;
         if (G.swing) G.swing.t += dt;
-        if (!G.whooshDone && G.pitchT > p.T - 0.25) { G.whooshDone = true; sfx('whoosh', { mph: p.mph }); }
+        if (!G.whooshDone && G.pitchT > p.T - 0.25) { G.whooshDone = true; sfx('whoosh', { mph: p.mph }); sfx('zip', { mph: p.mph }); }
         if (G.auto && !G.swing) autoBat(p);
         if (!G.resolved && G.swing && G.swing.result.contact) {
           // the bat meets the ball when the ball reaches the plate (or a hair after, on a late swing)
@@ -239,6 +240,9 @@
     G.runners = ev.runnerMoves || [];
     G.last = { mph: G.pitch.mph, name: G.pitch.name, ev: s.ev, la: s.la };
     sfx(play.type === 'FOUL' ? 'foul' : 'crack', { quality: s.quality, sweet: s.sweet });
+    if (play.type === 'HR') sfx('kablam', { when: 0.03 });
+    else if (play.type === 'FOUL') sfx('slide', { dir: 'down', when: 0.15 });
+    else if (s.la > 28) sfx('slide', { dir: 'up', when: 0.05 });
     if (s.sweet) { G.hitstopT = 0.09; G.shake = 1; haptic('thud'); } else { G.shake = 0.35 + 0.4 * s.quality; haptic('tap'); }
     track(ev, s, play);
     if (play.type === 'HR') {
@@ -279,6 +283,7 @@
     else if (c === 'STRIKE' && G.swing) kind = 'bad';
     setStamp(ev.text || c, ev.sub || '', kind);
     if (c === 'STRIKE') sfx('strike'); else if (c === 'BALL') sfx('ball');
+    if (c === 'K') { sfx('xylo', { when: 0.3 }); if (G.swing) sfx('twinkle', { when: 0.8 }); }
     if (c === 'K' || c === 'OUT' || c === 'DP') { sfx('out'); if (c !== 'OUT' || ev.over) call('Audio', 'groan'); }
     if (c === 'WALK') call('Audio', 'cheer', 0.3);
     if (kind !== 'neutral') sfx('stamp');
@@ -299,7 +304,9 @@
     var result = call('Rules', 'result', G.rs) || { mode: G.mode, win: false, stars: 0, score: 0, stats: {} };
     var rewards = call('Meta', 'endGame', G.mode, G.cfg, result) || {};
     G.results = { mode: G.mode, cfg: G.cfg, result: result, rewards: rewards };
-    call('Audio', 'organ', result.win || G.mode !== 'tour' && result.score > 0 ? 'win' : 'lose');
+    call('Audio', 'organ', 'iris');
+    var won = result.win || G.mode !== 'tour' && result.score > 0;
+    setTimeout(function () { call('Audio', 'organ', won ? 'win' : 'lose'); }, 1300);
     setPhase('over');
     G.loading = null;
     setTimeout(function () {

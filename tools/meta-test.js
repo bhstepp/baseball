@@ -92,6 +92,15 @@ test('cards: 72, unique ids & names, deterministic, 2 foil/3 rare/7 common per t
   console.log('       teams: ' + C.Meta.TEAMS.map(t => t.name).join(', '));
 });
 
+test('cards: every card has a species from its team theme; every theme species appears', () => {
+  const BB = load({});
+  for (let t = 0; t < 6; t++) {
+    const team = BB.Meta.CARDS.filter(c => c.teamIdx === t), list = BB.Meta.TEAM_SPECIES[t];
+    team.forEach(c => { assert.ok(list.includes(c.species), c.id + ' ' + c.species); assert.ok(c.speciesName); });
+    list.forEach(sp => assert.ok(team.some(c => c.species === sp), 'team ' + t + ' lacks ' + sp));
+  }
+});
+
 test('bats: >= 8, stats in range, default Old Hickory', () => {
   const BB = load({});
   assert.ok(BB.Meta.BATS.length >= 8);

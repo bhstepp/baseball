@@ -3,14 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Hardball Audio Harness</title>
+<title>Slugger Audio Harness</title>
 <style>
-  :root { --paper: #F4EEE1; --a: #0078BF; --b: #FF48B0; --c: #FFE800; --ink: #1A1A1A; }
-  body { margin: 0; padding: 16px; background: var(--paper); color: var(--ink); font: 14px/1.4 "Space Mono", ui-monospace, Menlo, monospace; }
-  h1 { font: 900 22px "Arial Black", sans-serif; color: var(--a); text-shadow: 2px 1px 0 var(--b); mix-blend-mode: multiply; margin: 0 0 8px; }
+  :root { --paper: #FBF1D9; --a: #C8302C; --b: #1F5FA8; --c: #FFD23F; --ink: #1A1410; }
+  body { margin: 0; padding: 16px; background: var(--paper); color: var(--ink); font: 14px/1.4 ui-rounded, "Trebuchet MS", system-ui, sans-serif; }
+  h1 { font: 900 22px "Arial Black", sans-serif; color: var(--a); text-shadow: 2px 2px 0 var(--ink); margin: 0 0 8px; }
   h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .1em; margin: 18px 0 6px; color: var(--b); }
   .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-  button { font: inherit; padding: 9px 12px; border: 2px solid var(--a); background: transparent; color: var(--a); border-radius: 3px; cursor: pointer; }
+  button { font: inherit; font-weight: 700; padding: 9px 12px; border: 3px solid var(--ink); background: #fff; color: var(--ink); border-radius: 14px; box-shadow: 2px 3px 0 var(--ink); cursor: pointer; }
+  button.new { background: var(--c); }
   button:active { background: var(--c); }
   label { display: inline-flex; gap: 6px; align-items: center; margin-right: 10px; }
   input[type=range] { width: 140px; }
@@ -18,7 +19,7 @@
 </style>
 </head>
 <body>
-<h1>Halftone Hardball — audio</h1>
+<h1>Screwball Slugger — audio</h1>
 <div class="row">
   <button id="unlock">unlock</button>
   <label><input type="checkbox" id="mute"> muted</label>
@@ -31,10 +32,13 @@
   <label>quality <input type="range" id="q" min="0" max="1" step="0.05" value="0.8"><b id="qv">0.80</b></label>
   <label><input type="checkbox" id="sweet"> sweet</label>
   <label>mph <input type="range" id="mph" min="50" max="102" step="1" value="92"><b id="mv">92</b></label>
+  <label>slide dir <select id="dir"><option>up</option><option>down</option></select></label>
 </div>
-<h2>Sound effects</h2>
+<h2>Sound effects <small>(yellow = cartoon gags)</small></h2>
 <div class="row" id="sfx"></div>
-<h2>Organ</h2>
+<h2>Gag combos</h2>
+<div class="row" id="combo"></div>
+<h2>Organ &amp; pit band</h2>
 <div class="row" id="organ"></div>
 <h2>Crowd</h2>
 <div class="row">
@@ -54,9 +58,18 @@
   var A = BB.Audio, $ = function (id) { return document.getElementById(id); };
   function log(s) { $('log').textContent = s + '\n' + $('log').textContent; }
   function btn(parent, text, fn) { var b = document.createElement('button'); b.textContent = text; b.onclick = function () { A.unlock(); fn(); }; parent.appendChild(b); return b; }
-  function opts() { return { quality: +$('q').value, sweet: $('sweet').checked, mph: +$('mph').value }; }
-  A.SFX.forEach(function (n) { btn($('sfx'), n, function () { A.sfx(n, opts()); }); });
-  A.ORGAN.concat(['stop']).forEach(function (n) { btn($('organ'), n, function () { A.organ(n); }); });
+  function opts() { return { quality: +$('q').value, sweet: $('sweet').checked, mph: +$('mph').value, dir: $('dir').value }; }
+  var NEW = ['zip', 'boing', 'slide', 'bonk', 'xylo', 'honk', 'pop', 'twinkle', 'kablam', 'splat', 'sneak', 'iris'];
+  A.SFX.forEach(function (n) { var b = btn($('sfx'), n, function () { A.sfx(n, opts()); }); if (NEW.indexOf(n) >= 0) b.className = 'new'; });
+  A.ORGAN.concat(['stop']).forEach(function (n) { var b = btn($('organ'), n, function () { A.organ(n); }); if (NEW.indexOf(n) >= 0) b.className = 'new'; });
+  // suggested in-game layering
+  btn($('combo'), 'slide up', function () { A.sfx('slide', { dir: 'up' }); });
+  btn($('combo'), 'slide down', function () { A.sfx('slide', { dir: 'down' }); });
+  btn($('combo'), 'homer: crack+kablam', function () { A.sfx('crack', { quality: 1, sweet: true }); A.sfx('kablam', { when: 0.03 }); A.cheer(1); A.organ('homer'); });
+  btn($('combo'), 'pitch: zip+mitt', function () { var o = opts(); A.sfx('zip', o); A.sfx('mitt', { mph: o.mph, when: 0.25 }); });
+  btn($('combo'), 'K: whiff+xylo+twinkle', function () { A.sfx('whiff'); A.sfx('xylo', { when: 0.35 }); A.sfx('twinkle', { when: 0.9 }); });
+  btn($('combo'), 'pop-up: crack+slide', function () { A.sfx('crack', { quality: 0.3 }); A.sfx('slide', { dir: 'up', when: 0.05 }); });
+  btn($('combo'), 'foul: foul+slide down', function () { A.sfx('foul'); A.sfx('slide', { dir: 'down', when: 0.1 }); });
   $('unlock').onclick = function () { A.unlock(); };
   $('mute').onchange = function () { A.setMuted(this.checked); };
   $('music').onchange = function () { A.setMusic(this.checked); };
@@ -73,15 +86,17 @@
   // Renders every sound offline; resolves to [{kind, name, peak, rms}]. Used by tools/audio-test.js too.
   window.audioCheckAll = function () {
     var jobs = [];
-    A.SFX.forEach(function (n) { jobs.push(['sfx', n, n === 'crack' ? { quality: 1, sweet: true } : { mph: 100 }, 1.5]); });
-    jobs.push(['sfx', 'crack', { quality: 0.1 }, 1.2]);
-    A.ORGAN.forEach(function (n) { jobs.push(['organ', n, {}, n === 'menu' ? 19 : 6]); });
+    A.SFX.forEach(function (n) { jobs.push(['sfx', n, n === 'crack' ? { quality: 1, sweet: true } : { mph: 100 }, n === 'kablam' || n === 'twinkle' ? 2.5 : 1.5]); });
+    jobs.push(['sfx', 'crack', { quality: 0.1 }, 1.2], ['sfx', 'slide', { dir: 'down' }, 1.5], ['sfx', 'zip', { mph: 55 }, 1],
+      ['sfx', 'honk', { n: 1 }, 1], ['sfx', 'crack+kablam', { quality: 1, sweet: true }, 2.5], ['sfx', 'crack+kablam+whiff+boing+splat+honk', { quality: 1, sweet: true }, 2.5]);
+    A.ORGAN.forEach(function (n) { jobs.push(['organ', n, {}, n === 'menu' ? 24 : n === 'sneak' ? 8.5 : 6]); });
     jobs.push(['cheer', '', { size: 1 }, 6], ['cheer', '', { size: 0.2 }, 4], ['groan', '', {}, 3],
       ['crowd', '', { level: 0.2 }, 4], ['crowd', '', { level: 1 }, 4]);
     var out = [];
     return jobs.reduce(function (p, j) {
       return p.then(function () { return A.render(j[0], j[1], j[2], j[3]); }).then(function (r) {
-        out.push({ kind: j[0], name: j[1] + (j[2].level != null ? '@' + j[2].level : j[2].size != null ? '@' + j[2].size : j[2].quality === 0.1 ? '@poor' : ''),
+        out.push({ kind: j[0], name: j[1] + (j[2].level != null ? '@' + j[2].level : j[2].size != null ? '@' + j[2].size : j[2].quality === 0.1 ? '@poor' :
+          j[2].dir ? '@' + j[2].dir : j[2].mph === 55 ? '@55mph' : j[2].n ? '@x' + j[2].n : ''),
           peak: r ? +r.peak.toFixed(4) : null, rms: r ? +r.rms.toFixed(4) : null });
       });
     }, Promise.resolve()).then(function () { return out; });
