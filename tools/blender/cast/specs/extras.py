@@ -12,7 +12,7 @@ def characters():
     S['ump'] = C.umpire_spec()
     for sp, num in (('otter', 8), ('fox', 3), ('beaver', 14)):
         S['mate_' + sp] = C.mate_spec(sp, num, {})
-    for pid in ('p_bpbob', 'p_mabel', 'p_ike'):          # derby / daily pitchers
+    for pid in ('p_ike',):          # derby / daily pitchers (p_mabel: specs/mabel.py; p_bpbob: specs/park5.py)
         if pid in C.PITCHERS:
             C.add(S, PENDING, pid, lambda pid=pid: C.pitcher_spec(pid))
     return S
