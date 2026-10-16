@@ -370,8 +370,9 @@ def bandaid(ctx, head, geo, at=None, mat='accessory_a', ang=0.5):
 
 def toothpick(ctx, head, geo, corner, mat='accessory_a', length=0.30):
     """A toothpick jutting out of the mouth corner (on the jaw), tilted up and out."""
-    a = np.asarray(corner, float) + np.array([0.02, 0.06, 0.0])
-    d = nrm(np.array([-0.85, -0.45, 0.22]))
+    a = np.asarray(corner, float) + np.array([0.04, -0.02, -0.03])
+    d = nrm(np.array([-0.80, -0.55, 0.25]))
+    length = max(length, 0.38)
     pts = [a - d * 0.06, a + d * length * 0.5, a + d * length]
     p = K.tube(pts, np.array([0.012, 0.011, 0.006]), 5, mat, 'toothpick', bone='jaw')
     head.parts.append(p)
@@ -479,6 +480,23 @@ def tusks(ctx, head, geo, length=0.55, r=0.05, mat='teeth', spread=0.14, curve=0
         top = K.march_to(geo.f, np.array([s * spread, -1.8, m.z0 + 0.03]), (0, 1, 0)) + np.array([0, 0.06, 0])
         ctrl = [top, top + np.array([s * 0.02, -0.03, -length * 0.5]), top + np.array([s * 0.04, curve, -length])]
         out.append(K.horn(ctrl, r, r * 0.35, mat=mat, name='tusk'))
+    head.parts += out
+    return out
+
+
+def buck_teeth(ctx, head, geo, w=0.048, h=0.085, sep=0.052):
+    """Two big incisors showing under the upper lip (beavers, rats, squirrels), rigid to the head."""
+    m = geo.mouth
+    out = []
+    for s in (1, -1):
+        x = sep * s
+        top = K.march_to(geo.f, np.array([x, -1.8, m.z0 + 0.03]), (0, 1, 0)) + np.array([0, 0.05, 0])
+        c = top + np.array([0, -0.02, -h * 0.82])
+        f = SD.box(c, (w, 0.022, h), rnd=0.012)
+        p = K.blob(f, c, 0.2, 60, 'teeth', 'buck_' + ('L' if s > 0 else 'R'), h=0.005)
+        p.sk['mouth_open'] = np.tile([0, -0.02, 0.02], (p.n, 1))
+        p.sk['grin'] = np.tile([0, -0.01, 0.01], (p.n, 1))
+        out.append(p)
     head.parts += out
     return out
 

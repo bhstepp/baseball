@@ -140,6 +140,8 @@ def build_body(spec, J, lod, head_world=None):
         parts.append(GR.ball_bag(J, f, mat='accessory_b', lod=lod))
     if 'shell' in gear:
         parts.append(GR.shell_part(J, f, kind=bp.get('shell_kind', 'tortoise'), lod=lod))
+    if 'keys' in gear:
+        parts += GR.key_ring(J, f, mat=bp.get('keys_mat', 'accessory_b'), lod=lod)
     if bp.get('decals') is False:
         decals = []
     return BodyResult(parts, decals, {k: J[k] for k in CT.CHAIN})

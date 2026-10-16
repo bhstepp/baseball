@@ -40,6 +40,10 @@ BUILDS = {
               dict(chest_w=0.94, chest_d=1.08, belly=0.9, seat=0.94, thigh=0.92, arm_r=0.92)),
     'athletic': (dict(leg=1.06, torso=1.04, hipw=1.0, shoulderw=1.1, arm=1.04, hand=1.04),
                  dict(chest_w=1.1, chest_d=1.05, belly=0.9, seat=1.0, thigh=1.08, shoulder=1.1, arm_r=1.1)),
+    # the landlord: short and bulky - a barrel chest and belly on short legs, no neck, big paws
+    'boss_bulldog': (dict(leg=0.86, torso=1.02, hipw=1.3, shoulderw=1.45, arm=1.0, hand=1.38, head=1.16, neck=0.55, foot=1.15),
+                     dict(chest_w=1.62, chest_d=1.5, belly=1.55, belly_drop=0.06, seat=1.3, thigh=1.42, shoulder=1.6,
+                          arm_r=1.55, forearm=1.25, neck_r=1.65, cuff=1.3)),
     # the boss: bigger, farm-strong (huge shoulders and arms), a short thick neck, big hands and feet
     'boss_ox': (dict(leg=1.2, torso=1.24, hipw=1.24, shoulderw=1.68, arm=1.16, hand=1.5, head=1.1, neck=0.7, foot=1.25),
                 dict(chest_w=1.72, chest_d=1.5, belly=1.1, belly_drop=0.0, seat=1.16, thigh=1.45, shoulder=2.0,

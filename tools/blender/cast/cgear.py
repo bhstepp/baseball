@@ -407,3 +407,51 @@ def shell_part(J, f, kind='tortoise', mat='shell', rim='fur_dark', lod=0):
     orient_outward(p)
     p.set_weights(BD.seg_weights(p.V, CB.torso_segments(J)[:3], 5.0))
     return p
+
+
+# ------------------------------------------------------------------------------------------- the landlord's keys
+def key_ring(J, f, mat='accessory_b', lod=0, side=-1):
+    """A big ring of keys hanging from the belt on one hip (his right by default): a steel ring and five keys fanned
+    below it. Rigid to the hips (it swings with the pelvis)."""
+    spine = np.asarray(J['spine'], float)
+    hips = np.asarray(J['hips'], float)
+    beltz = spine[2] + 0.005
+    # the belt surface on the side, a little to the front
+    p = np.array([side * 1.6, spine[1] - 0.18, beltz])
+    for _ in range(240):
+        v = f(p[None])[0]
+        if v < 0.004:
+            break
+        p[0] -= side * max(v, 0.004)
+    p = p + np.array([side * 0.03, 0.0, -0.02])
+    nrm_ = np.array([side * 1.0, -0.3, 0.0])
+    nrm_ = nrm_ / np.linalg.norm(nrm_)
+    out = []
+    # ring (lies in the plane of the hip side)
+    up = np.array([0, 0, 1.0])
+    t2 = np.cross(up, nrm_)
+    c = p + np.array([0, 0, -0.16])
+    rr = 0.13
+    ring = [c + (up * np.cos(a) + t2 * np.sin(a)) * rr for a in np.linspace(0, 2 * np.pi, 16 if lod == 0 else 8, endpoint=False)]
+    r = BD.ring_sweep(ring, 0.018, 0.018, 5 if lod == 0 else 4, True, mat, normals=[(q - c) / rr for q in ring])
+    out.append(orient_outward(r))
+    # clip to the belt
+    out.append(G.box(p + np.array([0, 0, -0.01]), (0.05, 0.06, 0.07), mat, R=G.frame_from(nrm_, (0, 0, 1))))
+    # keys: shaft + bow (the round end), fanned along the bottom of the ring
+    nk = 5 if lod == 0 else 3
+    for i in range(nk):
+        a = np.pi * (1.25 + 0.5 * i / max(nk - 1, 1))          # angles round the lower half of the ring
+        hang = c + (up * np.cos(a) + t2 * np.sin(a)) * rr
+        d = (hang - c) / rr
+        d = d - up * 0.6
+        d = d / np.linalg.norm(d)
+        bow = hang + d * 0.05
+        shaft_end = hang + d * 0.24
+        kb = SD.smooth_union(0.01, SD.ellipsoid(bow, (0.045, 0.012, 0.045), R=G.frame_from(nrm_, (0, 0, 1))),
+                             SD.capsule(bow, shaft_end, 0.014))
+        V, F = MS.sdf_mesh(kb, bow - 0.3, bow + 0.3, 0.008 if lod == 0 else 0.016, tris=60 if lod == 0 else 16)
+        k = Part(V, F, mat, 'key')
+        out.append(orient_outward(k))
+    for q in out:
+        q.set_weights({'hips': np.full(q.n, 0.7), ('thigh.R' if side < 0 else 'thigh.L'): np.full(q.n, 0.3)})
+    return out

@@ -33,24 +33,8 @@ def params(ctx):
     )
 
 
-def buck_teeth(ctx, head, geo):
-    m = geo.mouth
-    out = []
-    for s in (1, -1):
-        x = 0.052 * s
-        top = K.march_to(geo.f, np.array([x, -1.8, m.z0 + 0.03]), (0, 1, 0)) + np.array([0, 0.05, 0])
-        c = top + np.array([0, -0.02, -0.07])
-        f = SD.box(c, (0.048, 0.022, 0.085), rnd=0.012) if hasattr(SD, 'box') else SD.ellipsoid(c, (0.048, 0.025, 0.09))
-        p = K.blob(f, c, 0.2, 60, 'teeth', 'buck_' + ('L' if s > 0 else 'R'), h=0.005)
-        p.sk['mouth_open'] = np.tile([0, -0.02, 0.02], (p.n, 1))
-        p.sk['grin'] = np.tile([0, -0.01, 0.01], (p.n, 1))
-        out.append(p)
-    head.parts += out
-    return out
-
-
 def features(ctx, head, geo):
-    buck_teeth(ctx, head, geo)
+    M.buck_teeth(ctx, head, geo)
     M.whiskers(ctx, head, geo, n=3, length=0.34, mat='fur_dark')
 
 

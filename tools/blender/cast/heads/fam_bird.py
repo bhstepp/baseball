@@ -267,6 +267,11 @@ def build(ctx, over, features=None):
 
 def accessories(ctx, head, geo):
     acc = ctx.acc
+    if acc.get('gum'):          # a bubble blown at the tip of the beak (rides on the jaw)
+        bk = geo.beak
+        c = bk.tip + np.array([0.0, -0.10, -0.03])
+        p = K.blob(SD.sphere(c, 0.12), c, 0.25, 160, 'accessory_a', 'gum', bone='jaw')
+        head.parts.append(p)
     if acc.get('shades'):
         K.shades(head, geo.eyes, mat='accessory_b')
     if acc.get('glasses'):
