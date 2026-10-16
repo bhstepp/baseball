@@ -6,7 +6,7 @@
 // usage: node tools/build.js
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
 const ROOT = path.join(__dirname, '..');
-const ORDER = ['00-const.js', '10-pitch.js', '15-bat.js', '20-content.js', '25-rules.js', '31-toon.js', '32-cast.js', '33-park.js', '34-anim.js', '35-scene.js',
+const ORDER = ['00-const.js', '10-pitch.js', '15-bat.js', '20-content.js', '25-rules.js', '31-toon.js', '32-cast.js', '33-park.js', '34-anim.js', '35-scene.js', '36-rocco.js', '37-ink.js',
   '38-cards.js', '40-audio.js', '50-save.js', '55-meta.js', '56-ui.js', '60-main.js'];
 const S = f => fs.readFileSync(path.join(ROOT, 'src', f), 'utf8');
 const have = f => fs.existsSync(path.join(ROOT, 'src', f));
@@ -17,8 +17,13 @@ const js = ORDER.filter(have).map(f => `// ===================== MODULE: ${f} ==
 const head = have('shell.head.html') ? S('shell.head.html') : '<style>html,body{margin:0;background:#FFF4DC}</style>';
 const body = have('shell.body.html') ? S('shell.body.html') : '<canvas id="game"></canvas><div id="ui"></div>';
 // Vendored libraries go in their own script tag, ahead of the game bundle (three.js r149, MIT: src/vendor/three.LICENSE).
-const VENDOR = ['vendor/three.min.js'].filter(have).map(f => `<script>\n${S(f)}\n</script>\n`).join('');
-const script = `${VENDOR}<script>\n"use strict";\n${js}\n</script>\n`;
+const VENDOR = ['vendor/three.min.js', 'vendor/three-addons.js'].filter(have).map(f => `<script>\n${S(f)}\n</script>\n`).join('');
+// Binary assets (assets/*.glb, made by tools/blender/*.py) are inlined as base64 so the page stays one offline file:
+//   window.BB_ASSETS = { rocco: '<base64 of assets/rocco.glb>', ... }   (BB.assetBuffer(name) decodes one; see 00-const.js)
+const ASSET_DIR = path.join(ROOT, 'assets');
+const assets = fs.existsSync(ASSET_DIR) ? fs.readdirSync(ASSET_DIR).filter(f => /\.glb$/.test(f)).sort() : [];
+const ASSETS = `<script>\nwindow.BB_ASSETS = {${assets.map(f => `\n  ${JSON.stringify(f.replace(/\.glb$/, ''))}: "${fs.readFileSync(path.join(ASSET_DIR, f)).toString('base64')}"`).join(',')}\n};\n</script>\n`;
+const script = `${VENDOR}${ASSETS}<script>\n"use strict";\n${js}\n</script>\n`;
 
 const full = `<!doctype html>
 <html lang="en">
@@ -57,4 +62,4 @@ fs.mkdirSync(path.join(ROOT, 'dist'), { recursive: true });
 fs.writeFileSync(path.join(ROOT, 'dist', 'halftone.html'), full);
 fs.writeFileSync(path.join(ROOT, 'index.html'), site);
 fs.writeFileSync(path.join(ROOT, 'sw.js'), sw);
-console.log(`build: index.html ${(Buffer.byteLength(site) / 1024).toFixed(1)} KiB, sw ${version}, ${ORDER.length - missing.length}/${ORDER.length} modules`);
+console.log(`build: index.html ${(Buffer.byteLength(site) / 1024).toFixed(1)} KiB, sw ${version}, ${ORDER.length - missing.length}/${ORDER.length} modules, assets: ${assets.join(' ') || 'none'}`);

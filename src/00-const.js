@@ -60,6 +60,15 @@ BB.FONTS = {
   body: '"Fredoka", ui-rounded, "SF Pro Rounded", system-ui, sans-serif', // friendly rounded body text
 };
 
+// ---- binary assets inlined by tools/build.js (window.BB_ASSETS = { name: base64 }). Returns an ArrayBuffer or null.
+BB.assetBuffer = function (name) {
+  var b64 = typeof window !== 'undefined' && window.BB_ASSETS && window.BB_ASSETS[name];
+  if (!b64) return null;
+  var bin = atob(b64), n = bin.length, bytes = new Uint8Array(n);
+  for (var i = 0; i < n; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes.buffer;
+};
+
 // ---- utilities
 BB.U = (function () {
   function mulberry32(a) {

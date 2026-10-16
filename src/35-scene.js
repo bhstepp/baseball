@@ -87,6 +87,7 @@
     S.pr = Math.min(S.soft ? 1 : S.dpr, S.prCap, 2);
     S.renderer.setPixelRatio(S.pr);
     S.renderer.setSize(w, h, false);
+    if (BB.Ink && BB.Ink.resize) BB.Ink.resize(S.renderer, w, h, S.pr);
     var od = S.soft ? 1 : Math.min(S.dpr, 2);
     S.ov.width = Math.round(w * od); S.ov.height = Math.round(h * od);
     S.ov.style.width = w + 'px'; S.ov.style.height = h + 'px';
@@ -951,7 +952,9 @@
     var hot = !!v.onFire;
     if (S.bat.userData.hot !== hot) { S.bat.userData.hot = hot; S.bat.material = hot ? TN.toon('#F28C38') : TN.VC; }
     var t0 = performance.now();
-    S.renderer.render(S.scene, S.cam);
+    // BB.Ink (37-ink.js) draws the frame when active: hand-inked lines on layer-1 objects, paper grain, grade.
+    if (BB.Ink && BB.Ink.active()) BB.Ink.render(S.renderer, S.scene, S.cam, { scene: scene, time: v.time || 0, hitstop: !!v.hitstop });
+    else S.renderer.render(S.scene, S.cam);
     S.frameMs = performance.now() - t0;
     mark('render');
     // overlay
