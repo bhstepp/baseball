@@ -13,7 +13,7 @@ BB.K = {
   ZONE: { xMax: 0.83, zMin: 1.55, zMax: 3.45 },  // rule-book zone; a pitch is a strike if the ball touches it
   BALL_R: 0.121,
   RUBBER_Y: 60.5,
-  RELEASE_Y: 54.5,
+  RELEASE_Y: 57.4,         // typical release distance from the plate (per windup style in BB.Pitch.releasePoint)
   BATTER_X: -2.6,          // the hero is a right-handed hitter, standing on the third-base side of the plate
   BASES: [ { x: 0, y: 0 }, { x: 63.64, y: 63.64 }, { x: 0, y: 127.28 }, { x: -63.64, y: 63.64 } ], // home, 1B, 2B, 3B
   FOUL_DEG: 45,            // spray angle of the foul lines; spray is 0 at dead centre, negative toward left field

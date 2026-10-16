@@ -114,7 +114,8 @@ function suite(BB, label) {
     const fixed = (p, n) => n % 3 === 0 ? null : { err: ((n * 37) % 11 - 5) / 200, power: n % 2 === 0 };
     const a = play(BB, 'daily', R.dailyCfg(day), fixed).res, b = play(BB, 'daily', R.dailyCfg(day), fixed).res;
     if (a.share !== b.share) fail('daily same timing gave different results');
-    if (!/^Halftone Hardball · Daily #\d+\n[\s\S]+\n\d+ HR · [\d,]+ ft( · 🔥\d+)?$/u.test(a.share)) fail('share format: ' + a.share);
+    const esc = String(BB.TITLE || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (!new RegExp('^' + esc + ' · Daily #\\d+\\n[\\s\\S]+\\n\\d+ HR · [\\d,]+ ft( · 🔥\\d+)?$', 'u').test(a.share)) fail('share format: ' + a.share);
     if (day === '2026-10-15') console.log(`daily ${day}: ${C.getPitcher(cfg.pitcher).name} @ ${C.getPark(cfg.park).name}\n${a.share}`);
     console.log(`daily ${day} #${cfg.day}: ${traces.map(t => t.length).join('/')} pitches across 6 players, identical prefixes ✓`);
   });

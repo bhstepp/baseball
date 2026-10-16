@@ -1,4 +1,4 @@
-/* Halftone Hardball service worker. VERSION is filled in by tools/build.js with a hash of the built page,
+/* Screwball Slugger service worker. VERSION is filled in by tools/build.js with a hash of the built page,
    so every release gets a fresh cache. Own files: cache-first. Google Fonts: stale-while-revalidate.
    Character models (assets/*.glb, fetched by BB.Assets when a game needs them) live in their own cache that outlives
    releases: their URLs carry a content hash (?v=...), so an unchanged model is never downloaded twice; the page asks
