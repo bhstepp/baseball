@@ -41,7 +41,7 @@ def params(ctx):
         nose=dict(kind='big', z=3.93, r=(0.14, 0.10, 0.10)),
         ear=dict(kind='round', base=(0.58, 0.14, 4.30), up=(1.0, 0.15, 0.55), fwd=(0.35, -1.0, 0.0), H=0.20, W=0.15,
                  T=0.035, cup=0.06, shape='round', mat='fur_dark', inner='fur_light', rim='fur_light', slot=False, tris=140),
-        brow=dict(z=4.42, x0=0.07, x1=0.36, arch=0.07, thick=0.055, mat='fur_light'),
+        brow=dict(z=4.42, x0=0.07, x1=0.36, arch=0.07, thick=0.07, mat='fur_light'),
         regions=[],
     )
     if goofy:
@@ -83,8 +83,11 @@ def buck_teeth(ctx, head, geo, mat='teeth'):
     m = geo.mouth
     out = []
     for s in (1, -1):
-        top = K.march_to(geo.f, np.array([s * 0.045, -1.7, m.z0 + 0.02]), (0, 1, 0)) + np.array([0, 0.035, 0])
-        g = SD.box(top + np.array([0, 0, -0.07]), (0.042, 0.02, 0.07), rnd=0.018)
+        x = s * 0.048
+        ys = [K.surface_y(geo.f, x, z) for z in (m.z0 + 0.07, m.z0 + 0.10, m.z0 + 0.13)]
+        ys = [y for y in ys if y is not None]
+        top = np.array([x, min(ys) + 0.07, m.z0 + 0.09])        # hanging from under the snout, behind the mustache
+        g = SD.box(top + np.array([0, 0, -0.08]), (0.044, 0.018, 0.075), rnd=0.016)
         out.append(K.blob(g, top, 0.2, 40, mat, 'tooth'))
     head.parts += out
     return out

@@ -30,7 +30,8 @@ def characters():
                                             accessories=dict(eyeblack=0),
                                             colors=dict(GULL, accessory_a='#E8B43A', fur_light='#A9B3C1')))
     # ---- the card catcher (LOD0 + LOD1) and fielders (LOD1)
-    add('c4-04', lambda: C.card_spec('c4-04', gear=['catcher'], cap_back=True, build_name='stocky'))
+    add('c4-04', lambda: C.card_spec('c4-04', gear=['catcher'], cap_back=True, build_name='stocky',
+                                     colors=dict(accessory_a='#C9A27A')))
     add('c4-05', lambda: C.card_spec('c4-05', head=dict(beak=0.88, crown=1.04), build_name='round', colors=dict(GULL)))
     add('c4-06', lambda: C.card_spec('c4-06', head=dict(tusks=0.75, broken=True, stache=1.15), build_name='stocky'))
     add('c4-07', lambda: C.card_spec('c4-07', head=dict(tusks=1.15, stache=0.8), build_name='athletic',

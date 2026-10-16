@@ -2,9 +2,9 @@
 # Tess 'Tumbleweed' Rattigan (tortoise, lefty eephus), Cosmo 'Night Owl' Starling (possum, high kick) and the boss
 # Dez 'The Mirage' Montoya (chameleon, lefty sidearm); the card catcher (fennec) and fielders by position
 # (c5-04 ... c5-11): 1B badger, 2B lizard, SS armadillo, 3B badger, LF lizard, CF armadillo, RF tortoise.
-# Also Bobby Lobbs, 'Batting Practice Bob' (badger, the endless-derby pitcher, park 0): listed here unless
-# specs/extras.py already lists him (two modules must never define the same id); heads/badger.py gives him his
-# goofy look either way.
+# Also Bobby Lobbs, 'Batting Practice Bob' (badger, the endless-derby pitcher, park 0: built with the extras):
+# listed here unless specs/extras.py lists him too (two modules must never define the same id); heads/badger.py
+# gives him his goofy look either way.
 import cspecs as C
 
 PARK = 5
@@ -30,14 +30,16 @@ def characters():
     shell = dict(gear=['shell'])
     # ---- pitchers
     add('p_rio', lambda: C.pitcher_spec('p_rio', head=dict(ears=1.08, tilt=0.12, snout=1.05), **shell))
-    add('p_tess', lambda: C.pitcher_spec('p_tess', head=dict(old=True), accessories=dict(stalk=1), **shell))
+    add('p_tess', lambda: C.pitcher_spec('p_tess', head=dict(old=True), accessories=dict(stalk=1),
+                                         colors=dict(accessory_a='#E8C25A'), **shell))
     add('p_cosmo', lambda: C.pitcher_spec('p_cosmo', head=dict(snout=1.12, ears=1.18, droop=0.05, patches='big', scruff=True),
                                           colors=dict(fur='#7C7886')))
     add('p_mirage', lambda: C.pitcher_spec('p_mirage', build_name='lanky', build=MIRAGE_BUILD, body=MIRAGE_BODY,
                                            head=dict(chameleon=True, coil=dict(build=MIRAGE_BUILD, body=MIRAGE_BODY)),
                                            colors=dict(fur_light='#F6D2A0', accessory_a='#E8B84A')))
     # ---- the card catcher (LOD0 + LOD1) and fielders (LOD1)
-    add('c5-04', lambda: C.card_spec('c5-04', gear=['catcher'], cap_back=True, build_name='stocky', head=dict(ears=0.95)))
+    add('c5-04', lambda: C.card_spec('c5-04', gear=['catcher'], cap_back=True, build_name='stocky', head=dict(ears=0.95),
+                                     colors=dict(accessory_a='#C9A27A')))
     add('c5-05', lambda: C.card_spec('c5-05', head=dict(smudge=True), build_name='stocky'))
     add('c5-06', lambda: C.card_spec('c5-06', head=dict(blotches=6), build_name='stout'))
     add('c5-07', lambda: C.card_spec('c5-07', head=dict(ears=0.95, tilt=0.05), build_name='athletic', **shell))
@@ -47,5 +49,6 @@ def characters():
     add('c5-11', lambda: C.card_spec('c5-11', build_name='stocky', **shell))
     # ---- Batting Practice Bob (derby pitcher)
     if not _taken_by_extras('p_bpbob'):
-        add('p_bpbob', lambda: dict(C.pitcher_spec('p_bpbob', build_name='round', body=BOB_BODY, head=dict(goofy=True)), park=0))
+        add('p_bpbob', lambda: dict(C.pitcher_spec('p_bpbob', build_name='round', body=BOB_BODY, head=dict(goofy=True),
+                                                         accessories=dict(hair_mat='fur')), park=0))
     return S
