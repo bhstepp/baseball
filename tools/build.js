@@ -6,7 +6,7 @@
 // usage: node tools/build.js
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
 const ROOT = path.join(__dirname, '..');
-const ORDER = ['00-const.js', '10-pitch.js', '15-bat.js', '20-content.js', '25-rules.js', '30-riso.js', '31-toon.js', '32-cast.js', '33-park.js', '34-anim.js', '35-scene.js',
+const ORDER = ['00-const.js', '10-pitch.js', '15-bat.js', '20-content.js', '25-rules.js', '31-toon.js', '32-cast.js', '33-park.js', '34-anim.js', '35-scene.js',
   '38-cards.js', '40-audio.js', '50-save.js', '55-meta.js', '56-ui.js', '60-main.js'];
 const S = f => fs.readFileSync(path.join(ROOT, 'src', f), 'utf8');
 const have = f => fs.existsSync(path.join(ROOT, 'src', f));

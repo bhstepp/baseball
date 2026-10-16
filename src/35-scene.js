@@ -16,9 +16,9 @@
 
   // ------------------------------------------------------------------ tunables
   var ROCCO = { x: -2.35, y: 0.9, size: 1.12 };             // render spot of the right-handed hero (physics uses K.BATTER_X)
-  var CATCHER = { x: 0.35, y: -5.0, size: 0.94 };
-  var UMP = { x: 2.0, y: -3.6, size: 1.08, off: 4.6 };
-  var BATCAM = { pos: [-0.9, -18, 9.4], look: [0.2, 30, -3.0], fov: 38 };
+  var CATCHER = { x: 0.4, y: -5.4, size: 0.9 };
+  var UMP = { x: 1.75, y: -3.2, size: 1.08, off: 4.6 };
+  var BATCAM = { pos: [-0.9, -18, 8.0], look: [0.2, 30, -1.6], fov: 38 };
 
   var S = {
     canvas: null, renderer: null, scene: null, W: 390, H: 844, dpr: 1, pr: 1, prCap: 2, failed: false,
@@ -158,7 +158,7 @@
     if (S.pitcher) dispose(S.pitcher);
     if (S.catcher) dispose(S.catcher);
     S.fielders.forEach(dispose);
-    var size = (boss ? 1.85 : 1.55) * (look.build === 'tall' ? 1.06 : look.build === 'lanky' ? 1.04 : look.build === 'stout' ? 0.97 : 1);
+    var size = (boss ? 2.0 : 1.72) * (look.build === 'tall' ? 1.06 : look.build === 'lanky' ? 1.04 : look.build === 'stout' ? 0.97 : 1);
     S.pitcher = C.make({ species: sp, size: size, build: look.build, shirt: road, pants: road, trim: team, cap: team, brim: TN.shade(team, 0.75), socks: team, shoes: INK,
       number: look.number != null ? look.number : 1, numColor: team, numEdge: INK, glove: 'L', mirror: pitcher && pitcher.hand === 'L', headScale: boss ? 1.08 : 1 });
     S.pitcher.boss = boss; S.pitcher.style = look.windup || 'classic';
@@ -307,7 +307,7 @@
     var react = null, reactT = 0;
     if (ci && ci.hit && v.play) { react = v.play.type === 'HR' || v.play.type === '3B' || v.play.type === '2B' ? 'jaw' : v.play.type === 'OUT' || v.play.type === 'FOUL' ? null : 'grr'; reactT = ci.tc; }
     else if (p && v.pitchT != null && v.pitchT > p.T + 0.15 && !(ci && ci.hit) && (sw || p.strike)) { react = 'smug'; reactT = v.pitchT - p.T - 0.15; }
-    var pp = A.pitcher({ windup: v.windup, pitchT: v.windup != null ? null : (p ? v.pitchT : null), style: Pm.style, rel: toUp(Pm, rel.x, rel.y, rel.z), time: t, react: react, reactT: reactT });
+    var pp = A.pitcher({ windup: v.windup, pitchT: v.windup != null ? null : (p ? v.pitchT : null), style: (v.pitcher && v.pitcher.look && v.pitcher.look.windup) || Pm.style, rel: toUp(Pm, rel.x, rel.y, rel.z), time: t, react: react, reactT: reactT });
     if (react === 'jaw' && ci) { pp.hy = (pp.hy || 0) + 0.4 * smooth(ci.tc / 0.2); pp.hx = -0.6; }
     C.apply(Pm, pp);
     // --- catcher: reads the pitch late, then sticks it
@@ -328,7 +328,7 @@
     if (p && !sw && v.pitchT != null && p.strike && v.pitchT > p.T + 0.1) callT = v.pitchT - p.T - 0.12;
     var Um = S.ump, slide = callT == null ? 0 : smooth(callT / 0.14) * (1 - smooth((callT - 1.1) / 0.25));
     if (slide > 0.01) {
-      place(Um, lerp(UMP.off, UMP.x, C.backOut(Math.min(1, slide))), UMP.y, 0, PI - 0.15);
+      place(Um, lerp(UMP.off, UMP.x, C.backOut(Math.min(1, slide))), UMP.y, 0, yawToward(-0.75, -1));
       C.apply(Um, A.ump({ callT: callT, time: t }));
     }
     // --- fielders that happen to be in shot
@@ -388,6 +388,15 @@
     var a = BASES[(from + i) % 4], b = BASES[(from + i + 1) % 4];
     return { x: lerp(a.x, b.x, k), y: lerp(a.y, b.y, k), dx: b.x - a.x, dy: b.y - a.y };
   }
+  function runnerPos(m, tx, dur) {
+    var to = m.to === -1 ? m.from + 1 : Math.min(4, m.to), out = m.to === -1;
+    var startT = m.from === 0 ? 0.32 : 0.12, runDur = Math.max(0.6, dur + 0.45 - startT);
+    var u = clamp((tx - startT) / runDur, 0, 1);
+    if (out) u = Math.min(u * 1.25, 0.86);
+    var p = basePath(m.from, to, u);
+    p.u = u; p.to = to; p.out = out; p.startT = startT; p.runDur = runDur;
+    return p;
+  }
   function fieldFocus(play, t) {
     var sx = 0, sy = 0, sz = 0, sw = 0;
     for (var k = 0; k < 7; k++) {
@@ -400,6 +409,10 @@
     var play = v.play, t = v.playT || 0, time = v.time || 0;
     if (!play) { doBat(v, st); return; }
     var dur = play.dur || 3;
+    // main holds the field scene a little after playT reaches dur ('between'): keep the runners and camera going
+    if (S.endPlay !== play) { S.endPlay = play; S.endAt = null; }
+    if (t >= dur - 1e-3) { if (S.endAt == null) S.endAt = time; } else S.endAt = null;
+    var tx = t + (v._extra != null ? v._extra : S.endAt != null ? Math.min(1.2, time - S.endAt) : 0);
     // --- camera
     var F = fieldFocus(play, t), d = Math.hypot(F.x, F.y);
     var dir = d > 1 ? [F.x / d, F.y / d] : [0, 1], k0 = smooth(d / 60);
@@ -411,6 +424,18 @@
     cam.position.set(lerp(cx, -10, start * 0.5), lerp(cy, -34, start * 0.5), lerp(hgt, 14, start * 0.5));
     var lookX = F.x + dir[0] * 30, lookY = F.y + dir[1] * 30, lookZ = F.z * 0.72 + 4;
     if (play.type === 'HR' && play.fenceT > 0 && t > play.fenceT) { var after = smooth((t - play.fenceT) / 1.2); lookZ += after * 25; }
+    // closing beat: once the ball is dead, ease back to the diamond so the runners rounding the bases are in shot
+    var tDead = play.type === 'HR' ? (play.hang || dur * 0.7) + 0.2 : Math.min(dur - 0.3, play.catchT >= 0 ? play.catchT + 0.9 : (play.hang || 1) + 0.7);
+    var bm = null; (v.runners || []).forEach(function (m) { if (m.from === 0 && m.to !== -1) bm = m; });
+    if (bm && play.type !== 'FOUL') {
+      var kb = smooth((tx - tDead) / 0.8);
+      if (kb > 0) {
+        var rp = runnerPos(bm, tx, dur);
+        var rx = rp.x * 0.75 + (rp.u >= 0.85 && rp.to === 4 ? 30 : 0), ry = rp.y * 0.75 - 46;
+        cam.position.set(lerp(cam.position.x, rx, kb), lerp(cam.position.y, ry, kb), lerp(cam.position.z, 24, kb));
+        lookX = lerp(lookX, rp.x, kb); lookY = lerp(lookY, rp.y - 4, kb); lookZ = lerp(lookZ, 1, kb);
+      }
+    }
     var shake = v.shake || 0;
     if (shake > 0) cam.position.add(V.set(Math.sin(time * 61) * 1.2 * shake, Math.cos(time * 53) * 1.2 * shake, Math.sin(time * 47) * 0.8 * shake));
     cam.lookAt(lookX, lookY, lookZ);
@@ -431,19 +456,15 @@
     var moves = v.runners || [], dests = {}, mi = 0;
     var R = S.rocco, batterMoved = false;
     moves.forEach(function (m) {
-      var to = m.to === -1 ? m.from + 1 : Math.min(4, m.to), outRun = m.to === -1;
       if (m.to >= 1 && m.to <= 3) dests[m.to] = true;
-      var startT = m.from === 0 ? 0.32 : 0.12, runDur = Math.max(0.6, dur * 0.94 - startT);
-      var bases = to - m.from, u = clamp((t - startT) / runDur, 0, 1);
-      if (outRun) u = Math.min(u * 1.25, 0.86);
-      var ue = u; // constant speed
-      var pos = basePath(m.from, to, ue), arrived = u >= 1;
+      var rp = runnerPos(m, tx, dur), to = rp.to, outRun = rp.out, startT = rp.startT, runDur = rp.runDur, bases = to - m.from, u = rp.u;
+      var pos = rp, arrived = u >= 1;
       var ch;
       if (m.from === 0) { ch = R; batterMoved = true; } else ch = S.mates[(mi++) % S.mates.length];
       if (m.from === 0 && t < startT) { batterAtHome(v, t, play); return; }
-      place(ch, pos.x, pos.y, 0, yawToward(pos.dx, pos.dy));
+      place(ch, pos.x, pos.y, 0, arrived && to === 4 ? yawToward(cam.position.x - pos.x, cam.position.y - pos.y) : yawToward(pos.dx, pos.dy));
       var spd = arrived ? 0 : bases * 90 / runDur;
-      C.apply(ch, A.runner({ speed: spd, phase: t * 14 + m.from, time: time, cheer: arrived && to === 4, slide: outRun ? smooth((u - 0.7) / 0.16) : arrived && to < 4 ? 0 : 0 }));
+      C.apply(ch, A.runner({ speed: spd, phase: tx * 14 + m.from, time: time, cheer: arrived && to === 4, slide: outRun ? smooth((u - 0.7) / 0.16) : arrived && to < 4 ? 0 : 0 }));
       if (ch === R && play.type !== 'HR') { // the bat gets tossed aside at the plate
         syncBatFrame(); S.batFrame.userData.up.add(S.bat); S.bat.position.set(0.9, 0.16, 1.4); V2.set(1, 0.05, 0.4).normalize(); _q.setFromUnitVectors(_up, V2); S.bat.quaternion.copy(_q);
       }
@@ -684,6 +705,14 @@
       X.beginPath(); X.arc(s.x, s.y, 3.2 - k * 0.07, 0, PI * 2); X.fillStyle = '#FFF9EE'; X.fill(); X.lineWidth = 1.6; X.strokeStyle = INK; X.stroke();
     }
     X.restore();
+    // the ball itself, inked so it always reads against crowd and sky
+    var bnow = play.ballAt(t), bs = proj(bnow.x, bnow.y, bnow.z, cam);
+    if (!bs.behind && (play.catchBy < 0 || t < play.catchT)) {
+      var br = clamp(st.ballR ? st.ballR * pxPerFt(Math.max(1, cam.position.distanceTo(S.ballG.position)), cam) : 6, 6, 14);
+      X.beginPath(); X.arc(bs.x, bs.y, br, 0, PI * 2); X.fillStyle = '#FFFDF6'; X.fill(); X.lineWidth = 2.5; X.strokeStyle = INK; X.stroke();
+      X.beginPath(); X.arc(bs.x - br * 1.1, bs.y, br * 0.75, -0.9, 0.9); X.lineWidth = 1.8; X.strokeStyle = BRICK; X.stroke();
+      X.beginPath(); X.arc(bs.x + br * 1.1, bs.y, br * 0.75, PI - 0.9, PI + 0.9); X.stroke();
+    }
     // landing / wall dust, CLANG
     if (play.wallT > 0 && t > play.wallT && t < play.wallT + 1.0) {
       var wb = play.ballAt(play.wallT), ws = proj(wb.x, wb.y, wb.z, cam), u = (t - play.wallT) / 1.0;
@@ -740,7 +769,7 @@
   function drawHud(v) {
     var h = v.hud; if (!h) return;
     var key = hudKey(v), hc = S.hud;
-    var top = 50, x0 = 10, w = S.W - x0 - 66, hh = 70;
+    var top = 48, x0 = 10, w = S.W - x0 - 66, hh = 62;
     if (key !== hc.key) {
       hc.key = key;
       if (!hc.canvas) hc.canvas = document.createElement('canvas');
@@ -752,12 +781,12 @@
       var sbw = Math.min(104, w * 0.33);
       rrect(x0 + 6, y0 + 6, sbw, hh - 12, 10); X.fillStyle = S.col.a; X.fill(); X.lineWidth = 2.5; X.strokeStyle = INK; X.stroke();
       X.fillStyle = '#FFF9EE'; X.font = F(11, true, '700'); X.textAlign = 'center'; X.textBaseline = 'middle';
-      X.fillText(String(h.inning || '').toUpperCase(), x0 + 6 + sbw / 2, y0 + 19);
+      X.fillText(String(h.inning || '').toUpperCase(), x0 + 6 + sbw / 2, y0 + 17);
       var scoreTxt = String(h.score || '');
       X.font = F(28); var sw2 = X.measureText(scoreTxt).width, spx = sw2 > sbw - 12 ? 28 * (sbw - 12) / sw2 : 28;
-      X.save(); X.globalAlpha = 1; comicOn(scoreTxt, x0 + 6 + sbw / 2, y0 + 45, spx, '#FFF9EE'); X.restore();
+      X.save(); X.globalAlpha = 1; comicOn(scoreTxt, x0 + 6 + sbw / 2, y0 + 40, spx, '#FFF9EE'); X.restore();
       // B / S / O
-      var bx = x0 + sbw + 16, rowY = [y0 + 17, y0 + 35, y0 + 53];
+      var bx = x0 + sbw + 16, rowY = [y0 + 15, y0 + 31, y0 + 47];
       var cols = ['#6DBB4A', MUSTARD, BRICK], counts = [h.balls || 0, h.strikes || 0, h.outs || 0], maxes = [3, 2, h.outsMax > 5 ? 0 : (h.outsMax || 3) - 0];
       ['B', 'S', 'O'].forEach(function (lbl, i) {
         X.fillStyle = INK; X.font = F(13); X.textAlign = 'left'; X.fillText(lbl, bx, rowY[i] + 1);
@@ -783,9 +812,9 @@
       if (pw > 40) {
         X.textAlign = 'left'; X.fillStyle = INK;
         var prog = String(h.progress || ''); X.font = F(15); var pw2 = X.measureText(prog).width; if (pw2 > pw) X.font = F(15 * pw / pw2);
-        X.fillText(prog, px0, y0 + 20);
-        X.font = F(10, true, '600'); X.fillStyle = '#5A4E5E';
-        wrap(String(h.goal || ''), px0, y0 + 36, pw, 11, 3);
+        X.fillText(prog, px0, y0 + 16);
+        X.font = F(9.5, true, '600'); X.fillStyle = '#5A4E5E';
+        wrap(String(h.goal || ''), px0, y0 + 30, pw, 10, 3);
       }
       // last pitch ribbon
       if (v.last && v.last.mph) {

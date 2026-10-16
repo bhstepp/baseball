@@ -55,6 +55,8 @@ const SHOTS = [
   ['field-hr-late', 'scene=field&play=hr&f=0.8&stamp=GONE!&kind=huge&stt=0.6&sub=412%20FT%20%C2%B7%202%20RBI'],
   ['field-gapper', 'scene=field&play=gap&f=0.5'],
   ['field-gapper-end', 'scene=field&play=gap&f=0.98'],
+  ['field-hr-trot', 'scene=field&play=hr&f=1&extra=0.9'],
+  ['field-gapper-runners', 'scene=field&play=gap&f=1&extra=0.7'],
   ['field-groundout', 'scene=field&play=ground&f=0.45'],
   ['field-flyout', 'scene=field&play=fly&f=0.7'],
   ['field-wall', 'scene=field&play=wall&f=0.6'],

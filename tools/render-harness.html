@@ -130,6 +130,7 @@ function buildView(q) {
   if (v.scene === 'field') {
     var play = mockPlay(park, q.play || 'hr');
     v.play = play; v.playT = Math.min(play.dur, play.dur * +(q.f || 0.5));
+    if (q.extra) v._extra = +q.extra;
     v.runners = q.play === 'gap' ? [{ from: 1, to: 4 }, { from: 0, to: 2 }] : q.play === 'ground' ? [{ from: 1, to: 2 }, { from: 0, to: -1 }] : q.play === 'hr' || !q.play ? [{ from: 1, to: 4 }, { from: 0, to: 4 }] : [];
     if (q.play === 'gap') v.hud.bases = [false, true, false];
     if (q.play === 'hr' || !q.play) v.hud.bases = [false, false, false];
