@@ -8,33 +8,35 @@
 //      "ink ground") go in first, depth only, so feet sunk in the dirt are cut where the picture cuts them, and get
 //      their outline along the ground. Layer-2-only objects ("ink occluders", optional: walls, stands) are drawn
 //      there too, as masks: lines behind them are hidden and their edges draw no line.
-//   2. PICTURE  The scene is drawn to the canvas exactly as without ink (MSAA intact), with the inverted-hull
-//      outlines hidden: the ink pass draws every line. (Hulls come back when nothing on layer 1 is in view.)
-//   3. EDGES    Silhouettes (inked vs empty), occluding contours (a neighbour off the tangent plane), object and
-//      colour boundaries (id changes) and creases (normal Laplacian) become pen radii: heavy silhouettes, lighter
+//   2. EDGES    Silhouettes (inked vs empty), occluding contours (a neighbour off the tangent plane), object and
+//      colour boundaries (id changes) and creases (normal Laplacian) become pen widths: heavy silhouettes, lighter
 //      interior lines, thinner with distance (interior lines also fade out on far figures), heavier on the side
 //      away from the key light, and a slow brush-pressure swell re-rolled 12 times a second.
-//   4. NIB      Two separable passes stamp a round nib of that radius on every edge texel (max of r^2 - d^2, exact
-//      union of discs in 2 x (2R+1) taps) and store the signed distance to the stroke edge.
-//   5. OVERLAY  One full-screen pass blended over the canvas (premultiplied alpha): anti-aliased strokes from the
-//      distance field (smoothed with 4 taps, with a boil: a UV jitter that changes on twos), a static paper grain,
-//      a gentle warm grade and a soft vignette. Backgrounds (layer 0 only) get no lines.
+//   3. NIB      Two separable passes stamp a round nib of that width on every edge texel (max of r^2 - d^2: the
+//      exact union of discs in 2 x (2R+1) taps) and store the signed distance to the stroke edge.
+//   4. PICTURE  The scene is drawn to the canvas exactly as without ink (MSAA intact), with the inverted-hull
+//      outlines hidden: the ink pass draws every line. (Hulls come back when nothing on layer 1 is in view.)
+//   5. OVERLAY  Straight after the picture, in the same framebuffer (on tile GPUs it blends in tile memory): one
+//      full-screen pass multiplied onto the picture (like ink and paint on paper) draws the strokes anti-aliased from
+//      the distance field (smoothed with 4 taps, with a boil: a UV jitter re-rolled on twos), a static paper grain, a
+//      gentle warm tint and a soft vignette. Backgrounds (layer 0 only) get no lines.
 // Quality: low / medium / high = normals target at 1 / 1.5 / 2 texels per CSS px (never above the canvas). It
 // steps down by itself while the median frame interval stays over 20 ms, switches off below 'low', and stays off
 // once BB.Render has dropped its pixel ratio. `?ink=0` turns it off, `?ink=1` forces it on, `?ink=low|medium|high`
 // pins a level.
 //
 // API: active(), render(renderer, scene, camera, info), resize(renderer, w, h, pr), twos(t), setEnabled(on),
-//      enabled(), setQuality(level | name), quality(), stats(), hullsVisible(), registerHull(material),
-//      mark(root, opts) (helper: put a character/prop on layer 1), debug(mode) ('normals'|'edges'|'nib'|'lines'|null).
+//      enabled / quality / level (read-only), setQuality(1..3 | name), setAuto(on), stats(), hullsVisible(),
+//      registerHull(material), mark(root, opts) (helper: put a character/prop on layer 1),
+//      debug(mode) ('normals' | 'edges' | 'nib' | 'lines' | null: show an intermediate target instead of the frame).
 (function () {
   var T = (typeof THREE !== 'undefined') ? THREE : null;
   function clock() { return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); }
   if (!T) {
     BB.Ink = {
       active: function () { return false; }, render: function (r, s, c) { r.render(s, c); }, resize: function () {},
-      twos: function (t) { return t; }, setEnabled: function () {}, enabled: function () { return false; },
-      setQuality: function () {}, quality: function () { return 0; }, stats: function () { return { active: false, reason: 'no three.js' }; },
+      twos: function (t) { return t; }, setEnabled: function () {}, enabled: false, quality: 'off', level: 0, setAuto: function () {},
+      setQuality: function () {}, stats: function () { return { active: false, reason: 'no three.js' }; }, setHulls: function () {},
       hullsVisible: function () { return true; }, registerHull: function () {}, mark: function (o) { return o; }, debug: function () {},
     };
     return;
@@ -47,8 +49,8 @@
     width: { sil: 3.4, contour: 2.5, edge: 1.7, crease: 1.6 },
     // stroke style per edge type: 0 = solid ink, 1 = a darker shade of the colour underneath
     style: { sil: 0, contour: 0, edge: 0.2, crease: 0.25 },
-    colorLine: 0.42,          // brightness of a style-1 line relative to the fill under it
-    ppfRef: 64, attPow: 0.5, attMin: 0.3, attMax: 1.12,   // thinner with distance: (px-per-ft / ppfRef) ^ attPow
+    colorLine: 0.42,          // brightness of a style-1 line relative to the fill under it (ink lines: x ink colour)
+    ppfRef: 64, attMin: 0.4, attMax: 1.12,   // thinner with distance: sqrt(px-per-ft / ppfRef), clamped
     fade: [9, 34, 0.6],       // interior lines fade out between these px-per-ft (contours keep at least [2])
     shadowSide: 0.4,          // extra weight on edges facing away from the key light
     pressure: 0.12,           // brush-pressure swell (fraction of the width), re-rolled on twos
@@ -58,8 +60,9 @@
     gap: [1.5, 3.0],          // occluding contour: neighbour off the tangent plane by this many texels (ramp)
     crease: [0.3, 0.65],      // crease: |normal Laplacian| ramp
     minW: 1.0,                // thinnest stroke, texels; thinner strokes fade instead of breaking up
-    ground: 0,                // world z below which layer-1 surfaces are underground (null: no clip)
-    grain: 0.03, mottle: 0.25, vignette: 0.13, lift: [0.024, 0.013, 0.0], gain: 0.97,
+    // the grade multiplies the picture (like transparent ink and paint on paper): blacks stay black, colours stay rich
+    tint: [1.0, 0.988, 0.955], // warm: a touch less blue and green
+    grain: 0.028, mottle: 0.08, vignette: 0.09,
     slowMs: 20,               // median frame interval that counts as slow
   };
   var LEVELS = [null, { name: 'low', q: 1.0 }, { name: 'medium', q: 1.5 }, { name: 'high', q: 2.0 }];
@@ -73,6 +76,7 @@
     samples: [], lastT: 0, warm: 0, med: 0, cpuMs: 0, frames: 0, drawn: 0, occl: 0, calls: {}, seedK: 0, lastTick: -1,
     light: null, lightScan: -1e9, debug: '', hullMats: [], hullVis: [], hullAll: [], inked: false,
     grounds: [], gShown: [], gSig: 0, gScene: null, groundPass: false, grounds_: 0,
+    now: clock,   // frame clock (tests swap it to drive the adaptive quality)
   };
   (function urlFlag() {
     var m = /[?&]ink=([^&#]*)/.exec((typeof location !== 'undefined' && location.search) || '');
@@ -98,13 +102,13 @@
   // 1. normals / id / weight of layer-1 objects (layer-2-only objects: occluder masks). Skinning + morphs via chunks.
   //    rgba = (normal.xy * 0.5 + 0.5, id, weight * 0.5); empty = 0; occluder = (.5, .5, 1, 0)
   var NMAT = new T.ShaderMaterial({
-    uniforms: { uId: { value: 0 }, uW: { value: 0.5 }, uSkip: { value: 0 }, uOcc: { value: 0 }, uGround: { value: -1e9 } },
+    uniforms: { uId: { value: 0 }, uW: { value: 0.5 }, uSkip: { value: 0 }, uOcc: { value: 0 } },
     vertexShader: [
       '#include <common>',
       '#include <morphtarget_pars_vertex>',
       '#include <skinning_pars_vertex>',
       'uniform float uSkip;',
-      'varying vec3 vN; varying float vWz;',
+      'varying vec3 vN;',
       'void main() {',
       '  #include <beginnormal_vertex>',
       '  #include <morphnormal_vertex>',
@@ -119,18 +123,12 @@
       '  #include <morphtarget_vertex>',
       '  #include <skinning_vertex>',
       '  #include <project_vertex>',
-      '  vec4 wp = vec4(transformed, 1.0);',
-      '  #ifdef USE_INSTANCING',
-      '    wp = instanceMatrix * wp;',
-      '  #endif',
-      '  vWz = (modelMatrix * wp).z;',
       '  if (uSkip > 0.5) gl_Position = vec4(0.0, 0.0, -2.0, 1.0);', // skipped: outside the clip volume
       '}'].join('\n'),
     fragmentShader: [
-      'uniform float uId; uniform float uW; uniform float uOcc; uniform float uGround;',
-      'varying vec3 vN; varying float vWz;',
+      'uniform float uId; uniform float uW; uniform float uOcc;',
+      'varying vec3 vN;',
       'void main() {',
-      '  if (vWz < uGround) discard;',                                   // under the field: the ground hides it
       '  vec3 n = normalize(vN); if (!gl_FrontFacing) n = -n;',
       '  gl_FragColor = uOcc > 1.5 ? vec4(0.0) : uOcc > 0.5 ? vec4(0.5, 0.5, 1.0, 0.0) : vec4(n.xy * 0.5 + 0.5, uId, uW);',
       '}'].join('\n'),
@@ -139,8 +137,7 @@
   NMAT.onBeforeRender = function (renderer, scene, camera, geometry, object, group) {
     var u = this.uniforms, m = object.material;
     if (Array.isArray(m)) m = m[(group && group.materialIndex) || 0];
-    var skip = !object.isMesh || (object.userData && object.userData.noInk) || !m || isHull(m) ||
-      (m.transparent && m.depthWrite === false) || m.colorWrite === false;
+    var skip = !object.isMesh || !m || noInk(object, m);
     var occ = !skip && (object.layers.mask & L1) === 0;
     u.uSkip.value = skip ? 1 : 0;
     u.uOcc.value = S.groundPass ? 2 : occ ? 1 : 0;
@@ -154,6 +151,11 @@
     }
     this.uniformsNeedUpdate = true;
   };
+  // never inked: hulls, decals (open quads printed on a surface), see-through FX, depth-only helpers, opt-outs
+  function noInk(o, m) {
+    return !!((o.userData && o.userData.noInk) || isHull(m) || (m.transparent && m.depthWrite === false) || m.colorWrite === false ||
+      (m.name && m.name.indexOf('decal') >= 0) || (o.name && o.name.indexOf('decal') >= 0));
+  }
   function isHull(m) {
     if (m.userData && m.userData.inkHull) return true;
     if (BB.Toon && m === BB.Toon.OUTLINE) return true;
@@ -165,7 +167,7 @@
   //    b = style, a = 1 on edge texels. Both texels either side of an edge are marked (the stroke is centred on it).
   var EMAT = new T.ShaderMaterial({
     uniforms: {
-      tN: { value: null }, tZ: { value: null }, uTexel: { value: new T.Vector2() }, uProjInv: { value: new T.Matrix4() },
+      tN: { value: null }, tZ: { value: null }, uTexel: { value: new T.Vector2() }, uPj: { value: new T.Vector4() }, uPz: { value: new T.Vector2() },
       uP11: { value: 1 }, uCssH: { value: 844 }, uPx: { value: 1 }, uWid: { value: new T.Vector4() }, uSty: { value: new T.Vector4() },
       uAtt: { value: new T.Vector4() }, uFade: { value: new T.Vector3() }, uLight: { value: new T.Vector3() }, uSeed: { value: new T.Vector2() },
       uPress: { value: 0.2 }, uPressF: { value: 0.04 }, uRmax: { value: 2 }, uMinW: { value: 1 }, uGap: { value: new T.Vector2() }, uCrease: { value: new T.Vector2() },
@@ -173,7 +175,7 @@
     vertexShader: FS_VERT,
     fragmentShader: [
       'uniform sampler2D tN; uniform sampler2D tZ;',
-      'uniform vec2 uTexel; uniform mat4 uProjInv; uniform float uP11; uniform float uCssH; uniform float uPx;',
+      'uniform vec2 uTexel; uniform vec4 uPj; uniform vec2 uPz; uniform float uP11; uniform float uCssH; uniform float uPx;',
       'uniform vec4 uWid; uniform vec4 uSty; uniform vec4 uAtt; uniform vec3 uFade; uniform vec3 uLight; uniform vec2 uSeed;',
       'uniform float uPress; uniform float uPressF; uniform float uRmax; uniform float uMinW; uniform vec2 uGap; uniform vec2 uCrease;',
       'varying vec2 vUv;',
@@ -181,9 +183,10 @@
       'float isInk(vec4 v) { return step(0.002, v.a); }',
       'float isOcc(vec4 v) { return (1.0 - step(0.002, v.a)) * step(0.5, v.b); }',
       'vec3 decN(vec4 v) { vec2 n = v.xy * 2.0 - 1.0; return vec3(n, sqrt(max(0.0, 1.0 - dot(n, n)))); }',
-      'vec3 vpos(vec2 uv) { float d = texture2D(tZ, uv).x; vec4 p = uProjInv * vec4(uv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0); return p.xyz / p.w; }',
+      // view-space position from the depth texture (perspective: P = [P00 0 P20 0; 0 P11 P21 0; 0 0 P22 P32; 0 0 -1 0])
+      'vec3 vpos(vec2 uv) { float z = -uPz.y / (texture2D(tZ, uv).x * 2.0 - 1.0 + uPz.x); return vec3(-z * (uv * 2.0 - 1.0 + uPj.zw) / uPj.xy, z); }',
       'float ppf(float dist) { return uCssH * 0.5 * uP11 / max(dist, 0.05); }',          // css px per foot at that depth
-      'float att(float dist) { return clamp(pow(ppf(dist) / uAtt.x, uAtt.y), uAtt.z, uAtt.w); }',
+      'float att(float dist) { return clamp(sqrt(ppf(dist) / uAtt.x), uAtt.z, uAtt.w); }',
       'float fadeI(float dist) { return smoothstep(uFade.x, uFade.y, ppf(dist)); }',
       'float shade(vec4 v) { vec2 d = v.xy * 2.0 - 1.0; float l = length(d); return 1.0 + uLight.z * (l > 0.05 ? smoothstep(-0.15, 0.8, -dot(d / l, uLight.xy)) : 0.0); }',
       // (width css px, style, opacity) for the edge between this texel (c, at pc) and the neighbour q at uvq
@@ -266,19 +269,19 @@
     return NIBS[k];
   }
 
-  // 5. overlay: strokes + paper + grade + vignette, premultiplied over the picture already on the canvas
+  // 5. overlay: strokes + paper + grade + vignette, multiplied onto the picture already on the canvas
   var OMAT = new T.ShaderMaterial({
     uniforms: {
       tD: { value: null }, tG: { value: null }, uTexelN: { value: new T.Vector2() }, uRmax: { value: 2 }, uDevPerTex: { value: 2 },
       uBoil: { value: 0.6 }, uBoilF: { value: 0.02 }, uBoilSeed: { value: new T.Vector2() }, uInk: { value: new T.Color(CFG.ink) },
-      uLift: { value: new T.Vector3() }, uGain: { value: 1 }, uVig: { value: 0.1 }, uGrain: { value: new T.Vector2() }, uColMul: { value: 0.4 },
+      uTint: { value: new T.Vector3(1, 1, 1) }, uVig: { value: 0.1 }, uGrain: { value: new T.Vector2() }, uColMul: { value: 0.4 },
       uGrainScale: { value: 1 / 256 }, uLines: { value: 1 },
     },
     vertexShader: FS_VERT,
     fragmentShader: [
       'uniform sampler2D tD; uniform sampler2D tG; uniform vec2 uTexelN; uniform float uRmax; uniform float uDevPerTex;',
-      'uniform float uBoil; uniform float uBoilF; uniform vec2 uBoilSeed; uniform vec3 uInk; uniform vec3 uLift;',
-      'uniform float uGain; uniform float uVig; uniform vec2 uGrain; uniform float uColMul; uniform float uGrainScale; uniform float uLines;',
+      'uniform float uBoil; uniform float uBoilF; uniform vec2 uBoilSeed; uniform vec3 uInk; uniform vec3 uTint;',
+      'uniform float uVig; uniform vec2 uGrain; uniform float uColMul; uniform float uGrainScale; uniform float uLines;',
       'varying vec2 vUv;',
       NOISE,
       'vec3 nib(vec2 uv) { vec4 e = texture2D(tD, uv); return vec3((e.r * 2.0 - 1.0) * uRmax, e.g, e.b); }', // (distance texels, opacity, style)
@@ -293,16 +296,15 @@
       '    cov = clamp(a.x * uDevPerTex + 0.5, 0.0, 1.0) * min(1.0, a.y * 1.15) * (0.92 + 0.08 * g.b);', // + a touch of dry brush
       '    sty = a.z;',
       '  }',
-      '  float paper = 1.0 + uGrain.x * (g.r - 0.5) * 2.0 + uGrain.y * (g.g - 0.5) * 2.0;',
+      '  float paper = 1.0 - uGrain.x * (1.0 - g.r) - uGrain.y * (1.0 - g.g);',      // tooth and mottling only darken
       '  vec2 p = (vUv - 0.5) * 2.0;',
       '  float vig = 1.0 - uVig * smoothstep(0.45, 1.5, length(p * vec2(0.8, 1.0)));',
-      '  float gain = min(1.0, uGain * paper * vig);',
-      '  vec3 rgb = cov * (1.0 - sty) * uInk + (1.0 - cov) * uLift * vig;',
-      '  float keep = cov * sty * uColMul + (1.0 - cov) * gain;',
-      '  gl_FragColor = vec4(rgb, 1.0 - keep);',
+      '  vec3 grade = uTint * (paper * vig);',
+      '  vec3 line = mix(uInk, vec3(uColMul), sty) * vig;',                       // ink, or a darker shade of the fill
+      '  gl_FragColor = vec4(mix(grade, line, cov), 1.0);',                        // multiplied onto the picture
       '}'].join('\n'),
     depthTest: false, depthWrite: false, transparent: true,
-    blending: T.CustomBlending, blendEquation: T.AddEquation, blendSrc: T.OneFactor, blendDst: T.OneMinusSrcAlphaFactor,
+    blending: T.CustomBlending, blendEquation: T.AddEquation, blendSrc: T.ZeroFactor, blendDst: T.SrcColorFactor,
   });
 
   // debug views of the intermediate targets (BB.Ink.debug(mode)), drawn opaque over the canvas
@@ -333,8 +335,9 @@
   var PROXY = new T.Scene(); PROXY.matrixWorldAutoUpdate = false; PROXY.overrideMaterial = NMAT;
 
   // ------------------------------------------------------------------ paper grain (static, tileable, 256^2)
-  // r: fine tooth + fibres, g: soft mottling, b: a coarser tooth used to break up the ink a touch
-  var GRAIN = (function () {
+  // r: fine tooth + fibres, g: soft mottling, b: a coarser tooth used to break up the ink a touch. Made on first use.
+  var GRAIN = null;
+  function grainTex() {
     var N = 256, rnd = BB.U ? BB.U.rng(0x5EED1E) : Math.random;
     function layer(cell) {
       var n = N / cell, lat = new Float32Array(n * n), out = new Float32Array(N * N), i, x, y;
@@ -370,7 +373,7 @@
     tex.wrapS = tex.wrapT = T.RepeatWrapping; tex.magFilter = T.LinearFilter; tex.minFilter = T.LinearFilter; tex.generateMipmaps = false;
     tex.needsUpdate = true;
     return tex;
-  })();
+  }
 
   // ------------------------------------------------------------------ targets
   var _v2 = new T.Vector2(), _v3 = new T.Vector3();
@@ -408,16 +411,16 @@
     E.uCssH.value = ch; E.uPx.value = px; E.uRmax.value = S.rmax; E.uMinW.value = CFG.minW;
     E.uWid.value.set(CFG.width.sil, CFG.width.contour, CFG.width.edge, CFG.width.crease);
     E.uSty.value.set(CFG.style.sil, CFG.style.contour, CFG.style.edge, CFG.style.crease);
-    E.uAtt.value.set(CFG.ppfRef, CFG.attPow, CFG.attMin, CFG.attMax);
+    E.uAtt.value.set(CFG.ppfRef, 0.5, CFG.attMin, CFG.attMax);
     E.uFade.value.set(CFG.fade[0], CFG.fade[1], CFG.fade[2]);
     E.uPress.value = CFG.pressure; E.uPressF.value = 1 / (CFG.pressureWave * px);
     E.uGap.value.set(CFG.gap[0], CFG.gap[1]); E.uCrease.value.set(CFG.crease[0], CFG.crease[1]);
     S.nib.h.uniforms.tE.value = S.rtE.texture; S.nib.h.uniforms.uTexel.value.set(1 / nW, 1 / nH);
     S.nib.v.uniforms.tE.value = S.rtH.texture; S.nib.v.uniforms.uTexel.value.set(1 / nW, 1 / nH);
     var O = OMAT.uniforms;
-    O.tD.value = S.rtD.texture; O.tG.value = GRAIN; O.uTexelN.value.set(1 / nW, 1 / nH); O.uRmax.value = S.rmax;
+    O.tD.value = S.rtD.texture; O.tG.value = GRAIN || (GRAIN = grainTex()); O.uTexelN.value.set(1 / nW, 1 / nH); O.uRmax.value = S.rmax;
     O.uDevPerTex.value = dbH / nH; O.uBoil.value = CFG.boil * px; O.uBoilF.value = 1 / (CFG.boilWave * px);
-    O.uLift.value.set(CFG.lift[0], CFG.lift[1], CFG.lift[2]); O.uGain.value = CFG.gain; O.uVig.value = CFG.vignette;
+    O.uTint.value.set(CFG.tint[0], CFG.tint[1], CFG.tint[2]); O.uVig.value = CFG.vignette;
     O.uGrain.value.set(CFG.grain, CFG.grain * CFG.mottle); O.uColMul.value = CFG.colorLine; O.uGrainScale.value = 1 / (256 * Math.max(1, dbH / ch));
     var X = XMAT.uniforms; X.tN.value = S.rtN.texture; X.tE.value = S.rtE.texture; X.tD.value = S.rtD.texture; X.uRmax.value = S.rmax; X.uDevPerTex.value = dbH / nH;
     S.warm = 0; S.samples.length = 0;
@@ -457,17 +460,18 @@
   function frameInk(r, scene, camera, info) {
     ensureTargets(r);
     S.tot = { calls: 0, tris: 0 };
-    // world matrices once, for both scene passes
+    // world matrices once, for every pass
     if (scene.matrixWorldAutoUpdate) scene.updateMatrixWorld();
     if (camera.parent === null && camera.matrixWorldAutoUpdate) camera.updateMatrixWorld();
     // hull materials: remember their visibility, keep them out of the normals pass
     S.hullAll = (BB.Toon && BB.Toon.OUTLINE ? [BB.Toon.OUTLINE] : []).concat(S.hullMats);
     S.hullVis = S.hullAll.map(function (m) { return m.visible; });
     hulls(false);
+    // Order matters on tile-based GPUs: every offscreen pass runs first, then the picture and the overlay go to the
+    // canvas back to back, so the overlay blends in tile memory (no store + reload of the multisampled canvas).
 
     // 1. normals / depth / ids of layer 1 (+ layer-2 occluder masks), over the ground's depth
     var mask = camera.layers.mask;
-    NMAT.uniforms.uGround.value = CFG.ground == null ? -1e9 : CFG.ground;
     S.drawn = 0; S.occl = 0; S.grounds_ = 0;
     r.setRenderTarget(S.rtN);
     r.setClearColor(0x000000, 0);
@@ -488,21 +492,10 @@
     tally(r, 'normals');
     var inked = S.drawn > 0;
 
-    // 2. the picture, as it would be without ink (hulls only when nothing inked is in view, or when asked)
-    hulls(S.hulls || !inked);
-    r.setRenderTarget(null);
-    r.setClearColor(S.saved.cc, S.saved.ca);
-    r.autoClear = S.saved.ac;
-    var au = scene.matrixWorldAutoUpdate; scene.matrixWorldAutoUpdate = false;
-    r.render(scene, camera);
-    scene.matrixWorldAutoUpdate = au;
-    tally(r, 'scene');
-    hulls(true);
-
-    // 3 + 4. edges and nib
+    // 2 + 3. edges and nib
     if (inked) {
       var E = EMAT.uniforms, pe = camera.projectionMatrix.elements;
-      E.uProjInv.value.copy(camera.projectionMatrixInverse); E.uP11.value = pe[5];
+      E.uPj.value.set(pe[0], pe[5], pe[8], pe[9]); E.uPz.value.set(pe[10], pe[14]); E.uP11.value = pe[5];
       var L = keyLight(scene), lx = -0.55, ly = 0.83;
       if (L) {
         _v3.copy(L.position); if (L.target) _v3.sub(L.target.position);
@@ -516,14 +509,25 @@
       var k = S.seedK % 4096;
       E.uSeed.value.set((k * 37.13) % 251, (k * 71.71) % 241);
       OMAT.uniforms.uBoilSeed.value.set((k * 13.37) % 199, (k * 29.41) % 211);
-      r.setClearColor(0x000000, 0);
+      r.setClearColor(0x000000, 0);                      // a clear up front is a free "don't load" on tile GPUs
       r.autoClear = true;
       pass(r, EMAT, S.rtE); tally(r, 'edges');
       pass(r, S.nib.h, S.rtH); tally(r, 'nibH');
       pass(r, S.nib.v, S.rtD); tally(r, 'nibV');
     }
 
-    // 5. overlay (or a debug view)
+    // 4. the picture, as it would be without ink (hulls only when nothing inked is in view, or when asked)
+    hulls(S.hulls || !inked);
+    r.setRenderTarget(null);
+    r.setClearColor(S.saved.cc, S.saved.ca);
+    r.autoClear = S.saved.ac;
+    var au = scene.matrixWorldAutoUpdate; scene.matrixWorldAutoUpdate = false;
+    r.render(scene, camera);
+    scene.matrixWorldAutoUpdate = au;
+    tally(r, 'scene');
+    hulls(true);
+
+    // 5. overlay (or a debug view), same framebuffer, straight after the picture
     r.autoClear = false;
     if (S.debug && DEBUG_MODES[S.debug]) { XMAT.uniforms.uMode.value = DEBUG_MODES[S.debug]; pass(r, XMAT, null); }
     else { OMAT.uniforms.uLines.value = inked ? 1 : 0; pass(r, OMAT, null); }
@@ -546,8 +550,8 @@
   }
 
   function render(renderer, scene, camera, info) {
-    var t0 = clock();
-    if (!supported(renderer)) { renderer.render(scene, camera); return; }
+    var t0 = S.now();
+    if (!supported(renderer) || !camera.isPerspectiveCamera) { renderer.render(scene, camera); return; }
     try {
       save(renderer, scene, camera);
       frameInk(renderer, scene, camera, info || {});
@@ -558,7 +562,7 @@
       if (typeof console !== 'undefined') console.warn('BB.Ink: switched off after an error:', e);
       return;
     }
-    S.cpuMs = clock() - t0;
+    S.cpuMs = S.now() - t0;
     adapt(t0);
   }
 
@@ -598,7 +602,7 @@
     root.traverse(function (o) {
       if (!o.isMesh) return;
       var m = Array.isArray(o.material) ? o.material[0] : o.material;
-      if (!m || isHull(m) || (m.transparent && m.depthWrite === false) || (m.side === T.BackSide && m.isShaderMaterial)) return;
+      if (!m || noInk(o, m) || (m.side === T.BackSide && m.isShaderMaterial)) return;
       o.layers.enable(1);
       if (opts.weight != null) o.userData.inkWeight = opts.weight;
       if (opts.id != null) o.userData.inkId = opts.id;
@@ -606,25 +610,24 @@
     return root;
   }
 
-  BB.Ink = {
-    active: active,
-    render: render,
+  var API = {
+    active: active,                       // draw this frame with ink? (enabled, supported, not switched off for speed)
+    render: render,                       // (renderer, scene, camera, { scene, time, hitstop }): draws the whole frame
     resize: function (renderer, w, h, pr) { S.key = ''; S.samples.length = 0; S.warm = 0; },
+    // time quantised to 1/12 s while the ink look is on: character acting held for two frames, like drawn animation
     twos: function (t) { return active() ? Math.floor(t * 12 + 1e-7) / 12 : t; },
-    setEnabled: function (on) {
+    setEnabled: function (on) {           // user switch (?ink=0 starts it off); on also clears an automatic switch-off
       S.enabled = !!on;
       if (on) { S.off = S.ok === false ? 'unsupported' : ''; S.level = S.startLevel; S.key = ''; S.samples.length = 0; S.warm = 0; }
     },
-    enabled: function () { return S.enabled; },
-    setQuality: function (q) {
+    setQuality: function (q) {            // 1..3 or 'low' | 'medium' | 'high' (also the level it restarts from)
       var n = typeof q === 'string' ? ({ low: 1, medium: 2, med: 2, high: 3 })[q] : q;
       if (n) { setLevel(n); S.startLevel = S.level; }
     },
-    quality: function () { return S.level; },
-    setAuto: function (on) { S.auto = !!on; },
-    hullsVisible: function () { return !active() || S.hulls || !S.inked; },
-    setHulls: function (on) { S.hulls = !!on; },                // keep the inverted hulls under the ink (testing)
-    registerHull: function (mat) { if (mat && S.hullMats.indexOf(mat) < 0) S.hullMats.push(mat); },
+    setAuto: function (on) { S.auto = !!on; },                  // automatic step-down / switch-off (default on)
+    hullsVisible: function () { return !active() || S.hulls || !S.inked; }, // are the inverted hulls drawn this frame?
+    setHulls: function (on) { S.hulls = !!on; },                // keep the inverted hulls under the ink (comparison only)
+    registerHull: function (mat) { if (mat && S.hullMats.indexOf(mat) < 0) S.hullMats.push(mat); }, // hidden while inking
     mark: mark,
     debug: function (mode) { S.debug = mode || ''; },
     stats: function () {
@@ -637,4 +640,9 @@
     },
     CFG: CFG, _S: S,
   };
+  // read-only flags: BB.Ink.enabled (the user switch), BB.Ink.quality ('low' | 'medium' | 'high'), BB.Ink.level (1..3)
+  Object.defineProperty(API, 'enabled', { enumerable: true, get: function () { return S.enabled; } });
+  Object.defineProperty(API, 'quality', { enumerable: true, get: function () { return LEVELS[S.level].name; } });
+  Object.defineProperty(API, 'level', { enumerable: true, get: function () { return S.level; } });
+  BB.Ink = API;
 })();

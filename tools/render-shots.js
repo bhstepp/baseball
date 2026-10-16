@@ -100,12 +100,27 @@ const PILOT = [
   ['12-bat-dizzy', 'scene=bat&state=whiff&st=1.6&pz=2.5&stamp=WHIFF&kind=bad&stt=0.9&sub=1-2%20count'],
   ['13-bat-take', 'scene=bat&state=mitt&dt=0.4&strike=0'],
   ['14-bat-called-k', 'scene=bat&state=called&dt=1.0&strike=1&stamp=STRIKE%20THREE&kind=bad&stt=0.8'],
-  ['15-field-hr-flip', 'scene=field&play=hr&pt=0.45'],
+  ['15-field-hr-flip', 'scene=field&play=hr&pt=0.12'],
+  ['15b-field-hr-flip-toss', 'scene=field&play=hr&pt=0.4'],
+  ['15c-field-hr-flip-tumble', 'scene=field&play=hr&pt=0.75'],
   ['16-field-run', 'scene=field&play=gap&f=1&extra=0.35'],
   ['17-field-hr-trot', 'scene=field&play=hr&f=1&extra=0.9'],
   ['18-title', 'scene=title&time=4.1'],
   ['19-title-swing', 'scene=title&time=4.78'],
   ['20-fire', 'scene=bat&state=windup&w=0.4&fire=1'],
+];
+// face / gaze close-ups of the model (new only): --faces
+const FACES = [
+  ['f1-stance', 'scene=bat&state=idle&time=3.3&closeup=1'],
+  ['f2-blink', 'scene=bat&state=idle&time=2.05&closeup=1'],
+  ['f3-load', 'scene=bat&state=loading&l=1&closeup=1'],
+  ['f4-track', 'scene=bat&state=assist&f=0.85&closeup=1'],
+  ['f5-contact', 'scene=bat&state=contact&st=0.16&pz=2.5&closeup=1'],
+  ['f6-whiff', 'scene=bat&state=whiff&st=0.6&closeup=1'],
+  ['f7-dizzy', 'scene=bat&state=whiff&st=1.7&closeup=1'],
+  ['f8-calledk', 'scene=bat&state=called&dt=1.2&strike=1&stamp=K&kind=bad&closeup=1'],
+  ['f9-title', 'scene=title&time=2.0&closeup=1&cside=0.2'],
+  ['f10-fire', 'scene=bat&state=windup&w=0.4&fire=1&closeup=1&cside=1.2'],
 ];
 async function pilot(browser, filt) {
   const OUTP = path.join(ROOT, 'qa', 'pilot');
@@ -117,7 +132,7 @@ async function pilot(browser, filt) {
     const errors = [];
     page.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') errors.push(m.type() + ': ' + m.text()); });
     page.on('pageerror', e => errors.push('pageerror: ' + e.message));
-    const suffix = sizes.length > 1 || W !== 390 ? '@' + W + 'x' + H : '';
+    const suffix = W === 390 && H === 844 ? '' : '@' + W + 'x' + H;
     for (const [tag, flags] of [['old', '&rocco=old&ink=0'], ['new', '']]) {
       await page.goto('file://' + path.join(ROOT, 'tools', 'render-harness.html') + '?scene=title' + flags + EXTRA);
       await page.waitForFunction(() => window.__done === true, null, { timeout: 60000 });
@@ -128,17 +143,31 @@ async function pilot(browser, filt) {
         await page.screenshot({ path: path.join(OUTP, name + suffix + '-' + tag + '.png') });
       }
     }
-    // side by side: before | after
-    const pair = await ctx.newPage();
+    // side by side: before | after (images inlined: file URLs don't load into setContent pages)
+    const pctx = await browser.newContext({ viewport: { width: W * 2 + 12, height: H + 26 }, deviceScaleFactor: 2 });
+    const pair = await pctx.newPage();
     for (const [name] of PILOT) {
       if (filt && !name.includes(filt)) continue;
-      const a = 'file://' + path.join(OUTP, name + suffix + '-old.png'), b = 'file://' + path.join(OUTP, name + suffix + '-new.png');
-      await pair.setViewportSize({ width: W * 2 + 12, height: H + 26 });
+      const img = tag => 'data:image/png;base64,' + fs.readFileSync(path.join(OUTP, name + suffix + '-' + tag + '.png')).toString('base64');
       await pair.setContent(`<body style="margin:0;background:#1B1420;font:600 14px sans-serif;color:#FFF4DC"><div style="display:flex;gap:12px">
-        <div><div style="height:26px;line-height:26px;padding-left:6px">BEFORE (procedural)</div><img src="${a}" style="width:${W}px;height:${H}px;display:block"></div>
-        <div><div style="height:26px;line-height:26px;padding-left:6px">AFTER (model + ink + staging)</div><img src="${b}" style="width:${W}px;height:${H}px;display:block"></div></div></body>`, { waitUntil: 'load' });
+        <div><div style="height:26px;line-height:26px;padding-left:6px">BEFORE (procedural)</div><img src="${img('old')}" style="width:${W}px;height:${H}px;display:block"></div>
+        <div><div style="height:26px;line-height:26px;padding-left:6px">AFTER (model + ink + staging)</div><img src="${img('new')}" style="width:${W}px;height:${H}px;display:block"></div></div></body>`, { waitUntil: 'load' });
       await pair.screenshot({ path: path.join(OUTP, name + suffix + '.png') });
     }
+    // one overview sheet: every pair as small thumbnails (before | after)
+    const list = PILOT.filter(([n]) => !filt || n.includes(filt));
+    if (list.length > 1) {
+      const tw = 150, th = Math.round(tw * H / W), cols = 4, cw = tw * 2 + 30, rows = Math.ceil(list.length / cols);
+      const cells = list.map(([name]) => {
+        const img = tag => 'data:image/png;base64,' + fs.readFileSync(path.join(OUTP, name + suffix + '-' + tag + '.png')).toString('base64');
+        return `<div style="width:${cw}px;margin:0 10px 12px 0"><div style="height:18px;font:600 12px sans-serif;color:#FFF4DC">${name}</div>
+          <div style="display:flex;gap:6px"><img src="${img('old')}" style="width:${tw}px;height:${th}px"><img src="${img('new')}" style="width:${tw}px;height:${th}px"></div></div>`;
+      }).join('');
+      await pair.setViewportSize({ width: cols * (cw + 10) + 10, height: rows * (th + 32) + 40 });
+      await pair.setContent(`<body style="margin:0;padding:10px;background:#1B1420"><div style="font:700 15px sans-serif;color:#F2B632;margin-bottom:8px">Rocco pilot ${W}x${H}: before (procedural, ?rocco=old&ink=0) | after (model + ink + staging)</div><div style="display:flex;flex-wrap:wrap">${cells}</div></body>`, { waitUntil: 'load' });
+      await pair.screenshot({ path: path.join(OUTP, 'overview' + suffix + '.png'), fullPage: true });
+    }
+    await pctx.close();
     await ctx.close();
     const uniq = [...new Set(errors)].filter(e => !/GPU stall|GL Driver Message|swiftshader|Automatic fallback|ERR_FILE_NOT_FOUND/i.test(e));
     console.log(`pilot ${W}x${H}: ` + (uniq.length ? 'console:\n  ' + uniq.join('\n  ') : 'console clean'));
@@ -148,6 +177,14 @@ async function pilot(browser, filt) {
 (async () => {
   const args = process.argv.slice(2), perfOnly = args.includes('--perf'), filt = args.find(a => !a.startsWith('--'));
   if (args.includes('--pilot')) { const br = await pw.chromium.launch({ args: GL_ARGS }); await pilot(br, filt); await br.close(); return; }
+  if (args.includes('--faces')) {
+    const br = await pw.chromium.launch({ args: GL_ARGS }), c = await br.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 }), pg = await c.newPage();
+    const OUTP = path.join(ROOT, 'qa', 'pilot'); fs.mkdirSync(OUTP, { recursive: true });
+    await pg.goto('file://' + path.join(ROOT, 'tools', 'render-harness.html') + '?scene=title' + EXTRA);
+    await pg.waitForFunction(() => window.__done === true, null, { timeout: 60000 });
+    for (const [name, q] of FACES) { await pg.evaluate((qq) => window.setup('?' + qq), q); await pg.screenshot({ path: path.join(OUTP, name + '.png'), clip: { x: 45, y: 200, width: 300, height: 380 } }); }
+    await br.close(); console.log('faces in', OUTP); return;
+  }
   const browser = await pw.chromium.launch({ args: GL_ARGS });
   const ctx = await browser.newContext({ viewport: { width: SIZE[0], height: SIZE[1] }, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
   const page = await ctx.newPage();

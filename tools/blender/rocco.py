@@ -134,7 +134,12 @@ def export_glb(out):
         export_def_bones=False, export_leaf_bone=False, export_skins=True, export_influence_nb=4,
         export_all_influences=False, export_morph=True, export_morph_normal=False, export_morph_animation=True,
         export_try_sparse_sk=True, export_nla_strips=True)
-    os.replace(tmp, out)
+    import rk_glb
+    tmp2 = out + '.tmp2.glb'
+    forced = {n: (0.25,) for n in ('swing_high', 'swing_mid', 'swing_low')}
+    rk_glb.optimize_file(tmp, tmp2, forced)
+    os.remove(tmp)
+    os.replace(tmp2, out)
 
 
 def read_glb_json(path):
@@ -166,7 +171,20 @@ def build(args):
         bat = BO.bat_part()
     else:
         import rk_model as MD
-        head, pupils, body, decals, bat = MD.build_all(args)
+        import pickle
+        import hashlib
+        src = ''.join(open(os.path.join(HERE, f)).read() for f in sorted(os.listdir(HERE))
+                      if f.endswith('.py') and f not in ('rocco.py', 'rk_clips.py', 'rk_anim.py', 'rk_glb.py', 'rk_blockout.py'))
+        key = hashlib.sha1(src.encode()).hexdigest()[:16]
+        cache = os.path.join(args.cache, 'rocco_model_%s.pkl' % key) if args.cache else None
+        if cache and os.path.exists(cache):
+            head, pupils, body, decals, bat = pickle.load(open(cache, 'rb'))
+            print('model loaded from cache', cache)
+        else:
+            head, pupils, body, decals, bat = MD.build_all(args)
+            if cache:
+                os.makedirs(args.cache, exist_ok=True)
+                pickle.dump((head, pupils, body, decals, bat), open(cache, 'wb'))
     objs = {}
     objs['rocco_body'] = make_object(body, 'rocco_body', mats, rig)
     objs['rocco_head'] = make_object(head, 'rocco_head', mats, rig)
@@ -182,6 +200,8 @@ def build(args):
     if args.clips:
         keep = set(args.clips.split(','))
         clips = [c for c in clips if c.name in keep]
+    if args.clips == 'none':
+        clips = []
     report = {}
     for clip in clips:
         res = A.bake_clip(solver, rig, objs['rocco_head'], clip)
@@ -220,4 +240,6 @@ if __name__ == '__main__':
     ap.add_argument('--blockout', action='store_true')
     ap.add_argument('--quick', action='store_true')
     ap.add_argument('--clips', default='')
+    ap.add_argument('--verbose', action='store_true')
+    ap.add_argument('--cache', default='', help='directory for a model cache (speeds up animation iteration)')
     build(ap.parse_args(argv))

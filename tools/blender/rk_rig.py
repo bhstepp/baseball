@@ -19,17 +19,35 @@ J['spine'] = (0.0, 0.05, 1.98)
 J['chest'] = (0.0, 0.05, 2.40)
 J['neck'] = (0.0, 0.06, 2.98)
 J['head'] = (0.0, 0.06, 3.30)
-J['jaw'] = (0.0, -0.20, 3.74)
+J['jaw'] = (0.0, -0.18, 3.82)          # jaw hinge (lower jaw rotates about its local X)
 J['cap'] = (0.0, 0.04, 4.60)
-J['eye.L'] = (0.185, -0.40, 4.20)
-J['brow.L'] = (0.215, -0.56, 4.47)
-J['ear.L'] = (0.43, 0.04, 4.60)
-J['tail.1'] = (0.0, 0.40, 1.62)
-J['tail.2'] = (0.0, 0.74, 1.46)
-J['tail.3'] = (0.0, 1.08, 1.54)
-J['tail.4'] = (0.0, 1.30, 1.88)
-J['tail.5'] = (0.0, 1.32, 2.30)
-J['tail_tip'] = (0.0, 1.16, 2.70)
+# eyes: the visible white is a tall oval window cut from a sphere of radius EYE_R; the eye bone sits at the sphere
+# centre so rotating it slides the pupil exactly over the white.
+EYE_R, EYE_W, EYE_H = 0.40, 0.128, 0.195
+EYE_FRONT = np.array([0.18, -0.575, 4.17])           # visible centre of the left eye
+EYE_AXIS = np.array([0.13, -1.0, 0.02])              # forward, a touch outward
+
+
+def eye_frame(s=1):
+    front = EYE_FRONT * np.array([s, 1, 1])
+    ax = EYE_AXIS * np.array([s, 1, 1])
+    ax = ax / np.linalg.norm(ax)
+    up = np.array([0, 0, 1.0])
+    up = up - np.dot(up, ax) * ax
+    up = up / np.linalg.norm(up)
+    x = np.cross(up, ax)
+    return front - ax * EYE_R, np.stack([x, up, ax], 1)
+
+
+J['eye.L'] = tuple(eye_frame(1)[0])
+J['brow.L'] = (0.215, -0.52, 4.43)
+J['ear.L'] = (0.41, 0.04, 4.625)
+J['tail.1'] = (0.0, 0.58, 1.60)
+J['tail.2'] = (0.0, 0.92, 1.45)
+J['tail.3'] = (0.0, 1.26, 1.53)
+J['tail.4'] = (0.0, 1.48, 1.87)
+J['tail.5'] = (0.0, 1.50, 2.29)
+J['tail_tip'] = (0.0, 1.34, 2.69)
 # left arm (A-pose, 45 deg down); right is mirrored
 ARM_DIR = np.array([S2, 0.0, -S2])
 J['shoulder.L'] = (0.12, 0.06, 2.86)
@@ -46,10 +64,10 @@ J['fingers.L'] = tuple(np.array(J['hand.L']) + ARM_DIR * 0.20 - HAND_N * 0.02)
 J['thumb.L'] = tuple(np.array(J['hand.L']) + ARM_DIR * 0.07 + HAND_N * 0.06 + HAND_T * 0.07)
 # left leg
 J['thigh.L'] = (0.28, 0.03, 1.60)
-J['shin.L'] = (0.30, -0.02, 1.00)
-J['foot.L'] = (0.32, 0.10, 0.36)
-J['toe.L'] = (0.33, -0.34, 0.11)
-J['toe_end.L'] = (0.33, -0.70, 0.11)
+J['shin.L'] = (0.33, -0.02, 1.00)
+J['foot.L'] = (0.35, 0.10, 0.36)
+J['toe.L'] = (0.36, -0.34, 0.11)
+J['toe_end.L'] = (0.36, -0.70, 0.11)
 THIGH_LEN = float(np.linalg.norm(np.subtract(J['shin.L'], J['thigh.L'])))
 SHIN_LEN = float(np.linalg.norm(np.subtract(J['foot.L'], J['shin.L'])))
 # bat: the grip pivot sits between the two fists on the handle
@@ -65,9 +83,30 @@ for k in list(J):
         x, y, z = J[k]
         J[k[:-2] + '.R'] = (-x, y, z)
 
+# The head is modelled in a "design space" and placed with one transform (lowered onto the shoulders and scaled
+# up a touch about the top of the neck). JD keeps the design-space head joints; J holds the final ones.
+HEAD_PIVOT = np.array([0.0, 0.06, 3.30])
+HEAD_SCALE = 1.08
+HEAD_OFFSET = np.array([0.0, 0.0, -0.145])
+HEAD_JOINTS = ['head', 'jaw', 'cap', 'eye.L', 'eye.R', 'brow.L', 'brow.R', 'ear.L', 'ear.R']
+
+
+def hx(p):
+    return HEAD_PIVOT + HEAD_OFFSET + HEAD_SCALE * (np.asarray(p, float) - HEAD_PIVOT)
+
+
+JD = {k: J[k] for k in HEAD_JOINTS}
+for k in HEAD_JOINTS:
+    J[k] = tuple(hx(J[k]))
+
 
 def jv(name):
     return np.array(J[name], float)
+
+
+def jd(name):
+    """Design-space position of a head joint (what the head builders use)."""
+    return np.array(JD[name] if name in JD else J[name], float)
 
 
 # ------------------------------------------------------------------------------------------- bone table

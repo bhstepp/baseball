@@ -67,6 +67,8 @@ def rest_channels():
     pn = RR.HAND_N * np.array([-1, 1, 1])
     c['bat.px'], c['bat.py'], c['bat.pz'] = pn
     c['bat.vis'] = 1.0
+    c['bat.len'] = 1.0        # stretch along the bat axis (smear frames)
+    c['smear'] = 0.0          # arms thrown out and stretched along shoulder -> hand (smear frames)
     for s in ('L', 'R'):
         sx = RR.SIDE[s]
         w = RR.jv('hand.' + s)
@@ -75,6 +77,7 @@ def rest_channels():
             c['hand%s.%s' % (s, k)] = 0.0
         c['elbow%s.x' % s], c['elbow%s.y' % s], c['elbow%s.z' % s] = 0.0, 1.0, 0.0
         c['grip' + s] = 1.0 if s == 'R' else 0.0
+        c['hand%s.rel' % s] = 0.0          # 1: hand target / elbow pole given in the rest body frame, carried by the chest
         c['roll' + s] = 0.0
         c['fing' + s] = 0.0
         c['thumb' + s] = 0.0
@@ -196,7 +199,7 @@ class Solver:
         pal = np.array([g('bat.px'), g('bat.py'), g('bat.pz')])
         Rb = frame3(d, pal) @ self.bat_frame_local.T
         vis = max(g('bat.vis'), 1e-4)
-        set_world('bat', M4(Rb @ rest['bat'][:3, :3], vec('bat'), (vis, vis, vis)))
+        set_world('bat', M4(Rb @ rest['bat'][:3, :3], vec('bat'), (vis, vis, vis * max(g('bat.len'), 1e-3))))
         fk('bat_sweet', np.eye(4))
         fk('bat_tip', np.eye(4))
         Wbat = M4(Rb, vec('bat'))
@@ -205,8 +208,13 @@ class Solver:
             sx = RR.SIDE[sd]
             rel_delta('shoulder.' + sd, euler(g('sh%s.rx' % sd), g('sh%s.ry' % sd), g('sh%s.rz' % sd)))
             S = self.head_pos(W, 'upper_arm.' + sd)
-            # hand target: free or on the bat
+            # hand target: free (world, or carried by the chest) or on the bat
             Pfree = vec('hand' + sd)
+            rel = g('hand%s.rel' % sd)
+            Rc = rot_of(W['chest']) @ rest['chest'][:3, :3].T
+            if rel > 1e-4:
+                Pc = W['chest'][:3, 3] + Rc @ (Pfree - RR.jv('chest'))
+                Pfree = Pfree * (1 - rel) + Pc * rel
             gw = np.clip(g('grip' + sd), 0, 1)
             Rfree = None
             if gw > 1e-4:
@@ -221,7 +229,12 @@ class Solver:
                 Pt = Pgrip if gw >= 1 - 1e-4 else Pfree * (1 - gw) + Pgrip * gw
             else:
                 Pt, Rgrip = Pfree, None
+            sm = g('smear')
+            if sm > 1e-4:
+                Pt = S + (Pt - S) * (1.0 + 0.28 * sm)
             pole = vec('elbow' + sd)
+            if rel > 1e-4:
+                pole = pole * (1 - rel) + (Rc @ pole) * rel
             self._ik2(W, B, set_world, 'upper_arm.' + sd, 'forearm.' + sd, S, Pt, pole, max_stretch=1.45, tag='arm' + sd, t=t)
             Wr = W['forearm.' + sd] @ self._local_rest('hand.' + sd)
             Rfa = rot_of(W['forearm.' + sd]) @ rest['forearm.' + sd][:3, :3].T
@@ -307,6 +320,9 @@ class Clip:
         self.lags = {}          # channel prefix -> lag seconds
         self.layers = []        # f(t) -> {channel: additive offset}
         self.tail_lag = 0.035
+        self.secondary = True
+        self.sec_gain = 1.0
+        self.overrides = []     # f(t) -> {channel: (value, weight)} replaces evaluated channels (blended by weight)
 
     def key(self, t, base=None, mode='auto', **ch):
         prev = dict(self.keys[-1][1]) if (self.keys and base is None) else dict(base if base is not None else rest_channels())
@@ -413,6 +429,12 @@ def evaluate_clip(clip, times):
                 if ch not in out:
                     out[ch] = np.full(len(times), base.get(ch, 0.0))
                 out[ch][j] += dv
+    for ov in getattr(clip, 'overrides', []):
+        for j, t in enumerate(times):
+            for ch, (val, w) in ov(t).items():
+                if ch not in out:
+                    out[ch] = np.full(len(times), base.get(ch, 0.0))
+                out[ch][j] = out[ch][j] * (1 - w) + val * w
     # tail: per-bone values from tail.* channels with progressive lag
     for i in range(1, 6):
         lag = clip.tail_lag * i
@@ -430,6 +452,94 @@ def evaluate_clip(clip, times):
         out['_tail%d.ry' % i] = np.zeros(len(times))
         out['_tail%d.rz' % i] = vals['rz'] * w
         out['_tail%d.s' % i] = (1.0 + vals['fluff']) if i == 1 else np.ones(len(times))
+    if getattr(clip, 'secondary', True) and len(times) > 4:
+        dt = float(times[1] - times[0])
+        Rs = chain_rotations(out, len(times))
+        hp_ = np.stack([out.get('hip.x', np.zeros(len(times))), out.get('hip.y', np.zeros(len(times))),
+                        out.get('hip.z', np.zeros(len(times))) + 1.7], 1)
+        # tail: a chain of springs; deeper bones swing more and later
+        tr = spring_response(Rs['hips'], hp_, dt, freq=2.2, damp=0.28, gain=0.55 * clip.sec_gain, loop=clip.loop, lin_gain=0.6 * clip.sec_gain, u=(0, 1, 0))
+        for i in range(1, 6):
+            k = 0.35 + 0.22 * i
+            out['_tail%d.rx' % i] = out['_tail%d.rx' % i] + np.degrees(tr[:, 0]) * k * 0.6
+            out['_tail%d.rz' % i] = out['_tail%d.rz' % i] + np.degrees(tr[:, 2]) * k
+        # ears and cap: springs on the head
+        hr = spring_response(Rs['head'], hp_ + np.array([0, 0, 2.3]), dt, freq=3.2, damp=0.3, gain=0.35 * clip.sec_gain, loop=clip.loop, lin_gain=0.4 * clip.sec_gain, u=(0, 0, 1))
+        for sd in ('L', 'R'):
+            for ax, idx in (('rx', 0), ('ry', 1), ('rz', 2)):
+                key = 'ear%s.%s' % (sd, ax)
+                out[key] = out.get(key, np.zeros(len(times))) + np.degrees(hr[:, idx]) * 1.4
+        cr = spring_response(Rs['head'], hp_ + np.array([0, 0, 2.6]), dt, freq=4.0, damp=0.45, gain=0.12 * clip.sec_gain, loop=clip.loop, lin_gain=0.15 * clip.sec_gain, u=(0, 0, 1))
+        for ax, idx in (('rx', 0), ('ry', 1), ('rz', 2)):
+            key = 'cap.' + ax
+            out[key] = out.get(key, np.zeros(len(times))) + np.degrees(cr[:, idx]) * 0.5
+    return out
+
+
+# ------------------------------------------------------------------------------------------- secondary motion
+def chain_rotations(ch, n):
+    """World rotations of hips/chest/head per frame from the evaluated euler channels (model axes)."""
+    out = {'hips': [], 'chest': [], 'head': []}
+    for j in range(n):
+        g = lambda k: float(ch[k][j]) if k in ch else 0.0
+        Rh = euler(g('hip.rx'), g('hip.ry'), g('hip.rz'))
+        Rs = Rh @ euler(g('spine.rx'), g('spine.ry'), g('spine.rz'))
+        Rc = Rs @ euler(g('chest.rx'), g('chest.ry'), g('chest.rz'))
+        Rn = Rc @ euler(g('neck.rx'), g('neck.ry'), g('neck.rz'))
+        Rd = Rn @ euler(g('head.rx'), g('head.ry'), g('head.rz'))
+        out['hips'].append(Rh)
+        out['chest'].append(Rc)
+        out['head'].append(Rd)
+    return {k: np.array(v) for k, v in out.items()}
+
+
+def rot_vec(Ra, Rb):
+    """Small rotation vector taking Ra to Rb, expressed in Ra's frame."""
+    from mathutils import Matrix as MM
+    q = MM((Ra.T @ Rb).tolist()).to_quaternion()
+    ax, ang = q.to_axis_angle()
+    if ang > math.pi:
+        ang -= 2 * math.pi
+    return np.array(ax) * ang
+
+
+def spring_response(R, pos, dt, freq=3.0, damp=0.35, gain=1.0, loop=False, lin_gain=0.0, u=(0, 0, 1)):
+    """Lagging response (rotation vector in the parent's frame, radians) of a pendulum pointing along u (parent
+    frame) on a spring attached to a moving frame. R: (n,3,3) parent world rotations; pos: (n,3) pivot positions."""
+    u = np.asarray(u, float)
+    n = len(R)
+    w = 2 * math.pi * freq
+    k, c = w * w, 2 * damp * w
+    # angular velocity (parent frame) and linear acceleration (parent frame)
+    om = np.zeros((n, 3))
+    for j in range(1, n):
+        om[j] = rot_vec(R[j - 1], R[j]) / dt
+    om[0] = om[1] if n > 1 else 0
+    alpha = np.gradient(om, dt, axis=0) if n > 2 else np.zeros_like(om)
+    vel = np.gradient(pos, dt, axis=0) if n > 2 else np.zeros_like(pos)
+    acc = np.gradient(vel, dt, axis=0) if n > 2 else np.zeros_like(pos)
+    acc_local = np.einsum('nji,nj->ni', R, acc)
+    reps = 3 if loop else 1
+    th = np.zeros(3)
+    thd = np.zeros(3)
+    out = np.zeros((n, 3))
+    sub = 4
+    for r in range(reps):
+        for j in range(n):
+            # inertial forcing: the child lags the parent's angular acceleration; linear acceleration tips it
+            al = alpha[j] - np.dot(alpha[j], u) * u
+            fa = -gain * al
+            fl = -lin_gain * np.cross(u, acc_local[j])
+            for _ in range(sub):
+                h = dt / sub
+                thdd = -k * th - c * thd + fa + fl
+                thd = thd + thdd * h
+                th = th + thd * h
+            out[j] = th
+    if loop and n > 4:
+        # blend the seam
+        d = out[-1] - out[0]
+        out = out - np.outer(np.linspace(0, 1, n), d)
     return out
 
 

@@ -137,9 +137,9 @@ function buildView(q) {
     if (st === 'loading' && q.pt != null) { v.windup = null; v.pitch = pitch; v.pitchT = +q.pt; }
     if (st === 'swing' || st === 'contact' || st === 'whiff') {
       v.pitch = pitch;
-      var sw = +(q.st || (st === 'swing' ? 0.035 : 0.12));
-      v.pitchT = pitch.T - 0.07 + sw;
-      var res = st === 'whiff' ? { contact: false, label: 'WHIFF', timingErr: -0.15 } : { contact: true, label: 'PERFECT', quality: 1, sweet: true, ev: 106, la: 26, spray: -8, timingErr: 0 };
+      var sw = +(q.st || (st === 'swing' ? 0.035 : 0.12)), late = +(q.late || 0);   // late: timing error (s) of a contact swing
+      v.pitchT = pitch.T - 0.07 + sw + late;
+      var res = st === 'whiff' ? { contact: false, label: 'WHIFF', timingErr: -0.15 } : { contact: true, label: late ? 'LATE' : 'PERFECT', quality: late ? 0.6 : 1, sweet: !late, ev: 106, la: 26, spray: late ? 20 : -8, timingErr: late };
       v.swing = { t: sw, result: res, power: !!q.power };
       if (st === 'contact') v.play = mockPlay(park, q.play || 'hr');
     }
@@ -159,14 +159,27 @@ function buildView(q) {
 }
 function setup(search) {
   var q = qs(search);
+  var ov = document.getElementById('bb-overlay'); if (ov) ov.style.display = '';
   last = buildView(q);
   // a scene change opens with an iris: render a frame of the same scene first unless the shot asks for the wipe
   BB.Render._S.prevScene = ''; BB.Render._S.lastScene = '';
   if (!q.iris) { var pre = Object.assign({}, last, { time: last.time - 1 }); BB.Render.frame(pre); }
   else { var pv = Object.assign({}, last, { scene: q.iris, time: last.time - 0.16 }); BB.Render.frame(pv); BB.Render._S.sceneT0 = last.time - 0.16; BB.Render._S.lastScene = last.scene; BB.Render._S.prevScene = q.iris; }
   BB.Render.frame(last);
+  if (q.closeup && BB.Rocco && BB.Rocco.ready && BB.Rocco.ready()) closeup(q);
   window.__done = true;
   return true;
+}
+// debug: a close-up of the model's head (face shapes, gaze), drawn over the frame without the overlay.
+// cside: radians around him from straight in front (+ = toward his left), cdist: ft, cfov: degrees
+function closeup(q) {
+  var S = BB.Render._S, h = BB.Rocco.headPoint(new THREE.Vector3()), cam = new THREE.PerspectiveCamera(+(q.cfov || 24), S.W / S.H, 0.3, 500);
+  var yaw = BB.Rocco.root().rotation.z + +(q.cside || 0.5), d = +(q.cdist || 9);
+  cam.up.set(0, 0, 1); cam.position.set(h.x + Math.sin(yaw) * d, h.y - Math.cos(yaw) * d, h.z + 1.2); cam.lookAt(h.x, h.y, h.z + 0.45 - +(q.cdown || 0));
+  cam.updateProjectionMatrix();
+  S.renderer.setRenderTarget(null); S.renderer.render(S.scene, cam);
+  document.getElementById('bb-overlay').style.display = 'none';
+  var hp = h.clone().setZ(h.z + 0.45).project(cam); window.__closeHead = { x: (hp.x + 1) / 2 * S.W, y: (1 - hp.y) / 2 * S.H };
 }
 function animate() {
   var t0 = performance.now(), q = qs(location.search), v = buildView(q), pitch = v.pitch || mockPitch(v.pitcher, 7);

@@ -20,15 +20,20 @@
   function flag(re) { try { return re.test(location.search); } catch (e) { return false; } }
   var OLD = flag(/[?&]rocco=(old|0|off|proc)(&|$)/) && !flag(/[?&]stage=new(&|$)/);
   var ROCCO = { x: -2.35, y: 0.9, size: 1.12 };             // render spot of the right-handed hero (physics uses K.BATTER_X)
-  var CATCHER = OLD ? { x: 0.4, y: -5.4, size: 0.9 } : { x: 0.55, y: -5.2, size: 0.8 };
-  var UMP = { x: 1.75, y: -3.2, size: 1.08, off: 4.6 };
+  var CATCHER = OLD ? { x: 0.4, y: -5.4, size: 0.9 } : { x: 0.75, y: -4.75, size: 0.76, shift: 0.55, mitt: { x: 0.2, y: -3.2, z: 2.1 } };
+  var UMP = OLD ? { x: 1.75, y: -3.2, size: 1.08, off: 4.6 } : { x: 2.25, y: -4.5, size: 0.92, off: 5.6 };
   // bat camera. Old: fixed pose and fov. New: further back on a longer lens (bigger pitcher, smaller catcher), centred
   // on the zone (aim), sized so the zone gets ppf px per ft (min of ppfW * width, ppfH * height) and shifted (lens
   // shift, so verticals stay put) to put the aim point at screen fraction `at`. Solved per screen size in layoutBat.
-  var BATCAM = OLD ? { pos: [-0.9, -18, 8.0], look: [0.2, 30, -1.6], fov: 38 } : { pos: [-1.0, -30, 8.6], aim: [0, 0, 2.5], ppfW: 0.16, ppfH: 0.074, at: [0.56, 0.62] };
-  var PITCHER_K = OLD ? 1 : 1;                               // pitcher size multiplier
+  var BATCAM = OLD ? { pos: [-0.9, -18, 8.0], look: [0.2, 30, -1.6], fov: 38 } : {
+    aim: [0, 0, 2.5],
+    tall: { a: 0.462, pos: [-0.6, -28, 9.6], ppfW: 0.140, ppfH: 0.072, at: [0.63, 0.655] },     // 390x844, 430x932
+    wide: { a: 0.563, pos: [-1.6, -23, 7.3], ppfW: 0.156, ppfH: 0.078, at: [0.62, 0.675] },     // 320x568 (16:9) and wider
+  };
+  var PITCHER_K = OLD ? 1 : 1.08;                               // pitcher size multiplier
   // the modelled Rocco (BB.Rocco, 36-rocco.js): where his contact frame meets a middle-middle pitch
-  var HERO_AIM = { x: 0, y: 0.1, z: 2.5 };
+  var HERO_AIM = { x: 0, y: 0, z: 2.5 };
+  var HR_HOLD = { pos: [-7, -34, 12], look: [0, 16, 4.5] };   // field camera while the model Rocco flips his bat on a homer
 
   var S = {
     canvas: null, renderer: null, scene: null, W: 390, H: 844, dpr: 1, pr: 1, prCap: 2, failed: false,
@@ -91,7 +96,7 @@
         S.scene.add(root); if (prop) S.scene.add(prop);
         BB.Rocco.setColors(S.col);
         var size = BB.Rocco.autoSize(), pl = BB.Rocco.solvePlacement(HERO_AIM, size);
-        S.hero = { x: pl.x, y: pl.y, size: size };
+        S.hero = { x: pl.x, y: pl.y, size: size, homeMatrix: new T.Matrix4().compose(new T.Vector3(pl.x, pl.y, 0), new T.Quaternion().setFromAxisAngle(new T.Vector3(0, 0, 1), PI / 2), new T.Vector3(1, 1, 1)) };
         BB.Rocco.place(S.hero.x, S.hero.y, 0, PI / 2, size);
         var br = BB.Rocco.batRest();
         if (br) S.hero.batRest = { x: br.p.x, y: br.p.y, dx: br.dir.x, dy: br.dir.y };
@@ -130,18 +135,23 @@
   // the bat camera: fixed per screen size; camBase is never shaken so screenToPlate/plateToScreen stay exact
   function layoutBat() {
     var B = BATCAM, W = S.W, H = S.H, fov, look = batLook();
-    if (B.look) fov = B.fov * (W / H > 0.62 ? 0.9 : 1);
+    if (B.look) { fov = B.fov * (W / H > 0.62 ? 0.9 : 1); S.batPos = B.pos; S.batAt = null; }
     else {
-      var ppf = Math.min(B.ppfW * W, B.ppfH * H), d = Math.hypot(B.pos[0] - B.aim[0], B.pos[1] - B.aim[1], B.pos[2] - B.aim[2]);
+      // tall phones and 16:9 screens get their own framing; anything between is interpolated, wider screens use 'wide'
+      var k = clamp((W / H - B.tall.a) / (B.wide.a - B.tall.a), 0, 1), L = function (f) { return lerp(B.tall[f], B.wide[f], k); };
+      var pos = [0, 1, 2].map(function (i) { return lerp(B.tall.pos[i], B.wide.pos[i], k); }), at = [L2(B.tall.at[0], B.wide.at[0], k), L2(B.tall.at[1], B.wide.at[1], k)];
+      var ppf = Math.min(L('ppfW') * W, L('ppfH') * H), d = Math.hypot(pos[0] - B.aim[0], pos[1] - B.aim[1], pos[2] - B.aim[2]);
       fov = 2 * Math.atan(H / 2 / (ppf * d)) * 180 / PI;
+      S.batPos = pos; S.batAt = at;
     }
     [S.camBat, S.camBase].forEach(function (c) {
-      c.fov = fov; c.position.set(B.pos[0], B.pos[1], B.pos[2]);
+      c.fov = fov; c.position.set(S.batPos[0], S.batPos[1], S.batPos[2]);
       c.lookAt(look[0], look[1], look[2]);
-      if (B.at) c.setViewOffset(W, H, (0.5 - B.at[0]) * W, (0.5 - B.at[1]) * H, W, H); else if (c.view) c.clearViewOffset();
+      if (S.batAt) c.setViewOffset(W, H, (0.5 - S.batAt[0]) * W, (0.5 - S.batAt[1]) * H, W, H); else if (c.view) c.clearViewOffset();
       c.updateProjectionMatrix(); c.updateMatrixWorld(true);
     });
   }
+  function L2(a, b, k) { return a + (b - a) * k; }
   function batLook() { return BATCAM.look || BATCAM.aim; }
   function plateToScreen(x, z) {
     V.set(x, 0, z).project(S.camBase || new T.PerspectiveCamera());
@@ -309,8 +319,13 @@
     var sw = v.swing, p = v.pitch;
     if (!sw || !sw.result || !sw.result.contact || !p || v.pitchT == null) return null;
     var cT = p.T + clamp(sw.result.timingErr || 0, 0, 0.08), tc = v.pitchT - cT;
-    return { cT: cT, tc: tc, hit: tc >= 0, sweet: !!sw.result.sweet, q: sw.result.quality || 0.5 };
+    // where the bat visibly meets it: on a late swing the pitch is already on its way into the mitt, so the meeting
+    // is drawn at most LATE_DEPTH ft behind the plate (the ball waits on the bat for a frame or two)
+    var vT = cT;
+    if (!OLD && p.T != null) { var k = 0; while (vT > p.T && pitchPos(p, vT).y < -LATE_DEPTH && k++ < 60) vT -= 0.002; }
+    return { cT: cT, tc: tc, hit: tc >= 0, sweet: !!sw.result.sweet, q: sw.result.quality || 0.5, vT: vT, vP: pitchPos(p, vT) };
   }
+  var LATE_DEPTH = 1.2;
   function pitchPos(p, t) {
     if (BB.Pitch && BB.Pitch.pos && p._b) { try { return BB.Pitch.pos(p, t); } catch (e) {} }
     if (typeof p.pos === 'function') return p.pos(t);
@@ -358,15 +373,16 @@
     if (react === 'jaw' && ci) { pp.hy = (pp.hy || 0) + 0.4 * smooth(ci.tc / 0.2); pp.hx = -0.6; }
     C.apply(Pm, pp);
     // --- catcher: reads the pitch late, then sticks it
-    var Cc = S.catcher;
-    place(Cc, CATCHER.x, CATCHER.y, 0, PI);
-    var mitt = { x: 0.1, y: -2.55, z: 2.3 }, pop = 0;
+    var Cc = S.catcher, cxs = CATCHER.x;
+    var mitt = CATCHER.mitt ? { x: CATCHER.mitt.x, y: CATCHER.mitt.y, z: CATCHER.mitt.z } : { x: 0.1, y: -2.55, z: 2.3 }, pop = 0;
     if (p && v.pitchT != null) {
       var fin = pitchPos(p, p.T + 0.5), w = smooth((v.pitchT / p.T - 0.35) / 0.55);
+      if (CATCHER.shift) cxs = lerp(CATCHER.x, fin.x + 0.5, CATCHER.shift * w);   // shuffles over, glove side to the ball
       mitt = { x: lerp(mitt.x, fin.x, w), y: lerp(mitt.y, fin.y - 0.15, w), z: lerp(mitt.z, fin.z, w) };
       if (!(ci && ci.hit) && v.pitchT > p.T) pop = Math.max(0, 1 - (v.pitchT - p.T - 0.05) / 0.25);
       if (ci && ci.hit) { mitt = { x: 0.6, y: -3.0, z: 3.4 + smooth(ci.tc / 0.15) * 1.2 }; }
     }
+    place(Cc, cxs, CATCHER.y, 0, PI);
     var cp = A.catcher({ mitt: toUp(Cc, mitt.x, mitt.y + 0.1, mitt.z - 0.05), pop: pop, time: t });
     if (ci && ci.hit) { cp.hx = 0.7; cp.mouth = 0.7; cp.browY = 1; }
     C.apply(Cc, cp);
@@ -388,7 +404,13 @@
         bp = v.play.ballAt(Math.max(0, tt)); var b2 = v.play.ballAt(Math.max(0, tt) + 0.02);
         vel = { x: (b2.x - bp.x) / 0.02, y: (b2.y - bp.y) / 0.02, z: (b2.z - bp.z) / 0.02 };
         squash = Math.max(0, 1 - tt / 0.06) * 0.8;
-        if (tt < 0.012) { var pc = pitchPos(p, ci.cT); bp = pc; }
+        if (!OLD) { // leave from the bat: start at the meeting point and blend into the physics path
+          var b0 = v.play.ballAt(0), wl = 1 - smooth(tt / 0.2);
+          bp = { x: bp.x + (ci.vP.x - b0.x) * wl, y: bp.y + (ci.vP.y - b0.y) * wl, z: bp.z + (ci.vP.z - b0.z) * wl };
+        }
+        if (tt < 0.012) { var pc = OLD ? pitchPos(p, ci.cT) : ci.vP; bp = pc; }
+      } else if (ci && v.pitchT > ci.vT) {
+        bp = ci.vP; vel = null;
       } else {
         bp = pitchPos(p, v.pitchT); var b3 = pitchPos(p, v.pitchT + 0.01);
         vel = { x: (b3.x - bp.x) / 0.01, y: (b3.y - bp.y) / 0.01, z: (b3.z - bp.z) / 0.01 };
@@ -405,7 +427,7 @@
     }
     // --- camera: shake + contact punch
     var cam = S.camBat;
-    cam.position.set(BATCAM.pos[0], BATCAM.pos[1], BATCAM.pos[2]);
+    cam.position.set(S.batPos[0], S.batPos[1], S.batPos[2]);
     var shake = (v.shake || 0), look = batLook(), sk = OLD ? 1 : 0.6;   // the longer lens magnifies the shake
     if (shake > 0) cam.position.add(V.set(Math.sin(t * 71) * 0.16 * shake * sk, 0, Math.cos(t * 83) * 0.12 * shake * sk));
     cam.lookAt(look[0], look[1], look[2]);
@@ -423,9 +445,9 @@
     BB.Rocco.setHot(v.onFire);
     var o = { ci: ci, pitcherHead: PITCHER_EYE, latency: latency(), hr: !!(v.play && v.play.type === 'HR') };
     if (p && v.pitchT != null) {
-      if (ci && ci.hit && v.play) { o.ball = pitchPos(p, ci.cT); o.ballAfter = v.play.ballAt(Math.max(0, ci.tc) + 0.2); }
+      if (ci && ci.hit && v.play) { o.ball = ci.vP; o.ballAfter = v.play.ballAt(Math.max(0, ci.tc) + 0.2); }
       else o.ball = pitchPos(p, Math.min(v.pitchT + 0.05, p.T + 0.3));
-      o.contactPt = ci ? pitchPos(p, ci.cT) : pitchPos(p, p.T);
+      o.contactPt = ci ? ci.vP : pitchPos(p, p.T);
     }
     st.hero = BB.Rocco.poseBat(v, o); st.heroO = o; st.glb = true;
     S.bat.visible = false;
@@ -498,6 +520,13 @@
     var cx = F.x - dir[0] * back, cy = F.y - dir[1] * back;
     cam.position.set(lerp(cx, -10, start * 0.5), lerp(cy, -34, start * 0.5), lerp(hgt, 14, start * 0.5));
     var lookX = F.x + dir[0] * 30, lookY = F.y + dir[1] * 30, lookZ = F.z * 0.72 + 4;
+    if (hero && play.type === 'HR') { // hold on the plate for the bat flip while the ball soars out of the top, then chase it
+      var hk = 1 - smooth((t - 0.5) / 0.7);
+      if (hk > 0) {
+        cam.position.set(lerp(cam.position.x, HR_HOLD.pos[0], hk), lerp(cam.position.y, HR_HOLD.pos[1], hk), lerp(cam.position.z, HR_HOLD.pos[2], hk));
+        lookX = lerp(lookX, HR_HOLD.look[0], hk); lookY = lerp(lookY, HR_HOLD.look[1], hk); lookZ = lerp(lookZ, HR_HOLD.look[2], hk);
+      }
+    }
     if (play.type === 'HR' && play.fenceT > 0 && t > play.fenceT) { var after = smooth((t - play.fenceT) / 1.2); lookZ += after * 25; }
     // closing beat: once the ball is dead, ease back to the diamond so the runners rounding the bases are in shot
     var tDead = play.type === 'HR' ? (play.hang || dur * 0.7) + 0.2 : Math.min(dur - 0.3, play.catchT >= 0 ? play.catchT + 0.9 : (play.hang || 1) + 0.7);
@@ -589,14 +618,15 @@
     BB.Rocco.place(rp.x, rp.y, 0, yaw, H.size);
     BB.Rocco.setHot(v.onFire);
     var bases = rp.to - m.from;
-    BB.Rocco.poseRun(v, { dist: rp.u * bases * 90, hr: play.type === 'HR', arrived: arrived && !rp.out, arriveT: arrived ? tx - (rp.startT + rp.runDur) : null,
-      out: rp.out, outT: rp.out ? tx - (rp.startT + rp.runDur * 0.86 / 1.25) : null });
+    BB.Rocco.poseRun(v, { dist: rp.u * bases * 90, runT: Math.max(0, tx - rp.startT), speed: bases * 90 / rp.runDur, hr: play.type === 'HR',
+      arrived: arrived && !rp.out, arriveT: arrived ? tx - (rp.startT + rp.runDur) : null, out: rp.out, outT: rp.out ? tx - (rp.startT + rp.runDur * 0.86 / 1.25) : null });
     st.glb = true; S.bat.visible = false;
-    // the bat lies in the dirt by the plate (where the flip dropped it on a homer)
-    var r = play.type === 'HR' && H.batRest;
-    if (r) BB.Rocco.dropBat(r.x, r.y, r.dx, r.dy);
+    // the bat: on a homer it keeps tumbling along its flip from the plate, then lies in the dirt; otherwise it was
+    // dropped by the plate
+    if (play.type === 'HR' && BB.Rocco.has('bat_flip')) BB.Rocco.flipBat(tx + FIELD_DELAY - FLIP_AT, H.homeMatrix);
     else BB.Rocco.dropBat(H.x + 1.5, H.y - 0.5, 0.45, -1);
   }
+  var FLIP_AT = 0.18;   // 36-rocco: a homer's bat flip starts this long after contact
   function batterAtHome(v, t, play) {
     var R = S.rocco;
     syncBatFrame();
@@ -619,6 +649,8 @@
       BB.Rocco.setHot(false);
       BB.Rocco.poseTitle(t);
       st.glb = true; S.bat.visible = false;
+    } else if (BB.Rocco && BB.Rocco.status && BB.Rocco.status() === 'loading') {
+      S.bat.visible = false;   // the model is a moment away: no flash of the procedural Rocco on the title
     } else {
       place(R, -3.0, -1.0, 0, 0.42);
       var cyc = t % 6.5, o = { time: t, load: 0 };
@@ -629,8 +661,8 @@
       poseBat(R, S.bat, A.batterBat(pose, o));
       S.bat.scale.set(1, 1, 1);
     }
-    var cam = S.camTitle, a = Math.sin(t * 0.07) * 0.18;
-    cam.position.set(-3.0 + Math.sin(a) * 26, -1.0 - Math.cos(a) * 26, 4.2 + Math.sin(t * 0.11) * 0.4);
+    var cam = S.camTitle, a = Math.sin(t * 0.07) * 0.18, cd = st.glb ? 22 : 26;   // the model is a 5-ft Rocco: come in a little
+    cam.position.set(-3.0 + Math.sin(a) * cd, -1.0 - Math.cos(a) * cd, (st.glb ? 3.9 : 4.2) + Math.sin(t * 0.11) * 0.4);
     cam.fov = 40;
     cam.lookAt(-2.0 + Math.sin(a) * 4, 60, 3.0);
     cam.updateProjectionMatrix();
@@ -762,7 +794,7 @@
     }
     // contact: impact star + comic word
     if (ci && ci.hit && ci.tc < 0.3) {
-      var cp = pitchPos(p, ci.cT), sc = proj(cp.x, cp.y, cp.z, cam), u = ci.tc / 0.3, big = ci.sweet ? 1.35 : 0.9 + ci.q * 0.3;
+      var cp = ci.vP, sc = proj(cp.x, cp.y, cp.z, cam), u = ci.tc / 0.3, big = ci.sweet ? 1.35 : 0.9 + ci.q * 0.3;
       var sz = (60 + 50 * U.easeOut(Math.min(1, ci.tc / 0.08))) * big * (1 - smooth((u - 0.6) / 0.4) * 0.6);
       X.save(); X.globalAlpha = 1 - smooth((u - 0.65) / 0.35);
       burst(sc.x, sc.y, sz * 0.45, sz, 12, t * 0.5, 11); X.fillStyle = ci.sweet ? MUSTARD : '#FFF9EE'; X.fill(); X.lineWidth = 4; X.strokeStyle = INK; X.stroke();
@@ -975,11 +1007,11 @@
     if (kind === 'huge' && !word) word = 'KA-BLAM!';
     var t = st.t, inS = C.backOut(clamp(t / 0.28, 0, 1)), out = smooth((t - 1.55) / 0.35), sc = inS * (1 - out * 0.4), al = 1 - out;
     if (al <= 0) return;
-    var cx = S.W / 2, cy = (v.scene === 'field' ? 0.44 : 0.42) * S.H;
+    var cx = S.W / 2, cy = (v.scene === 'field' ? 0.44 : OLD ? 0.42 : 0.395) * S.H;   // new staging: clear of Rocco's cap
     X.save(); X.globalAlpha = al;
     if (kind === 'neutral') {
       // a calm ribbon for hints & neutral calls, lower on screen
-      cy = v.scene === 'bat' && v.windup != null ? S.H * 0.8 : cy;
+      cy = v.scene === 'bat' && v.windup != null ? S.H * (OLD ? 0.8 : 0.88) : cy;   // new staging: below Rocco's cleats
       X.font = F(30); var tw = Math.min(S.W - 40, X.measureText(word).width + 40);
       X.save(); X.translate(cx, cy); X.scale(sc, sc); X.rotate(-0.03);
       card(-tw / 2, -26, tw, 50, S.col.a, 14, 5);

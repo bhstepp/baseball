@@ -384,6 +384,20 @@ def bl_apply_modifiers(ob):
     return from_blender_mesh(me) + (me,)
 
 
+def clean_degenerate(V, F, dist=1e-6):
+    me = to_blender_mesh(V, F, 'clean')
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=dist)
+    bmesh.ops.dissolve_degenerate(bm, dist=dist, edges=bm.edges)
+    bmesh.ops.triangulate(bm, faces=[f for f in bm.faces if len(f.verts) > 4])
+    bm.to_mesh(me)
+    bm.free()
+    out = from_blender_mesh(me)
+    bpy.data.meshes.remove(me)
+    return out
+
+
 def voxel_remesh(V, F, voxel):
     ob = bl_temp_object(V, F, 'vox')
     ob.data.remesh_voxel_size = voxel
@@ -396,6 +410,7 @@ def voxel_remesh(V, F, voxel):
 
 
 def quadriflow(V, F, faces, seed=0, sharp=False):
+    V, F = clean_degenerate(V, F)
     ob = bl_temp_object(V, F, 'qf')
     with _ctx_obj(ob):
         r = bpy.ops.object.quadriflow_remesh(target_faces=int(faces), use_mesh_symmetry=False, use_preserve_sharp=sharp,
@@ -409,6 +424,7 @@ def quadriflow(V, F, faces, seed=0, sharp=False):
 
 
 def decimate(V, F, ratio=None, target_tris=None, sym=False):
+    V, F = clean_degenerate(V, F)
     ob = bl_temp_object(V, F, 'dec')
     tris = sum(len(f) - 2 for f in F)
     md = ob.modifiers.new('dec', 'DECIMATE')

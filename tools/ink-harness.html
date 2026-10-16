@@ -181,18 +181,21 @@ function addGlb(done) {
     root.traverse(function (o) {
       if (o.isMesh) {
         var c = o.material && o.material.color ? o.material.color : new THREE.Color('#ccc');
-        o.material = new THREE.MeshToonMaterial({ color: c, gradientMap: BB.Toon.GRAD, side: o.material.side });
+        var nm = new THREE.MeshToonMaterial({ color: c, gradientMap: BB.Toon.GRAD, side: o.material.side }); nm.name = o.material.name;
+        o.material = nm;
         o.frustumCulled = false;
         if (o.morphTargetDictionary && Q.face) { var k = o.morphTargetDictionary[Q.face]; if (k != null) o.morphTargetInfluences[k] = 1; }
       }
     });
     wrap.add(root); wrap.rotation.x = Math.PI / 2;
-    BB.Ink.mark(wrap);
+    var outer = new THREE.Group(); outer.add(wrap);
+    BB.Ink.mark(outer);
     TEST.mixer = new THREE.AnimationMixer(root);
     var clip = gltf.animations.filter(function (a) { return a.name === (Q.clip || 'stance'); })[0] || gltf.animations[0];
     if (clip) { TEST.mixer.clipAction(clip).play(); TEST.mixer.setTime(+(Q.ct || 0.3)); }
     TEST.clips = gltf.animations.map(function (a) { return a.name; });
-    done(wrap);
+    TEST.anims = gltf.animations;
+    done(outer);
   }, function (e) { console.warn('glb parse failed', e); done(null); });
 }
 
@@ -214,7 +217,7 @@ function boot() {
 var CLOSE = new THREE.PerspectiveCamera(30, 1, 0.5, 2000); CLOSE.up.set(0, 0, 1);
 function closeCam(which) {
   var S = BB.Render._S, tgt = null, d = 9, h = 0.5;
-  if (which === 'rocco' && S.rocco) tgt = S.rocco.root;
+  if (which === 'rocco') tgt = (BB.Rocco && BB.Rocco.ready && BB.Rocco.ready() && BB.Rocco.R.root && BB.Rocco.R.root.visible) ? BB.Rocco.R.root : S.rocco && S.rocco.root;
   if (which === 'pitcher' && S.pitcher) { tgt = S.pitcher.root; d = 14; }
   if (which === 'catcher' && S.catcher) tgt = S.catcher.root;
   if (which === 'test') tgt = TEST.glb || TEST.skin;
@@ -223,14 +226,20 @@ function closeCam(which) {
   var b = new THREE.Box3().setFromObject(tgt), c = b.getCenter(new THREE.Vector3()), sz = b.getSize(new THREE.Vector3());
   d = Math.max(sz.z, sz.x * 1.2) * 2.6 + 2;
   var cam = S.cam, dir = new THREE.Vector3().subVectors(cam.position, c); dir.z = 0; dir.normalize();
+  if (Q.front === '1' && which === 'test' && TEST.glb) { // look him in the face: the model's +Z (glTF front) in the world
+    var inner = TEST.glb.children[0] && TEST.glb.children[0].children[0];
+    if (inner) { inner.updateMatrixWorld(true); dir.set(0, 0, 1).transformDirection(inner.matrixWorld); dir.z = 0; dir.normalize(); }
+    if (Q.zoom) { d = (+Q.zoom); }
+  }
   if (Q.yaw) dir.applyAxisAngle(new THREE.Vector3(0, 0, 1), +Q.yaw * Math.PI / 180);
   CLOSE.aspect = S.W / S.H; CLOSE.fov = 30;
-  CLOSE.position.copy(c).addScaledVector(dir, d); CLOSE.position.z = c.z + sz.z * 0.15 + h;
+  if (Q.zoom && Q.front === '1') { c.z = b.max.z - sz.z * 0.2; } // head height
+  CLOSE.position.copy(c).addScaledVector(dir, d); CLOSE.position.z = c.z + (Q.zoom ? 0.3 : sz.z * 0.15 + h);
   CLOSE.lookAt(c); CLOSE.updateProjectionMatrix(); CLOSE.updateMatrixWorld(true);
   return CLOSE;
 }
 function applyInk(q) {
-  BB.Ink.setEnabled(q.fx !== '0');
+  if (q.fx != null) BB.Ink.setEnabled(q.fx !== '0');   // (no fx: leave it to ?ink=)
   BB.Ink.setAuto(false);
   if (q.q) BB.Ink.setQuality(+q.q);
   BB.Ink.setHulls(q.hulls === '1');
@@ -250,18 +259,31 @@ function setup(search) {
     if (TEST.skin.parent !== S.scene) S.scene.add(TEST.skin);
     TEST.skin.position.set(+(q.tx || 1.6), +(q.ty || 1.2), 0);
   } else if (TEST.skin && TEST.skin.parent) TEST.skin.parent.remove(TEST.skin);
-  if (TEST.glb) {
+  if (TEST.glb && q.glb !== '1' && TEST.glb.parent) TEST.glb.parent.remove(TEST.glb); // only when the shot asks for it
+  if (TEST.glb && q.glb === '1') {
     if (TEST.glb.parent !== S.scene) S.scene.add(TEST.glb);
-    TEST.glb.position.set(+(q.tx || 1.8), +(q.ty || 1.0), 0); TEST.glb.rotation.set(Math.PI / 2, +(q.tyaw || -150) * Math.PI / 180, 0, 'XYZ');
+    if (TEST.mixer && TEST.anims) {   // pose: clip + time
+      TEST.mixer.stopAllAction();
+      var clip = TEST.anims.filter(function (a) { return a.name === (q.clip || 'stance'); })[0] || TEST.anims[0];
+      if (clip) { TEST.mixer.clipAction(clip).reset().play(); TEST.mixer.setTime(+(q.ct || 0.3)); }
+    }
+    TEST.glb.traverse(function (o) {
+      if (o.morphTargetDictionary) for (var k in o.morphTargetDictionary) o.morphTargetInfluences[o.morphTargetDictionary[k]] = k === q.face ? 1 : 0;
+    });
+    if (q.glbspot === 'game') { // where the game puts him (docs: root rotated z = PI/2 at (-2.4, 0, 0)); the procedural Rocco steps out
+      TEST.glb.position.set(-2.4, 0, 0); TEST.glb.rotation.set(0, 0, Math.PI / 2);
+      if (S.rocco) S.rocco.root.traverse(function (o) { o.layers.disableAll(); });
+    } else {
+      TEST.glb.position.set(+(q.tx || 1.8), +(q.ty || 1.0), 0); TEST.glb.rotation.set(0, 0, +(q.tyaw || -150) * Math.PI / 180);
+    }
   }
   BB.Render.frame(last);
   if (q.cam) {
     var c = closeCam(q.cam);
-    if (c) {
-      if (BB.Ink.active()) BB.Ink.render(S.renderer, S.scene, c, { scene: last.scene, time: last.time, hitstop: false });
-      else S.renderer.render(S.scene, c);
-      S.octx.setTransform(1, 0, 0, 1, 0, 0); S.octx.clearRect(0, 0, S.ov.width, S.ov.height);
-    }
+    if (!c) throw new Error('no close-up target: ' + q.cam);
+    if (BB.Ink.active()) BB.Ink.render(S.renderer, S.scene, c, { scene: last.scene, time: last.time, hitstop: false });
+    else S.renderer.render(S.scene, c);
+    S.octx.setTransform(1, 0, 0, 1, 0, 0); S.octx.clearRect(0, 0, S.ov.width, S.ov.height);
   }
   window.__done = true;
   return BB.Ink.stats();

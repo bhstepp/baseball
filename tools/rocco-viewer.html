@@ -174,6 +174,7 @@
     renderer.setClearColor(CREAM, 1);
     renderer.setViewport(0, 0, cols * cw, rows * ch); renderer.setScissor(0, 0, cols * cw, rows * ch); renderer.clear();
     const out = [];
+    R.meshes.forEach((m) => { m.visible = !(spec.hide || []).includes(m.material.name); });
     spec.cells.forEach((cell, i) => {
       const cx = (i % cols) * cw, cy = Math.floor(i / cols) * ch;
       const pl = cell.place || spec.place || { x: 0, y: 0, yaw: 0 };
@@ -181,12 +182,29 @@
       plate.visible = !!(cell.plate || spec.plate); ground.visible = cell.ground !== false && spec.ground !== false;
       shadow.position.set(R.root.position.x, R.root.position.y, 0.012); shadow.scale.set(1.3, 1.0, 1);
       if (cell.ball) { ball.visible = true; ball.position.fromArray(cell.ball); } else ball.visible = false;
+      const trails = [];
+      if (cell.trail && cell.clip) {   // motion trails: sampled world paths of bones (spacing shows as dot gaps)
+        const tr = cell.trail, cols = [0xD9483B, 0x2E5AAC, 0x2F7A4A, 0x8A5A3C];
+        (tr.bones || ['bat_tip']).forEach((bn, bi) => {
+          const pts = [];
+          for (let k = 0; k <= (tr.n || 40); k++) {
+            const tt = (tr.from || 0) + ((tr.to != null ? tr.to : R.clips[cell.clip].duration) - (tr.from || 0)) * k / (tr.n || 40);
+            pose(cell.clip, tt); const v = boneWorld(bn); if (v) pts.push(v.clone());
+          }
+          const g = new T.BufferGeometry().setFromPoints(pts);
+          const line = new T.Line(g, new T.LineBasicMaterial({ color: cols[bi % 4], depthTest: false }));
+          const dots = new T.Points(g, new T.PointsMaterial({ color: cols[bi % 4], size: 5, sizeAttenuation: false, depthTest: false }));
+          line.renderOrder = dots.renderOrder = 10;
+          scene.add(line); scene.add(dots); trails.push(line, dots);
+        });
+      }
       pose(cell.clip, cell.t || 0, cell.sk);
       const cam = makeCam(cell.view || spec.view, cw / ch); placeKey(cam);
       if (cell.bg != null) { renderer.setClearColor(cell.bg, 1); }
       renderer.setViewport(cx, rows * ch - cy - ch, cw, ch); renderer.setScissor(cx, rows * ch - cy - ch, cw, ch);
       renderer.clear(); renderer.render(scene, cam);
       renderer.setClearColor(CREAM, 1);
+      trails.forEach((o) => { scene.remove(o); o.geometry.dispose(); });
       if (cell.label) label(cx + 4, cy + 4, cell.label);
       const info = {};
       ['bat_sweet', 'bat_tip', 'head', 'hand.L', 'hand.R', 'foot.L', 'foot.R'].forEach((b) => { const v = boneWorld(b); if (v) info[b] = [v.x, v.y, v.z].map((k) => +k.toFixed(4)); });

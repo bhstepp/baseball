@@ -42,24 +42,24 @@ const ZOOMS = [
 ];
 // close-up camera renders (ink on): character detail
 const CLOSE = [
-  ['close-rocco', 'scene=bat&state=windup&w=0.5&cam=rocco&nohud=1'],
-  ['close-rocco-side', 'scene=bat&state=windup&w=0.5&cam=rocco&yaw=70&nohud=1'],
-  ['close-pitcher', 'scene=bat&state=windup&w=0.8&cam=pitcher&nohud=1'],
-  ['close-catcher', 'scene=bat&state=windup&w=0.5&cam=catcher&nohud=1'],
+  ['close-rocco', 'scene=bat&state=windup&w=0.5&cam=rocco&nohud=1&fx=1'],
+  ['close-rocco-side', 'scene=bat&state=windup&w=0.5&cam=rocco&yaw=70&nohud=1&fx=1'],
+  ['close-pitcher', 'scene=bat&state=windup&w=0.8&cam=pitcher&nohud=1&fx=1'],
+  ['close-catcher', 'scene=bat&state=windup&w=0.5&cam=catcher&nohud=1&fx=1'],
 ];
 // intermediate targets
 const DEBUG = [
-  ['dbg-normals', 'scene=bat&state=windup&w=0.5&dbg=normals&nohud=1'],
-  ['dbg-edges', 'scene=bat&state=windup&w=0.5&dbg=edges&nohud=1'],
-  ['dbg-lines', 'scene=bat&state=windup&w=0.5&dbg=lines&nohud=1'],
-  ['dbg-lines-field', 'scene=field&play=gap&f=1&extra=0.7&dbg=lines&nohud=1'],
+  ['dbg-normals', 'scene=bat&state=windup&w=0.5&dbg=normals&nohud=1&fx=1'],
+  ['dbg-edges', 'scene=bat&state=windup&w=0.5&dbg=edges&nohud=1&fx=1'],
+  ['dbg-lines', 'scene=bat&state=windup&w=0.5&dbg=lines&nohud=1&fx=1'],
+  ['dbg-lines-field', 'scene=field&play=gap&f=1&extra=0.7&dbg=lines&nohud=1&fx=1'],
 ];
 // hulls kept under the ink (comparison), quality levels
 const VARIANTS = [
-  ['var-hulls-on', 'scene=bat&state=windup&w=0.5&hulls=1'],
-  ['var-q1', 'scene=bat&state=windup&w=0.5&q=1'],
-  ['var-q2', 'scene=bat&state=windup&w=0.5&q=2'],
-  ['var-q3', 'scene=bat&state=windup&w=0.5&q=3'],
+  ['var-hulls-on', 'scene=bat&state=windup&w=0.5&hulls=1&fx=1'],
+  ['var-q1', 'scene=bat&state=windup&w=0.5&q=1&fx=1'],
+  ['var-q2', 'scene=bat&state=windup&w=0.5&q=2&fx=1'],
+  ['var-q3', 'scene=bat&state=windup&w=0.5&q=3&fx=1'],
 ];
 
 (async () => {
@@ -74,7 +74,7 @@ const VARIANTS = [
   const glb = fs.existsSync(path.join(ROOT, 'assets', 'rocco.glb'));
   await page.goto(harness + '?scene=title' + (glb ? '&glb=1' : ''));
   await page.waitForFunction(() => window.__done === true, null, { timeout: 90000 });
-  const setup = async (q) => page.evaluate((qq) => { window.__done = false; return window.setup('?' + qq); }, q);
+  const setup = async (q) => page.evaluate((qq) => { window.__done = false; return window.setup('?' + qq); }, /(^|[?&])q=/.test(q) ? q : q + '&q=2');
   const shot = async (name, q, clip) => { const st = await setup(q); await page.screenshot({ path: path.join(OUT, name + '.png'), clip }); return st; };
   const want = (n) => !filt || n.includes(filt);
   const pairPage = await ctx.newPage();
@@ -102,7 +102,8 @@ const VARIANTS = [
       await setup(q + '&fx=1');
       const box = await page.evaluate((w) => {
         const S = BB.Render._S, ch = S[w]; if (!ch) return null;
-        const b = new THREE.Box3().setFromObject(ch.root), c = [], V = new THREE.Vector3();
+        const glb = w === 'rocco' && BB.Rocco && BB.Rocco.ready && BB.Rocco.ready() && BB.Rocco.R.root && BB.Rocco.R.root.visible;
+        const b = new THREE.Box3().setFromObject(glb ? BB.Rocco.R.root : ch.root), c = [], V = new THREE.Vector3();
         for (let i = 0; i < 8; i++) { V.set(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z).project(S.cam); c.push([(V.x + 1) / 2 * S.W, (1 - V.y) / 2 * S.H]); }
         const xs = c.map(p => p[0]), ys = c.map(p => p[1]);
         return { x: Math.min(...xs), y: Math.min(...ys), x2: Math.max(...xs), y2: Math.max(...ys) };
@@ -125,20 +126,32 @@ const VARIANTS = [
       // skinned + morph test limb: the normals pass must follow the bones and the bulge
       const q = 'scene=bat&state=windup&w=0.5&skin=1&nohud=1';
       await shot('skin-on', q + '&fx=1');
-      await shot('skin-normals', q + '&dbg=normals');
+      await shot('skin-normals', q + '&fx=1&dbg=normals');
       const s = await shot('skin-close', q + '&cam=test&fx=1');
-      await shot('skin-close-normals', q + '&cam=test&dbg=normals');
+      await shot('skin-close-normals', q + '&cam=test&fx=1&dbg=normals');
       await pair('skin-pair', 'skin-close', 'skin-close-normals', 'ink on', 'normals pass', 390, 844);
       console.log('skin test:', JSON.stringify({ inkedDraws: s.inkedDraws, active: s.active }));
       if (glb) {
         for (const [clip, ct] of [['stance', 0.4], ['swing_mid', 0.25], ['whiff', 0.7], ['run', 0.2]]) {
-          const qq = `scene=bat&state=windup&w=0.5&nohud=1&clip=${clip}&ct=${ct}`;
+          const qq = `scene=bat&state=windup&w=0.5&nohud=1&glb=1&clip=${clip}&ct=${ct}`;
           await shot(`glb-${clip}`, qq + '&cam=test&fx=1');
           await shot(`glb-${clip}-off`, qq + '&cam=test&fx=0');
           await pair(`glb-${clip}-pair`, `glb-${clip}-off`, `glb-${clip}`, 'ink off', 'ink on', 390, 844);
         }
-        await shot('glb-normals', 'scene=bat&state=windup&w=0.5&nohud=1&clip=swing_mid&ct=0.25&cam=test&dbg=normals');
-        await shot('glb-face-grin', 'scene=bat&state=windup&w=0.5&nohud=1&clip=stance&ct=0.4&cam=test&fx=1&face=grin');
+        await shot('glb-normals', 'scene=bat&state=windup&w=0.5&nohud=1&glb=1&clip=swing_mid&ct=0.25&cam=test&fx=1&dbg=normals');
+        const face = 'scene=bat&state=windup&w=0.5&nohud=1&glb=1&clip=stance&ct=0.4&cam=test&front=1&zoom=10';
+        await shot('glb-face', face + '&fx=1');
+        await shot('glb-face-normals', face + '&fx=1&dbg=normals');
+        await shot('glb-face-open', face + '&fx=1&face=mouth_open');
+        await shot('glb-face-open-normals', face + '&fx=1&dbg=normals&face=mouth_open');
+        await pair('glb-face-morph-pair', 'glb-face-normals', 'glb-face-open-normals', 'normals: rest', 'normals: mouth_open morph', 390, 844);
+        // the glb where the game will stand him (procedural Rocco hidden), ink off / on
+        for (const [nm, st] of [['glb-bat-stance', 'state=windup&w=0.5&clip=stance&ct=0.4'], ['glb-bat-swing', 'state=swing&st=0.035&clip=swing_mid&ct=0.25']]) {
+          const g = `scene=bat&${st}&glb=1&glbspot=game`;
+          await shot(nm + '-off', g + '&fx=0');
+          await shot(nm + '-on', g + '&fx=1');
+          await pair(nm + '-pair', nm + '-off', nm + '-on', 'ink off', 'ink on', 390, 844);
+        }
       }
     }
   }
@@ -183,6 +196,50 @@ const VARIANTS = [
         return acc;
       });
       console.log(`perf split ${scene} (ms, swiftshader):`, JSON.stringify(split));
+    }
+  }
+
+  if (args.includes('--adapt') || !filt) {
+    // adaptive quality: slow frames step the level down, then switch the ink off; a dropped pixel ratio switches it off
+    await setup('scene=bat&state=windup&w=0.5&fx=1&q=3');
+    const log = await page.evaluate(async () => {
+      const R = BB.Render._S, S = BB.Ink._S, out = [], real = S.now;
+      R.noAdapt = false; BB.Ink.setAuto(true); BB.Ink.setQuality(3); BB.Ink.setEnabled(true);
+      let fake = 1000; S.now = () => (fake += 15);  // each render() sees two clock reads 15 ms apart: a 30 ms frame
+      const cam = R.cam, empty = new THREE.Scene();
+      for (let i = 0; i < 400 && BB.Ink.active(); i++) {
+        BB.Ink.render(R.renderer, empty, cam, { time: i / 60 });
+        const s = BB.Ink.stats();
+        if (!out.length || out[out.length - 1].q !== s.quality || out[out.length - 1].active !== s.active) out.push({ frame: i, q: s.quality, active: s.active, reason: s.reason, med: s.medianFrameMs });
+      }
+      const s = BB.Ink.stats();
+      out.push({ end: true, q: s.quality, active: s.active, reason: s.reason, med: s.medianFrameMs });
+      // fast frames: no change
+      BB.Ink.setEnabled(true); BB.Ink.setQuality(2); fake = 1000; S.now = () => (fake += 6);
+      for (let i = 0; i < 120; i++) BB.Ink.render(R.renderer, empty, cam, { time: i / 60 });
+      out.push({ fast: { q: BB.Ink.stats().quality, active: BB.Ink.active() } });
+      S.now = real;
+      // a dropped pixel ratio switches it off
+      BB.Ink.setEnabled(true); const before = BB.Ink.active(); R.prCap = 1.5; const after = BB.Ink.active(); R.prCap = 2; BB.Ink.setEnabled(true);
+      out.push({ prDrop: { before, after } });
+      R.noAdapt = true; BB.Ink.setAuto(false);
+      return out;
+    });
+    log.forEach(l => console.log('adapt:', JSON.stringify(l)));
+    const ok = log.some(l => l.q === 'medium') && log.some(l => l.q === 'low') && log.some(l => l.end && !l.active && l.reason === 'slow') &&
+      log.some(l => l.fast && l.fast.active && l.fast.q === 'medium') && log.some(l => l.prDrop && l.prDrop.before && !l.prDrop.after);
+    console.log('adapt test:', ok ? 'OK' : 'FAILED');
+    if (!ok) errors.push('adapt test failed');
+    // URL flags
+    for (const [flag, want] of [['0', false], ['1', true]]) {
+      const p2 = await ctx.newPage();
+      await p2.goto(harness + '?scene=title&ink=' + flag);
+      await p2.waitForFunction(() => window.__done === true, null, { timeout: 90000 });
+      const st = await p2.evaluate(() => ({ enabled: BB.Ink.enabled, forced: BB.Ink.stats().forced }));
+      const got = flag === '0' ? !st.enabled : st.forced;
+      console.log(`url ?ink=${flag}:`, JSON.stringify(st), got ? 'OK' : 'FAILED');
+      if (!got) errors.push('url flag ink=' + flag);
+      await p2.close();
     }
   }
 
