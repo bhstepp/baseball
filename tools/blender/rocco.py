@@ -204,7 +204,9 @@ def build(args):
         clips = []
     report = {}
     for clip in clips:
+        n0 = len(solver.warn)
         res = A.bake_clip(solver, rig, objs['rocco_head'], clip)
+        solver.warn[n0:] = [clip.name + ': ' + w for w in solver.warn[n0:]]
         if clip.name.startswith('swing_'):
             j = int(round(CL.T_CONTACT * A.FPS))
             Wd = res['worlds'][j]

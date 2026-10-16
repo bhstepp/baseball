@@ -645,7 +645,9 @@
   function doTitle(v, st) {
     var t = v.time || 0, R = S.rocco;
     if (glb()) {
-      BB.Rocco.place(-3.0, -1.0, 0, 0.42, S.hero.size);
+      // the model's stance turns his head to the pitcher (90 deg off his chest): open him up to the camera so the face
+      // reads 3/4 with the "R" on his chest, and the practice swing comes round toward us
+      BB.Rocco.place(-3.0, -1.0, 0, -0.7, S.hero.size);
       BB.Rocco.setHot(false);
       BB.Rocco.poseTitle(t);
       st.glb = true; S.bat.visible = false;

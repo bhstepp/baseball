@@ -4,16 +4,18 @@
 //   node tools/rocco-shots.js                 every sheet
 //   node tools/rocco-shots.js turn face       only sheets whose name contains one of the words
 //   node tools/rocco-shots.js --glb other.glb
+//   node tools/rocco-shots.js --spec adhoc.json  ad-hoc sheet(s): JSON [[name, spec], ...] (same spec format as below)
 let pw;
 try { pw = require('playwright'); } catch (e) { pw = require('/opt/node22/lib/node_modules/playwright'); }
 const path = require('path'), fs = require('fs');
 const ROOT = path.join(__dirname, '..');
 const args = process.argv.slice(2);
-let glb = path.join(ROOT, 'assets', 'rocco.glb'), out = path.join(ROOT, 'qa', 'rocco');
+let glb = path.join(ROOT, 'assets', 'rocco.glb'), out = path.join(ROOT, 'qa', 'rocco'), adhoc = null;
 const words = [];
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--glb') glb = path.resolve(args[++i]);
   else if (args[i] === '--out') out = path.resolve(args[++i]);
+  else if (args[i] === '--spec') adhoc = JSON.parse(fs.readFileSync(path.resolve(args[++i]), 'utf8'));
   else words.push(args[i]);
 }
 fs.mkdirSync(out, { recursive: true });
@@ -116,8 +118,8 @@ function sheets() {
   console.log('clips', clips.join(', '));
   console.log('tris', info.tris, 'bones', info.bones, 'morphs', info.morphs.join(','), 'size', (info.size / 1024).toFixed(1) + ' KB');
   const all = { info, sheets: {} };
-  for (const [name, spec] of sheets()) {
-    if (words.length && !words.some((w) => name.includes(w))) continue;
+  for (const [name, spec] of adhoc || sheets()) {
+    if (!adhoc && words.length && !words.some((w) => name.includes(w))) continue;
     if (!words.length && /^(side|back)-/.test(name)) continue;
     const res = await page.evaluate((s) => window.viewer.sheet(s), spec);
     all.sheets[name] = res;

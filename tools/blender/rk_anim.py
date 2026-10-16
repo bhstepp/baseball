@@ -78,6 +78,7 @@ def rest_channels():
         c['elbow%s.x' % s], c['elbow%s.y' % s], c['elbow%s.z' % s] = 0.0, 1.0, 0.0
         c['grip' + s] = 1.0 if s == 'R' else 0.0
         c['hand%s.rel' % s] = 0.0          # 1: hand target / elbow pole given in the rest body frame, carried by the chest
+        c['hand%s.relh' % s] = 0.0         # 1: hand target given in the rest frame of the head (carried by the head)
         c['roll' + s] = 0.0
         c['fing' + s] = 0.0
         c['thumb' + s] = 0.0
@@ -170,6 +171,7 @@ class Solver:
 
         g = lambda k: c[k]
         vec = lambda k: np.array([c[k + '.x'], c[k + '.y'], c[k + '.z']])
+        self.smearing = c.get('smear', 0.0) > 1e-4
         eul = lambda k: euler(c[k + '.rx'], c[k + '.ry'], c[k + '.rz'])
 
         # root squash (vertical stretch s, volume preserving)
@@ -212,7 +214,12 @@ class Solver:
             Pfree = vec('hand' + sd)
             rel = g('hand%s.rel' % sd)
             Rc = rot_of(W['chest']) @ rest['chest'][:3, :3].T
-            if rel > 1e-4:
+            relh = g('hand%s.relh' % sd)
+            if relh > 1e-4:
+                Rhd = rot_of(W['head']) @ rest['head'][:3, :3].T
+                Ph = W['head'][:3, 3] + Rhd @ (Pfree - RR.jv('head'))
+                Pfree = Pfree * (1 - relh) + Ph * relh
+            elif rel > 1e-4:
                 Pc = W['chest'][:3, 3] + Rc @ (Pfree - RR.jv('chest'))
                 Pfree = Pfree * (1 - rel) + Pc * rel
             gw = np.clip(g('grip' + sd), 0, 1)
@@ -262,7 +269,7 @@ class Solver:
             ankle_t = ball + Rf @ (RR.jv('foot.' + sd) - ball_rest)
             H = self.head_pos(W, 'thigh.' + sd)
             pole = vec('knee' + sd)
-            self._ik2(W, B, set_world, 'thigh.' + sd, 'shin.' + sd, H, ankle_t, pole, max_stretch=1.08, tag='leg' + sd, t=t)
+            self._ik2(W, B, set_world, 'thigh.' + sd, 'shin.' + sd, H, ankle_t, pole, max_stretch=1.12, tag='leg' + sd, t=t)
             A = (W['shin.' + sd] @ self._local_rest('foot.' + sd))[:3, 3]
             set_world('foot.' + sd, M4(Rf @ rest['foot.' + sd][:3, :3], A))
             Rt_ = euler(0, 0, g('foot%s.rz' % sd)) @ euler(g('toe%s.rx' % sd), g('foot%s.ry' % sd), 0)
@@ -284,6 +291,8 @@ class Solver:
             k = min(dist / ((a + b) * 0.9995), max_stretch)
             if dist > (a + b) * max_stretch * 0.9995:
                 self.warn.append('%s out of reach at t=%.3f by %.3f ft' % (tag, t, dist - (a + b) * max_stretch))
+            elif tag.startswith('arm') and k > 1.12 and not getattr(self, 'smearing', False):
+                self.warn.append('%s stretched x%.2f at t=%.3f' % (tag, k, t))
         a2, b2l = a * k, b * k
         dist = min(dist, (a2 + b2l) * 0.9999)
         dist = max(dist, abs(a2 - b2l) + 1e-4)
@@ -302,7 +311,7 @@ class Solver:
             # keep the rest roll relation: rest Z ~ pole side for both bones
             x_ = np.cross(y, z)
             R = np.stack([x_, y, z], 1)
-            set_world(bone, M4(R, p0, (1.0, k, 1.0)))
+            set_world(bone, M4(R, p0))      # stretch = joint translation (no bone scale -> no shear on children)
 
 
 def slerp_mat(Ra, Rb, t):

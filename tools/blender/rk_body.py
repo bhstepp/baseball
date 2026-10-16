@@ -128,6 +128,22 @@ def torso_weights(V, F):
         mask['shoulder.' + sd] = mask['shoulder.' + sd] * G.smoothstep(2.5, 2.75, z)
     W = seg_weights(V, torso_segments(), power=5.0, mask=mask)
     W = smooth_weights(W, F, len(V), iters=8, lam=0.6)
+    # thighs: the pelvis segment's big radius (it has to cover the seat) leaked 25-70% 'hips' weight down the baggy
+    # knickers to the knee, so a lifted knee left its trouser leg behind. Hand that weight to the thigh, fully below
+    # 1.15 ft and fading out by the seat (the buttocks and crotch stay on the pelvis).
+    for sd, sgn in (('L', 1), ('R', -1)):
+        g = G.smoothstep(1.52, 1.15, z) * G.smoothstep(0.04, 0.16, x * sgn)
+        mv = W['hips'] * g
+        W['hips'] = W['hips'] - mv
+        W['thigh.' + sd] = W['thigh.' + sd] + mv
+    # knee: re-split the leg's weight by height, not by distance to the bone segments (the baggy knickers are far
+    # from the shin axis, so distance weights left the cuff on the thigh and the sock top poked out when the knee
+    # folded). Everything below the cuff band follows the shin; the bend is spread over the knee bulge.
+    for sd in ('L', 'R'):
+        tot = W['thigh.' + sd] + W['shin.' + sd]
+        f = G.smoothstep(1.20, 0.90, z)
+        W['shin.' + sd] = tot * f
+        W['thigh.' + sd] = tot * (1 - f)
     return W
 
 

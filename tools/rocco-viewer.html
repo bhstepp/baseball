@@ -227,7 +227,8 @@
     let worstA = 0, worstP = 0, wa = '', wp = '';
     for (const k in A.bones) {
       if (skip && skip.some((s) => k.startsWith(s))) continue;
-      const [pa, qa] = A.bones[k], [pb, qb] = B.bones[k];
+      const [pa, qa0] = A.bones[k], [pb, qb0] = B.bones[k];
+      const qa = qa0.clone().normalize(), qb = qb0.clone().normalize();
       const ang = 2 * Math.acos(Math.min(1, Math.abs(qa.dot(qb)))) * 180 / Math.PI, d = pa.distanceTo(pb);
       if (ang > worstA) { worstA = ang; wa = k; } if (d > worstP) { worstP = d; wp = k; }
     }
@@ -242,7 +243,7 @@
     },
     sheet, pose, boneWorld, R,
     info() {
-      const out = { meshes: [], bones: Object.keys(R.bones).length, clips: {} };
+      const out = { meshes: [], bones: new Set(Object.values(R.bones).filter((o) => o.isBone)).size, clips: {} };
       let tris = 0;
       R.meshes.forEach((m) => { const g = m.geometry, t = (g.index ? g.index.count : g.attributes.position.count) / 3; tris += t; out.meshes.push([m.name, m.material.name, t, g.attributes.position.count, m.isSkinnedMesh]); });
       out.tris = tris;

@@ -119,7 +119,7 @@ const FACES = [
   ['f6-whiff', 'scene=bat&state=whiff&st=0.6&closeup=1'],
   ['f7-dizzy', 'scene=bat&state=whiff&st=1.7&closeup=1'],
   ['f8-calledk', 'scene=bat&state=called&dt=1.2&strike=1&stamp=K&kind=bad&closeup=1'],
-  ['f9-title', 'scene=title&time=2.0&closeup=1&cside=0.2'],
+  ['f9-title', 'scene=title&time=2.0&closeup=1&cside=0.7'],   // from the title camera's side (he stands at yaw -0.7 there)
   ['f10-fire', 'scene=bat&state=windup&w=0.4&fire=1&closeup=1&cside=1.2'],
 ];
 async function pilot(browser, filt) {
