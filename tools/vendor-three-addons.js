@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Turns the three.js r149 ES-module addons we need into one classic script that attaches to the global THREE:
-//   THREE.GLTFLoader, THREE.SkeletonUtils
+//   THREE.GLTFLoader, THREE.SkeletonUtils, THREE.MeshoptDecoder (for EXT_meshopt_compression assets made by gltfpack)
 // usage: node tools/vendor-three-addons.js <path to an unpacked three@0.149.0 npm package>
 // Output: src/vendor/three-addons.js (committed; the build inlines it after three.min.js).
 const fs = require('fs'), path = require('path');
@@ -31,14 +31,20 @@ let sk = read('utils/SkeletonUtils.js');
 sk = fromThree(sk).replace(/export\s*\{([^}]*)\};?/, (m, names) =>
   'THREE.SkeletonUtils = {' + names.split(',').map(s => s.trim()).filter(Boolean).map(n => `${n}: ${n}`).join(', ') + '};');
 
-if (/^\s*(import|export)\b/m.test(gltf + sk)) throw new Error('leftover import/export');
-const out = `/* three.js r149 addons (MIT, see three.LICENSE): GLTFLoader and SkeletonUtils, converted to a classic script
+let mo = fs.readFileSync(path.join(PKG, 'examples/jsm/libs/meshopt_decoder.module.js'), 'utf8')
+  .replace(/export\s*\{\s*MeshoptDecoder\s*\};?/, 'THREE.MeshoptDecoder = MeshoptDecoder;');
+
+if (/^\s*(import|export)\b/m.test(gltf + sk + mo)) throw new Error('leftover import/export');
+const out = `/* three.js r149 addons (MIT, see three.LICENSE): GLTFLoader, SkeletonUtils and the meshoptimizer decoder (MIT), converted to a classic script
    by tools/vendor-three-addons.js. Do not edit by hand. */
 (function () {
 ${gltf}
 })();
 (function () {
 ${sk}
+})();
+(function () {
+${mo}
 })();
 `;
 fs.writeFileSync(path.join(__dirname, '..', 'src', 'vendor', 'three-addons.js'), out);

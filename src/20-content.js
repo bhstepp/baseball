@@ -217,6 +217,19 @@ BB.Content = (function () {
   var games = {};
   TOUR.forEach(function (c) { c.games.forEach(function (g) { games[g.id] = g; }); });
 
+  // Each pitcher's animal. The single source of truth for the trading cards (38-cards.js), the briefing portraits and
+  // the 3D cast: every renderer reads pitcher.species.
+  var SPECIES = {
+    p_hank: 'goat', p_dottie: 'hen', p_clem: 'dog', p_ox: 'ox',
+    p_vinnie: 'rat', p_rosalind: 'pigeon', p_marty: 'cat', p_landlord: 'bulldog',
+    p_ellis: 'moose', p_june: 'loon', p_otis: 'beaver', p_sasquatch: 'bear',
+    p_pearl: 'walrus', p_nils: 'pelican', p_sully: 'seal', p_admiral: 'gull',
+    p_rio: 'armadillo', p_tess: 'tortoise', p_cosmo: 'possum', p_mirage: 'lizard',
+    p_organist: 'flamingo', p_belle: 'owl', p_thunder: 'bison', p_halo: 'peacock',
+    p_bpbob: 'badger', p_mabel: 'goose', p_ike: 'squirrel',
+  };
+  PITCHERS.forEach(function (p) { if (!p.species && SPECIES[p.id]) p.species = SPECIES[p.id]; });
+
   return {
     PARKS: PARKS, PITCHERS: PITCHERS, TOUR: TOUR, SCN: { walkoff: walkoff, rally: rally, derby: derby, hits: hits, onbase: onbase, distance: distance }, DERBY_PITCHER: DERBY_PITCHER, DAILY_POOL: DAILY_POOL,
     getPitcher: function (id) { return typeof id === 'object' ? id : byId[id] && byId[id].velo ? byId[id] : null; },

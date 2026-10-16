@@ -62,9 +62,12 @@ BB.Cast = (function () {
     p_organist: 'badger', p_belle: 'goat', p_thunder: 'rhino', p_halo: 'eagle',
     p_bpbob: 'hippo', p_mabel: 'sheep', p_ike: 'squirrel',
   };
+  var SPECIES_ALIAS = { hen: 'rooster', dog: 'bulldog', cat: 'possum', bison: 'rhino', peacock: 'eagle' };
   var FALLBACK = ['bear', 'goat', 'owl', 'badger', 'walrus', 'rooster', 'moose', 'possum', 'gull', 'bulldog'];
   function speciesFor(p) {
     if (!p) return 'bear';
+    if (p.species && SPECIES[p.species]) return p.species;   // BB.Content is the source of truth (same as the cards)
+    if (p.species && SPECIES_ALIAS[p.species]) return SPECIES_ALIAS[p.species];
     if (PITCHER_SPECIES[p.id]) return PITCHER_SPECIES[p.id];
     var s = ((p.nick || '') + ' ' + (p.name || '')).toLowerCase();
     for (var k in SPECIES) if (s.indexOf(k) >= 0) return k;
