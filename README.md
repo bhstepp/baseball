@@ -81,6 +81,8 @@ python tools/blender/cast/cbuild.py --park 3  # a park's team (or ids, or --list
 python3 tools/blender/anim/build.py pitcher   # a shared clip library: pitcher, catcher, umpire, fielder
 node tools/pack-assets.js                     # gltfpack (meshopt) + checks: names, clips, contact frames
 node tools/cast-shots.js --park 3             # turnarounds, faces, lineups and game-camera sheets to qa/cast/
+python tools/blender/cast/cbuild.py --park -2 --out-dir dist/card-models   # portrait-only card players (P, DH)
+node tools/card-portraits.js                  # every card / pitcher portrait -> assets/portraits_*.webp
 ```
 
 `docs/CAST-CONTRACT.md` describes the shared skeleton, the head kit for adding species, the character files and the

@@ -25,7 +25,7 @@
   const T = THREE, PI = Math.PI;
   const CREAM = 0xFFF4DC, INK = 0x1B1420;
   const canvas = document.getElementById('c');
-  const renderer = new T.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+  const renderer = new T.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
   renderer.outputEncoding = T.sRGBEncoding;
   renderer.setPixelRatio(1);
   renderer.autoClear = false;
@@ -208,13 +208,15 @@
   function clearLabels() { wrap.querySelectorAll('.lbl').forEach((e) => e.remove()); }
   function label(x, y, text, cls) { const d = document.createElement('div'); d.className = 'lbl' + (cls ? ' ' + cls : ''); d.style.left = x + 'px'; d.style.top = y + 'px'; d.textContent = text; wrap.appendChild(d); }
   // spec: { cols, cellW, cellH, field, cells: [{ label, view, actors: [{ id, x, y, z, yaw, scale, clip, t, sk, hide, team, name }], ball, field, studio }] }
+  // spec.transparent: clear to alpha 0 (portraits for tools/card-portraits.js)
   function sheet(spec) {
+    const A = spec.transparent ? 0 : 1;
     const cols = spec.cols || 4, cw = spec.cellW || 300, ch = spec.cellH || 400, n = spec.cells.length, rows = Math.ceil(n / cols);
     renderer.setSize(cols * cw, rows * ch, false); canvas.style.width = cols * cw + 'px'; canvas.style.height = rows * ch + 'px';
     res.value.set(cw, ch);
     clearLabels();
     renderer.setScissorTest(true);
-    renderer.setClearColor(spec.bg != null ? spec.bg : CREAM, 1);
+    renderer.setClearColor(spec.bg != null ? spec.bg : CREAM, A);
     renderer.setViewport(0, 0, cols * cw, rows * ch); renderer.setScissor(0, 0, cols * cw, rows * ch); renderer.clear();
     const out = [];
     spec.cells.forEach((cell, i) => {
@@ -240,9 +242,9 @@
       const cam = makeCam(cell.view || spec.view, cw, ch, cell.actors);
       key.position.copy(cam.position).add(new T.Vector3(4, -3, 10)); key.target.position.copy(cam.position).add(cam.getWorldDirection(new T.Vector3()).multiplyScalar(20));
       renderer.setViewport(cx, rows * ch - cy - ch, cw, ch); renderer.setScissor(cx, rows * ch - cy - ch, cw, ch);
-      if (cell.bg != null) renderer.setClearColor(cell.bg, 1);
+      if (cell.bg != null) renderer.setClearColor(cell.bg, A);
       renderer.clear(); renderer.render(scene, cam);
-      renderer.setClearColor(spec.bg != null ? spec.bg : CREAM, 1);
+      renderer.setClearColor(spec.bg != null ? spec.bg : CREAM, A);
       if (cell.label) label(cx + 4, cy + 4, cell.label);
       // labels under actors (lineups)
       (cell.actors || []).forEach((a) => {
