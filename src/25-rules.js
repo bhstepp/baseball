@@ -38,7 +38,7 @@ BB.Rules = (function () {
       mode: mode, cfg: cfg, sc: sc, kind: sc.kind, derbyRules: derbyRules, seed: seed,
       basePitcher: pitcher, pitcher: pitcher, park: park, title: cfg.title || (mode === 'derby' ? 'Endless Derby' : ''),
       day: mode === 'daily' ? (cfg.day || U.dayNumber(cfg.dayKey)) : null,
-      balls: 0, strikes: 0, outs: 0, outsMax: sc.kind === 'hits' ? 0 : (sc.outs || 3),
+      balls: 0, strikes: 0, used: 0, outs: 0, outsMax: sc.kind === 'hits' ? 0 : (sc.outs || 3),
       bases: [false, false, false], runs: 0, thrown: 0, pa: 0, level: 0,
       hr: 0, hrDist: 0, hits: 0, onbase: 0, startRunners: 0,
       streak: 0, bestStreak: 0, onFire: false, over: false, win: false, last: null, log: [], vc: 0,
@@ -97,7 +97,8 @@ BB.Rules = (function () {
     var l = st.outsMax - st.outs;
     return st.derbyRules ? l + (l === 1 ? ' out left' : ' outs left') : st.outs + (st.outs === 1 ? ' out' : ' outs');
   }
-  function pitchesLeft(st) { return st.kind === 'hits' ? Math.max(0, st.sc.pitches - st.stats.pitches) : null; }
+  // taken balls never cost you: only swings and called strikes come out of a 'hits' game's pitch budget
+  function pitchesLeft(st) { return st.kind === 'hits' ? Math.max(0, st.sc.pitches - st.used) : null; }
   function ev(call, text, sub) { return { call: call, runs: 0, outs: 0, runnerMoves: [], text: text, sub: sub || '', over: false }; }
   function endPA(st) { st.balls = 0; st.strikes = 0; st.pa++; if (st.kind === 'hits') st.bases = [false, false, false]; }
   function hitStreak(st) { st.streak++; if (st.streak > st.bestStreak) st.bestStreak = st.streak; st.onFire = st.streak >= 3; }
@@ -181,6 +182,7 @@ BB.Rules = (function () {
       e = ev(pitch.strike ? 'STRIKE' : 'BALL', pitch.strike ? 'TAKEN' : 'BALL', 'Takes are free · ' + outsStr(st));
       return check(st, e);
     }
+    if (pitch.strike) st.used++;
     if (!pitch.strike) {
       st.balls++;
       if (st.balls >= 4) return walk(st);
@@ -216,7 +218,7 @@ BB.Rules = (function () {
     return check(st, e);
   }
   function swingStats(st, swing, inPlay) {
-    st.stats.pitches++; st.stats.swings++;
+    st.stats.pitches++; st.stats.swings++; st.used++;
     if (inPlay) st.stats.contact++;
     if (swing) {
       if (swing.label === 'PERFECT') st.stats.perfects++;
@@ -377,7 +379,7 @@ BB.Rules = (function () {
     if (st.mode !== 'tour' || k === 'derby') { score = st.hr; label = st.hr + ' HR · ' + f(st.hrDist) + ' ft'; }
     else if (k === 'inning') { score = st.runs; label = (win ? 'WON ' : 'LOST ') + scoreStr(st) + ' · ' + st.runs + ' R'; }
     else if (k === 'distance') { score = Math.round(st.hrDist); label = f(st.hrDist) + ' ft · ' + st.hr + ' HR'; }
-    else if (k === 'hits') { score = st.hits; label = st.hits + ' hits in ' + st.stats.pitches + ' pitches'; }
+    else if (k === 'hits') { score = st.hits; label = st.hits + ' hits in ' + st.used + ' pitches'; }
     else { score = st.onbase; label = 'On base ' + st.onbase + 'x'; }
     var stats = {};
     for (var key in st.stats) stats[key] = st.stats[key];
