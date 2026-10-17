@@ -1146,9 +1146,10 @@
       while (t && t !== document.body) { if (t.classList && (t.classList.contains('body') || t.classList.contains('slider'))) return; t = t.parentNode; }
       if (e.cancelable) e.preventDefault();
     }, { passive: false });
-    // redraw art once the web fonts arrive (canvas lettering uses Luckiest Guy / Fredoka)
+    // redraw art once the web fonts arrive (canvas lettering uses Luckiest Guy / Fredoka) and the 3D card portraits load
+    var redrawAll = function () { redraws.forEach(function (f) { try { f(); } catch (e) {} }); };
+    if (BB.CardArt && BB.CardArt.onPortraits) BB.CardArt.onPortraits(redrawAll);
     if (document.fonts && document.fonts.ready) {
-      var redrawAll = function () { redraws.forEach(function (f) { try { f(); } catch (e) {} }); };
       document.fonts.ready.then(redrawAll);
       try { Promise.all([document.fonts.load('20px "Luckiest Guy"'), document.fonts.load('600 20px Fredoka')]).then(redrawAll, function () {}); } catch (e) {}
     }
