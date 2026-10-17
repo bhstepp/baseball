@@ -97,6 +97,15 @@ function suite(BB, label) {
     });
     console.log(`${g.id.padEnd(6)} ${g.scenario.kind.padEnd(9)} ${out.join('   |  ')}`);
   });
+  // pitch-budget games: taken balls never come out of the budget, called strikes and swings do
+  const hg = C.TOUR.flatMap(t => t.games).find(g => g.scenario.kind === 'hits');
+  if (hg) {
+    const st = R.create('tour', hg), left0 = R.hud(st).pitchesLeft;
+    R.take(st, { strike: false }); R.take(st, { strike: false });
+    if (R.hud(st).pitchesLeft !== left0) fail('taken balls cost pitches in a hits game');
+    R.take(st, { strike: true });
+    if (R.hud(st).pitchesLeft !== left0 - 1) fail('called strike did not cost a pitch in a hits game');
+  }
   // endless derby
   let hrs = 0;
   for (let i = 0; i < N; i++) { const { res } = play(BB, 'derby', {}, randomPolicy(.03)); hrs += res.score; }

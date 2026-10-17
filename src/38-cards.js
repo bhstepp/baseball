@@ -9,6 +9,11 @@
 //   BB.CardArt.SPECIES_BY_PITCHER = { p_ox: 'ox', ... }   // shared with the 3D renderer
 //   BB.CardArt.speciesFor(pitcher) -> species id;  BB.CardArt.SPECIES = { id: { fam, name, ... } }
 //   BB.CardArt.scheme(inkset) -> { a, b, c, paper, ink }   // the inkset tamed to the cartoon palette (UI uses it too)
+//   BB.CardArt.onPortraits(fn)   // fn() whenever a portrait sheet arrives (the UI redraws its cards)
+//
+// Card players and pitchers are drawn from renders of their 3D models (tools/card-portraits.js: sprite sheets listed
+// in window.BB_PORTRAITS by tools/build.js), fetched on first use; until a sheet is in (or without one) the Canvas 2D
+// bust below stands in.
 //
 // Static drawings are cached per (thing, size, variant, fonts-loaded), so an album grid redraw is a blit.
 (function () {
@@ -132,6 +137,35 @@
     var x = canvas.getContext('2d'); x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, canvas.width, canvas.height); x.drawImage(c, 0, 0);
     return true;
   }
+  // ------------------------------------------------------------------ 3D portraits
+  var PORT = (typeof window !== 'undefined' && window.BB_PORTRAITS) || null, sheets = {}, portraitCbs = [];
+  function portrait(id) {
+    var m = PORT && id && PORT.map[id];
+    if (!m || typeof Image === 'undefined') return null;
+    var sh = sheets[m[0]];
+    if (!sh) {
+      sh = sheets[m[0]] = { img: new Image(), ok: false };
+      sh.img.onload = function () {
+        sh.ok = true; cache = {}; cacheKeys = [];
+        portraitCbs.forEach(function (f) { try { f(); } catch (e) {} });
+      };
+      sh.img.src = PORT.sheets[m[0]];
+    }
+    return sh.ok ? { img: sh.img, x: m[1] * PORT.cell, y: m[2] * PORT.cell, s: PORT.cell } : null;
+  }
+  // fetch every sheet now (resolves once each has loaded or failed)
+  function preloadPortraits() {
+    if (!PORT || typeof Promise === 'undefined') return Promise.resolve();
+    var first = {};
+    for (var id in PORT.map) if (!first[PORT.map[id][0]]) first[PORT.map[id][0]] = id;
+    return Promise.all(Object.keys(first).map(function (k) {
+      portrait(first[k]);
+      var im = sheets[k].img;
+      return sheets[k].ok ? null : new Promise(function (ok) { im.addEventListener('load', ok); im.addEventListener('error', ok); });
+    }));
+  }
+  function drawPortrait(x, pt, dx, dy, ds) { x.drawImage(pt.img, pt.x, pt.y, pt.s, pt.s, dx, dy, ds, ds); }
+
   function begin(canvas) { var x = canvas.getContext('2d'); x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, canvas.width, canvas.height); x.lineJoin = 'round'; x.lineCap = 'round'; return x; }
 
   // ================================================================== SPECIES
@@ -711,7 +745,7 @@
     var rarity = opts.misprint ? 'misprint' : card.rarity || 'common';
     var seed = card.seed != null ? card.seed : U.hashStr(card.id || card.name || 'card');
     var sc = scheme(card.inkset || 'classic');
-    var key = 'card|' + card.id + '|' + w + 'x' + h + '|' + rarity + '|' + sc.a + sc.b + sc.c + '|' + fontsReady();
+    var key = 'card|' + card.id + '|' + w + 'x' + h + '|' + rarity + '|' + sc.a + sc.b + sc.c + '|' + fontsReady() + (portrait(card.id) ? '|3d' : '');
     if (!blit(canvas, key)) { printCard(canvas, card, rarity, seed, sc); remember(key, canvas); }
     if (rarity === 'foil') sheen(canvas, seed, opts.time == null ? 0.9 : opts.time);
     else if (rarity === 'rare' && opts.time != null) twinkle(canvas, seed, opts.time, 3);
@@ -746,7 +780,9 @@
     var win = rr(7, 7, 86, 88, 5);
     x.save(); x.clip(win);
     windowBg(x, rarity, seed, TC, TC2, sc, f);
-    bust(x, f, { team: TC, trim: CREAM, num: card.number, pos: card.pos, letter: null, capC: TC, capLetter: (card.teamShort || card.team || 'X').charAt(0) });
+    var pt = portrait(card.id);
+    if (pt) drawPortrait(x, pt, 3, 1, 94);
+    else bust(x, f, { team: TC, trim: CREAM, num: card.number, pos: card.pos, letter: null, capC: TC, capLetter: (card.teamShort || card.team || 'X').charAt(0) });
     x.restore();
     line(x, win, INK, 2.2);
     // position badge
@@ -877,7 +913,8 @@
     if (!canvas || !pitcher) return;
     var w = canvas.width, h = canvas.height, sc = scheme(opts.inkset || 'classic');
     var spId = speciesFor(pitcher), boss = !!pitcher.boss, look = pitcher.look || {};
-    var key = 'pit|' + (pitcher.id || pitcher.name) + '|' + spId + '|' + (opts.border ? 'b' : '') + '|' + w + 'x' + h + '|' + sc.a + sc.b + '|' + fontsReady();
+    var pt = portrait(pitcher.id);
+    var key = 'pit|' + (pitcher.id || pitcher.name) + '|' + spId + '|' + (opts.border ? 'b' : '') + '|' + w + 'x' + h + '|' + sc.a + sc.b + '|' + fontsReady() + (pt ? '|3d' : '');
     if (blit(canvas, key)) return;
     var x = begin(canvas);
     var seed = U.hashStr(pitcher.id || pitcher.name || 'p');
@@ -894,10 +931,13 @@
       x.fillStyle = 'rgba(43,47,94,.35)'; x.fillRect(0, 0, 100, 130);
     } else sunburst(x, 50, 54, 130, 18, light(sc.a, 0.62), light(sc.a, 0.8), (seed % 7) * 0.2);
     x.restore();
-    x.save(); x.translate((w - 100 * u) / 2, (h - 130 * u) / 2 - 4 * u); x.scale(u, u);
-    var team = boss ? dark(sc.b, 0.15) : sc.b;
-    bust(x, f, { team: team, trim: CREAM, num: look.number, pos: 'P', build: look.build, capC: team, capLetter: String(pitcher.team || 'X').charAt(0) });
-    x.restore();
+    if (pt) { x.save(); x.scale(w / 100, h / 130); drawPortrait(x, pt, -9, 12, 118); x.restore(); }
+    else {
+      x.save(); x.translate((w - 100 * u) / 2, (h - 130 * u) / 2 - 4 * u); x.scale(u, u);
+      var team = boss ? dark(sc.b, 0.15) : sc.b;
+      bust(x, f, { team: team, trim: CREAM, num: look.number, pos: 'P', build: look.build, capC: team, capLetter: String(pitcher.team || 'X').charAt(0) });
+      x.restore();
+    }
     if (boss) {
       x.save(); x.translate(w / 2, h - 13 * u); x.rotate(-0.05);
       cel(x, rr(-26 * u, -9 * u, 52 * u, 16 * u, 4 * u), PAL.mustard, { sh: 1.2 * u, lw: 2.2 * u });
@@ -1238,5 +1278,7 @@
     speciesFor: speciesFor, cardSpecies: cardSpecies, scheme: scheme, tame: tame,
     PALETTE: { ink: INK, cream: CREAM, white: WHITE, mustard: PAL.mustard, brick: PAL.brick, teal: PAL.teal, sunset: PAL.sunset, pink: PAL.pink, grass: PAL.grass, grassDark: PAL.grassD, dirt: PAL.dirt, navy: PAL.navy },
     clearCache: function () { cache = {}; cacheKeys = []; },
+    onPortraits: function (fn) { portraitCbs.push(fn); },
+    portrait: portrait, preloadPortraits: preloadPortraits,
   };
 })();

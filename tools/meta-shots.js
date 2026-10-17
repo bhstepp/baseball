@@ -183,6 +183,7 @@ async function run(vp, tag) {
 }
 
 async function gallery(page, shot) {
+  await page.evaluate(() => BB.CardArt.preloadPortraits && BB.CardArt.preloadPortraits());   // the 3D card portraits
   const sheet = (fn, arg) => page.evaluate(([src, a]) => {
     BB.UI.hideAll();
     let g = document.getElementById('gallery');
@@ -254,7 +255,11 @@ async function galleryOnly() {
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
   const src = ['00-const.js', '20-content.js', '38-cards.js', '50-save.js', '55-meta.js'].map(f => fs.readFileSync(path.join(ROOT, 'src', f), 'utf8')).join('\n');
   const head = fs.readFileSync(path.join(ROOT, 'src', 'shell.head.html'), 'utf8');
-  await page.setContent('<!doctype html><html><head><meta charset="utf-8">' + head + '</head><body><div id="ui"></div><script>"use strict";\n' + src + '\nBB.UI = { hideAll() {} };</script></body></html>');
+  // the 3D card portraits (assets/portraits.json, as data URIs like the test bundle)
+  const pf = path.join(ROOT, 'assets', 'portraits.json'), P = fs.existsSync(pf) ? JSON.parse(fs.readFileSync(pf, 'utf8')) : null;
+  if (P) for (const k in P.sheets) P.sheets[k] = 'data:image/webp;base64,' + fs.readFileSync(path.join(ROOT, 'assets', P.sheets[k])).toString('base64');
+  const port = P ? 'window.BB_PORTRAITS = ' + JSON.stringify(P) + ';\n' : '';
+  await page.setContent('<!doctype html><html><head><meta charset="utf-8">' + head + '</head><body><div id="ui"></div><script>"use strict";\n' + port + src + '\nBB.UI = { hideAll() {} };</script></body></html>');
   await page.evaluate(() => Promise.all([document.fonts.load('20px "Luckiest Guy"'), document.fonts.load('600 20px Fredoka')]).then(() => document.fonts.ready)).catch(() => {}); await page.waitForTimeout(400);
   const shot = async (name, wait) => { if (ONLY && !name.includes(ONLY)) return; await page.waitForTimeout(wait || 100); await page.screenshot({ path: path.join(OUT, name + '.png') }); };
   await gallery(page, shot);

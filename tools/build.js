@@ -63,6 +63,13 @@ if (fs.existsSync(ASSET_DIR)) fs.readdirSync(ASSET_DIR).filter(f => /\.json$/.te
   try { const j = JSON.parse(fs.readFileSync(path.join(ASSET_DIR, f), 'utf8')); META[f.replace(/\.json$/, '')] = Object.assign(trim(j), j.face ? { face: j.face } : {}); }
   catch (e) { console.warn('build: bad JSON in assets/' + f); }
 });
+// card portraits (tools/card-portraits.js): sprite sheets of the 3D cast drawn into the cards; fetched by the site
+// (versioned URLs, cached by the service worker with the models), inlined as data URIs in the test bundle
+const PORT_FILE = path.join(ASSET_DIR, 'portraits.json');
+const PORT = fs.existsSync(PORT_FILE) ? JSON.parse(fs.readFileSync(PORT_FILE, 'utf8')) : null;
+const portSheets = PORT ? Object.keys(PORT.sheets).map(k => ({ key: k, name: PORT.sheets[k], buf: fs.readFileSync(path.join(ASSET_DIR, PORT.sheets[k])) })) : [];
+const portTag = (src) => PORT ? `<script>\nwindow.BB_PORTRAITS = ${JSON.stringify({ cell: PORT.cell, map: PORT.map, sheets: Object.fromEntries(portSheets.map(p => [p.key, src(p)])) })};\n</script>\n` : '';
+const portUrl = p => 'assets/' + p.name + '?v=' + sha(p.buf).slice(0, 10);
 const metaTag = Object.keys(META).length ? `<script>\nwindow.BB_ASSET_META = ${JSON.stringify(META)};\n</script>\n` : '';
 const b64 = a => a.buf.toString('base64');
 const inlineOf = list => `<script>\nwindow.BB_ASSETS = {${list.map(a => `\n  ${JSON.stringify(a.name)}: "${b64(a)}"`).join(',')}\n};\n</script>\n`;
@@ -70,8 +77,8 @@ const files = assets.filter(a => !a.boot);
 const FILEMAP = {}; files.forEach(a => { FILEMAP[a.name] = { url: 'assets/' + a.name + '.glb?v=' + sha(a.buf).slice(0, 10), bytes: a.buf.length }; });
 const fileList = `<script>\nwindow.BB_ASSET_FILES = ${JSON.stringify(FILEMAP)};\n</script>\n`;
 // the site: boot assets inline, the rest as files; the standalone test page: everything inline
-const siteAssets = inlineOf(assets.filter(a => a.boot)) + fileList + metaTag;
-const testAssets = inlineOf(assets) + metaTag;
+const siteAssets = inlineOf(assets.filter(a => a.boot)) + fileList + metaTag + portTag(portUrl);
+const testAssets = inlineOf(assets) + metaTag + portTag(p => 'data:image/webp;base64,' + p.buf.toString('base64'));
 
 function page(assetTags) {
   const script = `${VENDOR}${assetTags}<script>\n"use strict";\n${js}\n</script>\n`;
@@ -114,7 +121,7 @@ const iHead = sitePage.indexOf('</head>'), iBody = sitePage.lastIndexOf('</body>
 const site = sitePage.slice(0, iHead) + headLinks + sitePage.slice(iHead, iBody) + register + sitePage.slice(iBody);
 const version = crypto.createHash('sha1').update(site).update(fs.readFileSync(path.join(ROOT, 'manifest.webmanifest'))).digest('hex').slice(0, 10);
 const sw = fs.readFileSync(path.join(__dirname, 'sw.template.js'), 'utf8').replace('__VERSION__', version)
-  .replace('__ASSETS__', JSON.stringify(files.map(a => FILEMAP[a.name].url)));
+  .replace('__ASSETS__', JSON.stringify(files.map(a => FILEMAP[a.name].url).concat(portSheets.map(portUrl))));
 
 fs.mkdirSync(path.join(ROOT, 'dist'), { recursive: true });
 fs.writeFileSync(path.join(ROOT, 'dist', 'halftone.html'), full);
@@ -129,8 +136,10 @@ fs.writeFileSync(path.join(SITE, 'sw.js'), sw);
 fs.copyFileSync(path.join(ROOT, 'manifest.webmanifest'), path.join(SITE, 'manifest.webmanifest'));
 if (fs.existsSync(path.join(ROOT, 'icons'))) { fs.mkdirSync(path.join(SITE, 'icons'), { recursive: true }); fs.readdirSync(path.join(ROOT, 'icons')).filter(f => /\.png$/.test(f)).forEach(f => fs.copyFileSync(path.join(ROOT, 'icons', f), path.join(SITE, 'icons', f))); }
 files.forEach(a => fs.writeFileSync(path.join(SITE, 'assets', a.name + '.glb'), a.buf));
+portSheets.forEach(p => fs.writeFileSync(path.join(SITE, 'assets', p.name), p.buf));
 
 const kb = n => (n / 1024).toFixed(1) + ' KB';
 const inl = assets.filter(a => a.boot), inlB64 = inl.reduce((s, a) => s + Math.ceil(a.buf.length / 3) * 4, 0);
 console.log(`build: index.html ${(Buffer.byteLength(site) / 1024).toFixed(1)} KiB, sw ${version}, ${ORDER.length - missing.length}/${ORDER.length} modules, assets: ${assets.map(a => a.name).join(' ') || 'none'}`);
 if (assets.length) console.log(`build: inline ${inl.map(a => `${a.name} ${kb(a.buf.length)}${isPacked(a.buf) ? '' : ' (raw)'}`).join(', ') || 'none'} = ${kb(inlB64)} base64 in the page; files ${files.map(a => `${a.name} ${kb(a.buf.length)}`).join(', ') || 'none'} -> dist/site/assets/`);
+if (portSheets.length) console.log(`build: card portraits ${portSheets.map(p => `${p.name} ${kb(p.buf.length)}`).join(', ')} (${Object.keys(PORT.map).length} portraits)`);

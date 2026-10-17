@@ -146,7 +146,7 @@ BB.Content = (function () {
   }
   function hits(need, pitches, stars) {
     return { kind: 'hits', need: need, pitches: pitches, outs: 0, metric: 'hits', stars: stars,
-      goal: 'Get ' + need + ' hits in ' + pitches + ' pitches.', starText: [stars[0] + ' hits', stars[1] + ' hits', stars[2] + ' hits'] };
+      goal: 'Get ' + need + ' hits in ' + pitches + ' pitches. Taken balls are free.', starText: [stars[0] + ' hits', stars[1] + ' hits', stars[2] + ' hits'] };
   }
   function onbase(need, outs, stars) {
     return { kind: 'onbase', need: need, outs: outs, metric: 'onbase', stars: stars,

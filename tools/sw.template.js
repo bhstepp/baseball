@@ -1,6 +1,7 @@
 /* Screwball Slugger service worker. VERSION is filled in by tools/build.js with a hash of the built page,
    so every release gets a fresh cache. Own files: cache-first. Google Fonts: stale-while-revalidate.
-   Character models (assets/*.glb, fetched by BB.Assets when a game needs them) live in their own cache that outlives
+   Character models (assets/*.glb, fetched by BB.Assets when a game needs them) and the card portrait sheets
+   (assets/portraits_*.webp) live in their own cache that outlives
    releases: their URLs carry a content hash (?v=...), so an unchanged model is never downloaded twice; the page asks
    for a background pre-cache of the current list after it loads (message 'precache-assets'), so play works offline. */
 var VERSION = '__VERSION__';
@@ -60,7 +61,7 @@ self.addEventListener('fetch', function (e) {
     return;
   }
   if (url.origin !== location.origin) return;
-  if (/\/assets\/[^/]+\.glb$/.test(url.pathname)) {   // models: exact URL (the ?v= hash is the version)
+  if (/\/assets\/[^/]+\.(glb|webp)$/.test(url.pathname)) {   // models and card portraits: exact URL (the ?v= hash is the version)
     e.respondWith(caches.open(MODELS).then(function (cache) {
       return cache.match(req).then(function (hit) {
         return hit || fetch(req).then(function (res) { if (res && res.ok) cache.put(req, res.clone()); return res; });
